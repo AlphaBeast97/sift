@@ -6,6 +6,10 @@ Method: read the installed shell's source (GNOME Shell 51.1 tag), read the insta
 Blur my Shell 77 source, and read the source of Isle, Search Beam and VLIQ. No
 implementation decisions are made here.
 
+Update 2026-11-11: the design is in `docs/superpowers/specs/2026-11-11-sift-design.md`.
+The extension is named **Sift** (plain "Spotlight" is already taken on
+extensions.gnome.org); the open decisions below are resolved there.
+
 ## 1. What a GNOME Shell extension can be
 
 - GNOME 45+ loads extensions as ES modules. `extension.js` default-exports a class
@@ -201,14 +205,41 @@ VLIQ is MIT. Reusing code from any of them imposes that license. Independent
 implementation of the same techniques is possible, but the project license must
 be chosen before code is copied.
 
-## 8. Open decisions (do not build until answered)
+## 8. Decisions carried into the design (resolved 2026-11-11)
 
-1. Scope: Spotlight-only replacement, hybrid (Spotlight first, native window
-   picker on second Super/Esc), or full custom workspace/window overview.
-2. Blur: own in-shell liquid glass (Isle-style, JS/GLSL) with optional BMS opt-in,
-   or simpler `Shell.BlurEffect` panel blur; BMS no longer a hard requirement.
-3. Shell range: GNOME 51 only, or 46-51 with a compatibility layer.
-4. License: GPL-3.0-or-later if Isle/BMS-derived code is reused; MIT if the glass
-   is written independently.
-5. File index scope: filenames vs content; which roots; hidden files; max index.
-6. Name, UUID, GitHub remote. Working directory is `gnome-spotlight-rust`.
+1. Scope: full Overview replacement with a search view and an app grid; no window or
+   workspace picker.
+2. Blur: own bounded liquid glass with frosted/off fallback; BMS optional.
+3. Shell range: GNOME 51 only.
+4. License: GPL-3.0-or-later.
+5. File index: filenames/directories under `$HOME`, hidden skipped, excludes, 250k cap.
+6. Name/UUID: Sift, `sift@alphabeast97.github.io`, `io.github.alphabeast97.Sift`.
+
+See `docs/superpowers/specs/2026-11-11-sift-design.md`.
+
+## 9. App grid and prefs components (GNOME 51 source, 2026-11-11)
+
+- GNOME 51 exports `IconGrid.IconGrid`, `IconGrid.BaseIcon`,
+  `AppDisplay.AppIcon`, and `PageIndicators.PageIndicators`. `AppDisplay` and
+  `BaseAppView` are not exported and carry Overview/folder/DND/page-persistence state;
+  do not reuse them for Sift.
+- `IconGrid` provides pages, `addItem`/`appendItem`/`removeItem`, `goToPage`/
+  `currentPage`, `getItemsAtPage`, and `pages-changed`. Items need an `.icon` that is an
+  `IconGrid.BaseIcon`. Layout properties include `fixed-icon-size`, `columns-per-page`,
+  `rows-per-page`, and `page-padding`.
+- `AppIcon(app, {isDraggable: false})` creates a `BaseIcon` with
+  `app.create_icon_texture(size)` and activates through `Shell.App`. Its `activate()`
+  calls `Main.overview.hide()`, which the Sift wrapper maps to closing the overlay.
+  `isDraggable: false` avoids the only paths that call `Main.overview` drag methods.
+  Right-click is not in its button mask; the `AppMenu` is created only if `popupMenu()`
+  is called, so the grid needs no context menus.
+- `PageIndicators` has `setNPages`/`setCurrentPosition` and a `page-activated` signal;
+  GNOME's app display uses it with clickable dots.
+- `OverviewControls.ControlsState` is exported (`HIDDEN = 0`, `WINDOW_PICKER = 1`,
+  `APP_GRID = 2`). `_toggleAppsPage()` calls `Main.overview.show(APP_GRID)` whenever
+  `Main.overview.visible` is false, so the stock Super+A binding reaches the Sift
+  wrapper without adding a keybinding.
+- `prefs.js` uses `ExtensionPreferences.fillPreferencesWindow(window)` with
+  `Adw.PreferencesWindow`/`Page`/`Group`, `Adw.SwitchRow`/`ComboRow`, and `Gtk.Scale`.
+  `getSettings()` reads the schema named by `metadata.json`'s `settings-schema`; prefs
+  runs in its own process and needs no shell imports.

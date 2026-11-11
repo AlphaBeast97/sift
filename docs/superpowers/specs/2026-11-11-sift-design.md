@@ -1,8 +1,10 @@
-# Spotlight for GNOME Shell 51 — Design
+# Sift for GNOME Shell 51 — Design
 
 Date: 2026-11-11
 Status: **Draft for approval.** No implementation starts until this document is approved.
-Working name: **Spotlight** (rename before first release if desired; the UUID is harder to change later).
+Name: **Sift.** "Sift" was free on extensions.gnome.org when checked on 2026-11-11;
+search again before the first public release. The UUID is cheap to change only before
+users have settings and caches.
 
 ---
 
@@ -10,14 +12,16 @@ Working name: **Spotlight** (rename before first release if desired; the UUID is
 
 Build a macOS-Spotlight-style search for GNOME Shell 51. One key — Super — opens a
 centered search panel over the current desktop. Typing finds installed applications
-and files, and evaluates arithmetic/unit expressions. The panel has a liquid-glass
-backdrop that looks like macOS/Isle glass, with a simpler frosted blur as fallback.
-It must feel instant: open in one or two frames, no input lag, 60 fps while open,
-and zero idle cost when closed.
+and files, and evaluates arithmetic/unit expressions. An app grid view browses every
+installed application, and a preferences window exposes the glass, result, and grid
+settings. The panel has a liquid-glass backdrop that looks like macOS/Isle glass, with
+a simpler frosted blur as fallback. It must feel instant: open in one or two frames, no
+input lag, 60 fps while open, and zero idle cost when closed.
 
 This replaces the **entire** GNOME Overview. Super, Activities, the hot corner, and
-any shell caller of `Main.overview.show/hide/toggle` open Spotlight instead. There is
-no workspace picker, no window picker, and no app grid.
+any shell caller of `Main.overview.show/hide/toggle` open Sift instead. There is no
+workspace picker and no window picker. Sift has two views — the search panel and an app
+grid — plus its own preferences window.
 
 The Rust part exists because indexing the home directory and fuzzy matching 250k paths
 inside the GNOME Shell process would risk the frame budget. The visible UI, focus,
@@ -30,6 +34,9 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 - Super/Activities/hot corner open the same centered search overlay.
 - Application search is instant and uses GNOME's own `Shell.AppSystem` and activation
   paths so workspaces, startup notification, and focus behave correctly.
+- An app grid over the same app snapshot, opened with Super+A or the empty-state
+  button, with paging and full keyboard navigation.
+- A preferences window with live toggles and sliders for glass, results, and grid.
 - Filename search over the user's home directory, with live updates, in Rust.
 - Arithmetic and unit conversion via `fend-core`, with no network requirement.
 - A liquid-glass panel (blurred live backdrop + rounded shape, tint, subtle lens and
@@ -41,13 +48,13 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 
 ## 3. Non-goals (v1)
 
-- Window picker, workspace overview, app grid, dash, or window thumbnails.
+- Window picker, workspace overview, dash, or window thumbnails.
+- App folders, drag-and-drop icon rearrangement, or a separate Launchpad-style
+  full-screen app. The grid is a view of Sift, not a second product.
 - File **content** search; only file and directory names.
 - Web search, clipboard history, recent files, emoji, or a plugin/provider system.
 - Live currency exchange rates (no network calls from v1).
-- Touchpad gesture to open Spotlight (the stock overview gesture is disabled).
-- A preferences window. Settings exist in GSettings and are changed with
-  `gsettings`; a prefs UI is a later addition.
+- Touchpad gesture to open Sift (the stock overview gesture is disabled).
 - GNOME 46–50 support. GNOME 51 only (see §4).
 - Shipping through extensions.gnome.org. EGO cannot install the Rust daemon; v1
   installs with a script (see §17).
@@ -55,8 +62,9 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 ## 4. Anti-goals
 
 - **Shipping a second rate-limited search UI that still feels like GNOME's Overview.**
-  This is not a reskin of the Overview; it is a Spotlight overlay. If it opens the
-  workspace picker or app grid, it has failed.
+  This is not a reskin of the Overview; it is a Sift overlay. If it opens the
+  workspace picker or window picker, it has failed. The app grid must be Sift's own
+  view, never the native one.
 - **Jank hidden behind animations.** A pretty open animation is not a substitute for
   results appearing on the keystroke. If the glass costs the frame budget, the glass
   gets simpler.
@@ -88,15 +96,29 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 - **GNOME 51 only.** The shader API changed in 51 (`Shell.GLSLEffect` removed,
   `Clutter.ShaderEffect` + `Cogl.Snippet` now), and the Overview internals move between
   releases. Supporting 46–50 would double the private-surface area for no v1 benefit.
-- **Display name `Spotlight`, UUID `spotlight@alphabeast97.github.io`,
-  daemon `spotlightd`, bus name `io.github.alphabeast97.Spotlight`.**
-  "Spotlight" is a working name and may be a trademark concern if published; rename
-  before the first public release if that matters. The UUID is cheap to change only
-  before users have settings and caches.
+- **Display name `Sift`, UUID `sift@alphabeast97.github.io`,
+  daemon `siftd`, bus name `io.github.alphabeast97.Sift`.** The extension name was free
+  on EGO at design time. The UUID and bus name follow the chosen name so nothing has to
+  be renamed after code exists.
 - **File index: filenames and directory names only**, `$HOME` by default, hidden
   entries skipped, 250,000-entry cap, heavy build/cache directories excluded (§10).
-- **No prefs window in v1.** A small GSettings schema covers glass mode, max results,
-  and file-search on/off.
+- **The app grid is Sift's own view.** Super+A (the stock `toggle-application-view`
+  binding), `showApps()`, a grid button in the entry, and the empty-state button open
+  it. It reuses `IconGrid.IconGrid`, `AppDisplay.AppIcon` (`isDraggable: false`), and
+  `PageIndicators.PageIndicators`. `AppDisplay`/`BaseAppView` is not reused: it carries
+  Overview, folder, DND, and page-persistence state that Sift does not want. The grid is
+  built lazily once, cached, and rebuilt only when the app list changes (§13.2).
+- **A preferences window ships in v1.** `prefs.js` uses
+  `Adw.PreferencesWindow`; every key in §13.3 is exposed and applies live. There is no
+  `file-search` switch: file search is the product, and a switch that left `siftd`
+  watching `$HOME` would be a false privacy promise. Indexing is configured in
+  `~/.config/sift/config.toml`; `roots = []` (or not installing the daemon) disables it.
+- **Grid settings are layout-only.** The user controls icon size; columns, rows, and
+  pages are derived from the panel size. No free-form placement, folders, or drag order.
+- **No lock-screen presence.** `metadata.json` declares `session-modes: ["user"]`, so
+  the shell disables the extension on lock and enables it again on unlock. Sift
+  must never expose home filenames on the lock screen. `enable()`/`disable()` are
+  therefore exercised on every lock/unlock, and the test matrix includes it.
 - **No recents/frequently-used list on the empty state.** Empty query shows a short
   hint, not guessed apps. It avoids tracking usage in v1.
 - **The query clears when the panel closes.** Reopening always starts clean.
@@ -133,24 +155,22 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 ## 7. Architecture
 
 ```
-┌────────────────────────────── GNOME Shell process (GJS) ─────────────────────────────┐
-│                                                                                      │
-│  Overview takeover ──► SpotlightOverlay ──► ResultsModel ──► glass + St widgets       │
-│  (wrappers, keybinding)      │                  │                                    │
-│                              │                  ├── Apps: Shell.AppSystem (sync)      │
-│                              │                  └── Files/calc: D-Bus proxy (async)  │
-│                              ▼                                                       │
-│                        Main.pushModal() / focus / Escape / click-outside              │
-└───────────────────────────────────────┬──────────────────────────────────────────────┘
-                                        │ session D-Bus
-                                        │ io.github.alphabeast97.Spotlight
-                                        ▼
-┌────────────────────────────── spotlightd (Rust, one process) ────────────────────────┐
-│  D-Bus interface: Query / Reindex / Ping / Status + StatusChanged                     │
-│  Query ──► Calc (fend-core)                                                           │
-│       └──► File index (nucleo-matcher): snapshot, top-K, JSON                         │
-│  Indexer: walk $HOME → cache → inotify watcher → incremental updates                 │
-└──────────────────────────────────────────────────────────────────────────────────────┘
+GNOME Shell process (GJS)
+  Overview takeover → SiftOverlay → ResultsModel → glass + St widgets
+                       │              ├── Apps: Shell.AppSystem (sync)
+                       │              └── Files/calc: D-Bus proxy (async)
+                       └── AppGrid → IconGrid.IconGrid + AppDisplay.AppIcon
+
+  prefs.js (separate process) → Gio.Settings → same schema
+                                            │
+                                            │ session D-Bus
+                                            │ io.github.alphabeast97.Sift
+                                            ▼
+siftd (Rust, one process)
+  D-Bus: Query / EnsureFresh / Reindex / Ping / Status + StatusChanged
+  Query → Calc (fend-core)
+        → File index (nucleo-matcher): snapshot, top-K, JSON
+  Indexer: walk $HOME → cache → inotify watcher → incremental updates
 ```
 
 ### 7.1 Extension (GJS) responsibilities
@@ -159,12 +179,15 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 - Own the overlay actor, entry, result rows, focus, keyboard handling, and modal grab.
 - Search apps synchronously from a list built at enable and refreshed on
   `app-system` changes (`installed-changed`, `app-state-changed` as needed).
+- Build the app grid lazily from that same app list, reuse it across opens, and invalidate
+  it on `installed-changed` (§13.2).
+- Read GSettings and apply every key live; `prefs.js` writes the same schema.
 - Send file/calculator queries to the daemon asynchronously; drop stale replies.
 - Render the glass; own its fallback.
 - Open apps, files, and folders; copy calculator results.
 - Never walk the filesystem, never run a per-frame loop.
 
-### 7.2 Daemon (`spotlightd`) responsibilities
+### 7.2 Daemon (`siftd`) responsibilities
 
 - Build and maintain the filename index with `ignore` + `notify`.
 - Answer queries over D-Bus with file matches and at most one calculator result.
@@ -176,18 +199,23 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 ### 7.3 Lifecycle
 
 - Extension `enable()`:
-  1. Read settings; build the app list; install Overview wrappers; replace/disable
-     keybindings and gestures; create the hidden overlay; add it as chrome.
+  1. Read settings and connect `changed::` handlers; build the app list; install Overview
+     wrappers; replace/disable keybindings and gestures; create the hidden overlay and
+     the (empty, unbuilt) grid shell; add them as chrome.
   2. Create the D-Bus proxy and call `Ping` asynchronously. If the daemon is missing,
      the extension still works for apps; the footer shows "Search service unavailable".
   3. Subscribe to `StatusChanged`; do **not** create timers.
+- Because `session-modes` is `["user"]`, the shell disables the extension when the
+  session locks and enables it again on unlock. Nothing may remain (grab, timer, actor,
+  proxy, wrapper, keybinding, gesture change) across that cycle.
 - Daemon start is D-Bus-activated by the first `Ping`/`Query`, or by the installed
-  service file at session start. No systemd unit is required.
+  service file at session start. No systemd unit is required. The daemon accepts
+  `--config` and `--cache` overrides for tests; the shipped extension never spawns it.
 - `disable()`: close if open, destroy actors and effects, unbind signals, restore the
   Overview methods/keybindings/gestures, drop the proxy, remove chrome. No daemon kill:
   it is shared session infrastructure and exits naturally at logout.
-- Daemon exits if it cannot own its bus name (a second instance), and on session bus
-  disconnect.
+- Daemon exits if it cannot own its bus name (a second instance), on `Quit` after
+  flushing the cache, and on session bus disconnect.
 
 ## 8. Taking over the Overview
 
@@ -204,7 +232,7 @@ change is reversible.
   `Main.overview.toggle()` / `show()` / `hide()` dynamically. Wrapping the instance
   methods catches them without patching each caller.
 - **`toggle-application-view`** (Super+A or user binding) calls
-  `Main.overview.show(ControlsState.APP_GRID)` dynamically, so it opens Spotlight too.
+  `Main.overview.show(ControlsState.APP_GRID)` dynamically, so it opens Sift's app grid.
 - **Touchpad overview gesture** uses `Main.overview._swipeTracker`, which directly
   drives the native overview and bypasses public methods. It must be disabled.
 - **`Main.overview` is an ESM live binding** and cannot be replaced. Only instance
@@ -220,25 +248,31 @@ On enable:
    extension may already have patched one of them; restoring must put back that exact
    value, or delete our shadow if there was none.
 2. Shadow them on the `Main.overview` instance with wrappers:
-   - `show(...)` / `showApps()` → open Spotlight, focus the entry, ignore the requested
-     native state.
-   - `hide()` → close Spotlight.
-   - `toggle()` → toggle Spotlight.
-   - `focusSearch()` → open Spotlight and focus the entry.
+   - `show(state = WINDOW_PICKER)` → open Sift in search view, except when
+     `state === OverviewControls.ControlsState.APP_GRID`, which opens the app grid.
+   - `showApps()` → open Sift in app-grid view.
+   - `hide()` → close Sift.
+   - `toggle()` → toggle Sift (closing from either view).
+   - `focusSearch()` → open Sift in search view and focus the entry.
    - `shouldToggleByCornerOrButton()` → mirror the stock semantics (no toggle while our
      open/close animation runs, and no toggle within 0.5 s of our last open) so the
      hot-corner-then-Activities double trigger stays guarded without touching native
      private state.
+   `OverviewControls.ControlsState` is exported by `js/ui/overviewControls.js`.
 3. Remove and re-add `toggle-overview` **only if** it has a non-empty binding; bind it
    to our toggle with the same `org.gnome.shell.keybindings` schema, flags
    `IGNORE_AUTOREPEAT`, and modes `NORMAL | OVERVIEW`. On disable, remove ours and
    re-add a dynamic `() => Main.overview.toggle()` handler (after the wrappers are
    restored, this resolves to the stock method).
+   No new keybinding is added for Super+A: `OverviewControls._toggleAppsPage()` calls
+   `Main.overview.show(ControlsState.APP_GRID)` whenever `Main.overview.visible` is
+   false, which is always true under the takeover, so the stock `<Super>a` binding
+   reaches our wrapper. `toggle-application-view` is left untouched.
 4. Set `Main.overview._swipeTracker.enabled = false` (a public GObject property) and
    restore its previous value on disable. Do not destroy the tracker.
 5. Track open/closed state ourselves; do not rely on `Main.overview.visible`.
-6. On disable: close and destroy the overlay, pop the modal grab, restore each saved
-   value or delete the shadow (per step 1), re-add the original binding if removed,
+6. On disable: close and destroy the overlay and grid, pop the modal grab, restore each
+   saved value or delete the shadow (per step 1), re-add the original binding if removed,
    restore the swipe tracker, and verify no signal handlers remain.
 
 ### 8.3 Deliberate non-patches
@@ -254,7 +288,7 @@ On enable:
 
 **Known cosmetic differences** accepted in v1: the Activities button does not get its
 "checked" pseudo-class, window-open animations are not suppressed, and shell D-Bus
-`OverviewActive` reports false. None affect Spotlight's behavior. Revisit only if the
+`OverviewActive` reports false. None affect Sift's behavior. Revisit only if the
 override tests show a real problem.
 
 ### 8.4 Edge cases
@@ -264,17 +298,27 @@ override tests show a real problem.
   fullscreen windows. The hot corner intentionally stays inert over fullscreen windows
   (stock behavior); Super still works.
 - **Second Super while open:** the `overlay-key` handler calls our `toggle()`, which
-  closes.
+  closes from either view.
+- **Super+A while open:** the stock binding calls `show(APP_GRID)` again and keeps the
+  grid open; it does not toggle back because the native `visible` is always false.
+  Escape closes, typing switches to search, and the entry's view button toggles by hand.
+- **App list changes while the grid is open:** `installed-changed` marks the grid dirty;
+  the visible grid is left alone and rebuilt on the next open, so icons do not vanish
+  under the pointer.
+- **App activation from the grid:** `AppIcon.activate()` calls `Main.overview.hide()`;
+  because that call is wrapped, it closes Sift after launching. No separate handler is
+  needed.
 - **Super+Alt+Up/Down (`shift-overview-up`/`down`):** these bypass the public methods and
   drive the native state adjustment directly. With the native overview always hidden,
   `down` is a no-op and `up` reaches `Main.overview.show()`, which our wrapper turns into
-  Spotlight. Harmless; they are left untouched in v1 to keep the patch set smaller.
+  Sift. Harmless; they are left untouched in v1 to keep the patch set smaller.
 - **Sticky Keys enabled:** Mutter's `overlay-key` handler returns early (stock behavior),
   so Super alone does nothing. The Activities button, hot corner, and Super+A still open
-  Spotlight. No workaround is attempted in v1.
-- **Session lock / user switch:** close on `session-mode-changed` (and on
-  `screen-shield` lock if available), destroy the modal grab, and ignore keys while
-  the session is not `user`.
+  Sift. No workaround is attempted in v1.
+- **Session lock / user switch:** the extension is `["user"]`-only, so the shell runs
+  `disable()` on lock and `enable()` on unlock. `disable()` must close and destroy
+  everything; `enable()` must never open on its own. As defense in depth, the open path
+  refuses to run unless `Main.sessionMode.currentMode === 'user'`.
 - **Extension disabled while open:** `disable()` pops the modal and destroys the actor;
   the shell must not be left grabbed.
 - **Shell error:** if any required method/field is missing at enable, log once and
@@ -294,6 +338,8 @@ keystroke
   → error/timeout: keep app results; show service footer once
 ```
 
+- On open, send `EnsureFresh()` fire-and-forget (ignore errors). It lets the daemon
+  reconcile a stale or watcher-degraded index without any UI blocking.
 - At most one D-Bus query in flight. While it runs, only the newest query is kept as
   pending; when the reply returns, a stale reply is dropped and the pending query is
   sent. The daemon query is short enough (< 30 ms) that explicit cancellation in the
@@ -311,10 +357,13 @@ keystroke
 - Score (higher wins): exact name; name prefix; word-boundary prefix; substring;
   subsequence; keyword/generic-name substring; +small bonus for running. Tie-break by
   shorter name.
-- Top 4 app rows. Row icons use `app.get_icon()` on a reused `St.Icon` (`gicon`), not a
-  new texture per keystroke.
+- Top 4 app rows (bounded by `max-results`). Row icons use `app.get_icon()` on a reused
+  `St.Icon` (`gicon`), not a new texture per keystroke.
 - Enter: `app.activate()`. Ctrl+Enter: `app.open_new_window(-1)` when
   `can_open_new_window()` is true, otherwise activate.
+- The app grid uses the same snapshot, sorted by display name. `installed-changed`
+  marks the grid dirty; it is rebuilt on the next grid open, not while it is visible
+  (§13.2).
 
 ### 9.3 Files (daemon)
 
@@ -322,11 +371,13 @@ keystroke
 - Two-stage: a cheap ASCII subsequence prefilter over precomputed lowercase names, then
   `nucleo-matcher` scoring only on candidates. Top-K by score, tie-break shorter name
   and shallower path.
-- Return at most 12 candidates; the UI shows up to 6 under a "Files" header.
+- Return at most 12 candidates; the UI fills the remaining rows up to `max-results`.
+  Each row's icon and subtitle identify the type; there are no section headers in v1.
 - Each result: absolute path, basename, kind (`file`/`dir`). The extension displays the
   parent path with `~` abbreviation.
-- File icons are queried asynchronously for visible rows only, with a bounded cache
-  (256 entries). No icon query for off-screen results.
+- File icons are queried asynchronously for visible rows only (`query_info`,
+  `standard::icon`, metadata only), with a bounded cache (256 entries). No icon query for
+  off-screen results and no blocking lookup in a frame.
 - Enter opens with `Gio.AppInfo.launch_default_for_uri_async()`. Ctrl+Enter calls
   `org.freedesktop.FileManager1.ShowItems()`; if that service is absent, open the
   parent folder.
@@ -339,6 +390,9 @@ keystroke
 - Show a calculator row when evaluation succeeds **and** the query looks like a
   calculation: starts with `=`, or contains an operator/unit/letter (so a bare "42" or
   an app name does not produce a result), and the result differs from the input.
+- **This heuristic lives only in `calc.rs`.** The extension trusts the presence of the
+  `calc` field and renders it; it does not repeat the detection logic. GJS tests cover
+  rendering and merge behavior, Rust tests cover the decision.
 - v1 supports arithmetic, unit conversion, and whatever offline date/time math
   `fend-core` offers. **No live currency rates**; currency queries that need a network
   rate simply do not produce a row.
@@ -371,7 +425,7 @@ keystroke
 ### 10.1 Scope and defaults
 
 - Roots: `~` (expanded to `$HOME`). Extra roots can be configured in
-  `~/.config/spotlight/config.toml`; no UI in v1.
+  `~/.config/sift/config.toml`; no UI in v1.
 - Hidden entries (leading `.`) are skipped by default.
 - Excluded directory names at any depth: `.cache`, `.local/share/Trash` (by path),
   `node_modules`, `.git`, `target`, `__pycache__`, `.venv`, `venv`.
@@ -388,15 +442,19 @@ keystroke
 - Entry: absolute path, precomputed lowercase basename, kind. Rough memory at 250k:
   25–40 MB.
 - Immutable snapshots: rebuild into a new `Vec<Entry>`, then swap under a short write
-  lock. Queries take a read lock (or clone an `Arc`) and never block the indexer for
-  long.
-- Cache at `$XDG_CACHE_HOME/spotlight/index-v1.bin`, mode 0600, directory 0700. Versioned
+  lock. A query sees either the previous complete snapshot or the new one, never a
+  half-built vector. Queries take a read lock (or clone an `Arc`) and never block the
+  indexer for long.
+- Cache at `$XDG_CACHE_HOME/sift/index-v1.bin`, mode 0600, directory 0700. Versioned
   header + a fingerprint of roots/excludes/flags; mismatch ignores the cache. No extra
   serialization crate: length-prefixed paths and kinds over `std::io`.
-- Startup: load cache → serve immediately → full background scan → swap. After the scan,
-  replay watcher events that arrived during it, so changes are not lost.
-- Cache is written at most every 30 s while dirty and on clean shutdown. A stale cache is
-  harmless because the startup scan corrects it.
+- Startup: load cache → serve immediately → full background scan → swap. On a warm start
+  the cache answers queries during the scan. On a cold start with no cache, the live
+  snapshot is empty until the first scan finishes; the UI stays app-only and the footer
+  shows the indexing state. A query is never blocked on `ready`. After the scan, replay
+  watcher events that arrived during it, so changes are not lost.
+- Cache is written at most every 30 s while dirty, on clean shutdown, and on `Quit`. A
+  stale cache is harmless because the startup scan corrects it.
 
 ### 10.3 Live updates
 
@@ -408,8 +466,10 @@ keystroke
   - rename → remove the old subtree, add the new subtree by walking only that path.
 - Excluded paths are filtered before touching the index.
 - Watcher failure (for example inotify watch limit) sets `watcher: "unavailable"` and
-  logs once. The index remains usable; a full reconcile is scheduled when the overlay is
-  next opened if the last reconcile is older than 10 minutes, and `Reindex` always works.
+  logs once. The index remains usable. The extension calls `EnsureFresh()` on open; the
+  daemon runs a full reconcile if the last successful reconcile is older than 10 minutes
+  and no scan is already running. `Reindex` requests a rebuild and returns immediately;
+  if a scan is already running it is a no-op.
 - No periodic timer when idle.
 
 ### 10.4 Query limits
@@ -421,15 +481,15 @@ keystroke
 
 ## 11. D-Bus API
 
-- Bus: session bus, name `io.github.alphabeast97.Spotlight`.
-- Object: `/io/github/alphabeast97/Spotlight`.
-- Interface: `io.github.alphabeast97.Spotlight`.
+- Bus: session bus, name `io.github.alphabeast97.Sift`.
+- Object: `/io/github/alphabeast97/Sift`.
+- Interface: `io.github.alphabeast97.Sift`.
 - JSON strings for payloads: easy to inspect with `gdbus`, easy in GJS, no variant
   gymnastics.
 
 ```xml
 <node>
-  <interface name="io.github.alphabeast97.Spotlight">
+  <interface name="io.github.alphabeast97.Sift">
     <method name="Ping">
       <arg name="version" type="s" direction="out"/>
     </method>
@@ -439,6 +499,8 @@ keystroke
       <arg name="results" type="s" direction="out"/>
     </method>
     <method name="Reindex"/>
+    <method name="EnsureFresh"/>
+    <method name="Quit"/>
     <property name="Status" type="s" access="read"/>
     <signal name="StatusChanged">
       <arg name="status" type="s"/>
@@ -469,21 +531,33 @@ Empty/whitespace queries return empty arrays.
   "indexed": 123456,
   "roots": ["/home/alice"],
   "truncated": false,
-  "watcher": "ok"
+  "watcher": "ok",
+  "last_reconcile": 1762819200
 }
 ```
 
 `state`: `starting` | `indexing` | `ready` | `degraded`.
 `watcher`: `ok` | `unavailable`.
+`last_reconcile`: Unix seconds of the last successful full reconcile, or 0.
 Status is also readable as the `Status` property. The signal is emitted on state changes
 and at most twice per second during a scan.
 
 **Errors and limits**
 
 - Invalid args (query too long, limit out of range) → `org.freedesktop.DBus.Error.InvalidArgs`.
-- `Reindex` while a rebuild is running is ignored (debounced); it returns immediately.
+- `Reindex`: if a scan is running, no-op; otherwise re-read `config.toml`, schedule a
+  rebuild, and return. `EnsureFresh`: no-op if a scan is running or the last reconcile
+  is under 10 minutes old; otherwise schedule a rebuild. Both return immediately.
+- `Quit`: cancel any running scan, write the last complete cache if dirty, release the
+  bus name, and exit. The installer calls it before replacing the binary; the next call
+  D-Bus-activates the new binary. Errors are ignored.
+- `Query` always answers immediately from the last complete snapshot (cache, or empty
+  during the first scan); it is never blocked on `ready`. During a rebuild the previous
+  snapshot stays live. On a cold start without cache, files appear after the first scan.
+- `Ping` returns the daemon version (`CARGO_PKG_VERSION` + git hash). The extension logs
+  a warning once if it differs from its own metadata version; functionality is not gated.
 - The extension uses a 500 ms call timeout and drops late replies.
-- A service file (`packaging/io.github.alphabeast97.Spotlight.service.in`) points at the
+- A service file (`packaging/io.github.alphabeast97.Sift.service.in`) points at the
   installed binary for D-Bus activation.
 
 ## 12. Liquid glass
@@ -517,12 +591,16 @@ panel (St.Widget, rounded by shader)
 
 ### 12.2 Performance behavior
 
-- Panel size while results are shown is fixed (≈ 720×420 max), so keystrokes do not
-  resize the blur frame.
+- Panel size while results are shown is fixed for the current `max-results` (≈ 720×420
+  at the default 6 rows), so keystrokes do not resize the blur frame.
 - The overlay, entry, rows, blur effect, and shader are created at enable and reused.
   Only clones are built on open and destroyed on close.
 - While the open/close animation runs, clones are not rebuilt; the animation is 120 ms
   open / 80 ms close with `easeOutQuad`.
+- View switch: clones are built for the target rect first, then frozen during the 150 ms
+  panel resize. No clone rebuild happens inside an animation frame. The grid rect (up to
+  1040 × 70% of the monitor) is measured in M0; if it misses the frame budget, grid view
+  uses the frosted panel while search keeps its selected glass mode.
 - `Main.pushModal()` already disables unredirect; do not call
   `global.compositor.disable_unredirect()` again.
 - On close: destroy all clones, disconnect source signals, cancel the pending later.
@@ -535,6 +613,10 @@ panel (St.Widget, rounded by shader)
   setup failure, actor API change). Frosted uses the same bounded clones + blur, but a
   CSS rounded translucent panel instead of the shader, and no lens/rim.
 - `off` uses a flat translucent panel; useful for debugging and low-end GPUs.
+- Grid view uses the same pipeline at its larger rect. If that rect misses the budget,
+  the grid falls back to `frosted` while search keeps the selected mode; this is a
+  measured M3 decision with the fallback logged once. A forced `liquid` setting still
+  falls back if effect/clone creation throws.
 - Performance fallback is a milestone decision, not runtime magic: if the M0 spike or
   the release measurements miss the frame budget on the target hardware, `auto` defaults
   to frosted (or the shader constants get cheaper). We do not auto-switch mid-session,
@@ -546,28 +628,117 @@ panel (St.Widget, rounded by shader)
 
 ## 13. UI and interaction
 
+### 13.1 Search view
+
 - One panel on the monitor under the pointer at open time. Multi-monitor: close and
   reposition on `monitors-changed`; never show one panel per monitor.
 - Width: `clamp(560, 0.55 × monitor width, 720)` logical px.
   Top: 18% of monitor height, clamped so the panel and its shadow fit below the top bar.
 - Layout:
-  - 60 px entry with a search icon, 20 px text, placeholder "Spotlight Search".
-  - fixed results viewport while non-empty: up to 6 rows (52 px each), scrolling for
-    more; section headers "Applications" and "Files" (11 px, muted, uppercase).
+  - 60 px entry with a search icon, 20 px text, placeholder "Sift Search", and a grid
+    button on the right (`view-app-grid-symbolic`; accessible name "Show all
+    applications"). Clicking it clears the query and shows the grid.
+  - results viewport while non-empty: up to `max-results` rows (52 px each), also capped
+    by the available monitor height; it scrolls only when that many rows do not fit.
+    Rows carry their own icon and type subtitle; there are no section headers.
   - 32 px footer: keyboard hints on the left; index status on the right only while
     indexing/degraded.
-  - empty state: a short hint and keyboard hints, 120 px tall.
+  - empty state: a short hint, keyboard hints, and a "Show all applications" button;
+    120 px tall.
 - Rows: 28 px icon, title (15 px), subtitle (12 px, muted; app generic name or file
   parent path). Reused actors; no list rebuild.
 - Selected row: translucent fill, 10 px radius; hover selects.
+
+### 13.2 App grid view
+
+The grid is a second view of the same panel, not a second window. It reuses GNOME's
+`IconGrid.IconGrid`, `AppDisplay.AppIcon`, and `PageIndicators.PageIndicators`; no
+native Overview state is involved.
+
+- **Triggers:** Super+A (stock `toggle-application-view` → `show(APP_GRID)`),
+  `showApps()`, the entry's grid button, and the empty-state button. Entering the grid
+  clears the query. The entry's button toggles back to search; typing starts a new
+  search. Escape closes Sift from either view.
+- **Geometry:** the panel widens to `clamp(720, 0.72 × monitor width, 1040)` and grows
+  down from 12% of monitor height to at most 70% of it. The entry stays at the top;
+  the grid fills the space above a 28 px page-indicator strip. The width/height change
+  is one 150 ms ease (skipped when animations are off), never a per-frame resize.
+- **Content:** every `Shell.AppSystem` app with `should_show()`, deduplicated by id,
+  sorted by display name with `localeCompare()`. Running apps keep the stock running
+  dot. No folders, no recents, no drag, no context menus in v1.
+- **Items:** one `AppDisplay.AppIcon(app, {isDraggable: false})` per app. Icons are
+  `app.create_icon_texture(size)` through `AppIcon`; activation uses `Shell.App`, so
+  startup notification, workspaces, and focus are correct. Ctrl+Enter and middle-click
+  open a new window when the app allows it (stock `AppIcon` behavior).
+- **Layout:** `IconGrid` with horizontal pages, `fixed-icon-size` =
+  `grid-icon-size`, and columns/rows derived from the available width/height, clamped to
+  4–10 columns and 2–6 rows. `page-padding` is 24 px; column/row spacing is 12 px.
+  Columns and rows are recomputed on panel resize, not on every frame.
+- **Paging:** clickable `PageIndicators` dots at the bottom; PageUp/PageDown change
+  pages; the first/last item does not wrap to another page. `goToPage()` uses the stock
+  250 ms `EASE_OUT_CUBIC` scroll, or no animation when disabled.
+- **Keyboard:** the entry keeps key focus in both views, so typing always works; grid
+  tiles get `can_focus = false` so a click cannot steal focus. In grid view the overlay
+  intercepts arrows, Home/End, PageUp/PageDown, and Enter: arrows move the selection by
+  one cell/row, Enter launches, and the selected tile uses
+  `AppIcon.setForcedHighlight(true)`. The first tile is selected when the grid opens. A
+  printable key switches to search view and becomes the first query character. Hover
+  highlights a tile but does not move the keyboard selection.
+- **Build:** the grid is empty at enable. On first open, icons are created in idle
+  chunks of at most 30 and appended to the cached grid; the panel is interactive
+  immediately. Later opens reuse the actors. `installed-changed` marks the grid dirty;
+  a visible grid is rebuilt only after it closes. The grid is destroyed on `disable()`.
+- **Accessibility:** the grid is accessible-named "Applications"; each tile exposes the
+  app name through `AppIcon`'s label; page dots get "Page N" accessible names. Keyboard
+  selection is visible and never relies on hover.
+
+### 13.3 Preferences window and settings
+
+`extension/prefs.js` is a standard `ExtensionPreferences` that opens an
+`Adw.PreferencesWindow` (600×720, search enabled, title "Sift"). It reads and writes
+`this.getSettings()`. Its only daemon contact is a fire-and-forget `Reindex` call for
+the "Rebuild index" button; it never touches shell actors.
+
+| Key | Type | Range / default | Effect |
+|---|---|---|---|
+| `glass-mode` | enum | `auto` / `liquid` / `frosted` / `off`; `auto` | `auto` uses liquid unless the build fell back; `off` is a flat translucent panel. |
+| `glass-opacity` | double | 0.30–0.95; 0.72 | Panel tint opacity. |
+| `blur-radius` | int | 0–64; 40 | Backdrop blur radius; 0 disables blur. |
+| `glass-tint` | double | 0.0–1.0; 0.45 | Dark tint strength for legibility. |
+| `animations` | bool | true | Open/close and view transitions; also off when `org.gnome.desktop.interface.enable-animations` is false. |
+| `max-results` | int | 4–12; 6 | Maximum rows in the search view. |
+| `grid-icon-size` | int | 48–128; 96 | App-grid icon size; columns/rows follow. |
+
+- **Groups:** Appearance (mode combo, opacity, blur radius, tint, animations), Results
+  (max results), App grid (icon size), and File indexing (note + "Rebuild index"
+  button). Switches use `Adw.SwitchRow`; numbers use `Adw.ActionRow` + `Gtk.Scale`
+  (200 px wide, value shown, step 1 for integers, 0.05 for doubles); the mode uses
+  `Adw.ComboRow`; the rebuild action uses `Adw.ActionRow` + a `Gtk.Button` suffix.
+- **Live apply:** the extension connects `changed::<key>` for every key. Glass keys
+  update uniforms or rebuild the effect in place; `max-results` re-renders the current
+  results; `grid-icon-size` updates `fixed-icon-size` and relayouts the cached grid.
+  No shell restart and no reopen is required. Changes made while Sift is closed apply on
+  the next open.
+- **File indexing:** a note row explains that indexing runs in `siftd`, is configured in
+  `~/.config/sift/config.toml`, and is disabled with `roots = []`. "Rebuild index" calls
+  `Reindex`, which re-reads `config.toml` and rebuilds in the background; a toast reports
+  if the daemon is unreachable. There is deliberately no switch that leaves the daemon
+  watching `$HOME` (see §5).
+- **Defaults:** the values above are the schema defaults, so Sift works correctly if the
+  prefs window is never opened.
+
+Shared presentation:
+
 - Light/dark follows `St.Settings.get().color_scheme`; the tint and text colors switch
   together. The blur is dark-tinted by default for legibility over any wallpaper.
 - Fonts inherit the GNOME interface font. No custom font dependency.
-- Accessibility v1: entry accessible-name, per-row accessible-name, full keyboard
-  navigation, visible focus/selection, high-contrast-safe border. Full Orca
-  announcement of selection changes is a follow-up; the design does not claim it.
-- Animation: opacity + 0.98→1 scale on open (120 ms), reverse on close (80 ms). Focus
-  is grabbed immediately, not after the animation.
+- Accessibility v1: entry accessible-name, per-row and per-tile accessible-names, full
+  keyboard navigation, visible focus/selection, high-contrast-safe border, and labelled
+  prefs controls. Full Orca announcement of selection changes is a follow-up; the
+  design does not claim it.
+- Animation: opacity + 0.98→1 scale on open (120 ms), reverse on close (80 ms); grid
+  view switch 150 ms. Focus is grabbed immediately, not after the animation. All
+  durations are zero when animations are off.
 
 ## 14. Performance
 
@@ -581,6 +752,10 @@ panel (St.Widget, rounded by shader)
 | Keystroke → files/calc merged | ≤ 80 ms P95 with a warm 250k index |
 | Frame interval while open/animated | P95 ≤ 16.7 ms; no frame > 33 ms |
 | Open/close animation | ≤ 2 dropped frames |
+| App grid, first open (cold) | Panel visible within the normal open budget; icons complete in idle chunks ≤ 200 ms. |
+| App grid, warm open | ≤ 2 frames; no icon re-creation. |
+| Grid view, liquid glass | P95 ≤ 16.7 ms at the 1040 × 70% rect; otherwise the grid uses frosted. |
+| Settings change → visible effect | Glass ≤ 1 frame; results/grid re-layout ≤ 16 ms. |
 | Closed idle | 0% CPU, no timers, no per-frame callbacks |
 | Daemon idle | 0% CPU; inotify thread blocked; wakeups < 5/s |
 | Extension extra JS heap | ≤ 25 MB |
@@ -590,11 +765,19 @@ panel (St.Widget, rounded by shader)
 
 ### 14.2 Rules
 
-- Apps in the shell; files/calc in Rust. No file I/O in GJS.
+- Apps in the shell; files/calc in Rust. No directory walking, index scan, or file
+  content read in GJS. The only filesystem access is bounded async `query_info`
+  (`standard::icon`, metadata only) for the ≤ 12 visible file rows, cached (256 entries).
 - One in-flight D-Bus query, 40 ms debounce, stale replies dropped.
 - Precompute lowercase app names once; precompute lowercase file basenames once.
 - Reuse rows and icons; update text/gicon in place.
-- Fixed panel size while typing; only empty↔results resizes.
+- Search view: fixed panel size while typing; only empty↔results resizes. Grid view has
+  its own fixed larger size.
+- App grid: build once on first open in idle chunks of ≤ 30 icons, cache the actors, and
+  rebuild only after `installed-changed` while closed. Never create textures inside the
+  open animation.
+- GSettings changes are signal-driven; no polling. Prefs runs in its own process and
+  never touches shell actors directly.
 - Event-driven backdrop updates, coalesced before redraw; no per-frame JS.
 - No `GLib.timeout_add` polling. Timers exist only for the debounce, the status
   throttle, and the close animation.
@@ -609,7 +792,7 @@ panel (St.Widget, rounded by shader)
   functional behavior. Software rendering (llvmpipe) makes absolute FPS meaningless;
   CI gates correctness and gross timing (for example, open < 500 ms), not 60 fps.
 - **Real session:** a debug-only frame meter (`tools/perf/frame-meter.js`, enabled by
-  `SPOTLIGHT_PERF=1`) registers one `BEFORE_REDRAW` callback, records frame intervals
+  `SIFT_PERF=1`) registers one `BEFORE_REDRAW` callback, records frame intervals
   during open/typing/close, and logs P50/P95/max and long frames to the journal. It is
   not loaded in normal use. `sysprof-cli` captures CPU/GPU costs. Measurements and
   screenshots/notes live under `docs/perf/` so they survive `/tmp`.
@@ -625,9 +808,13 @@ panel (St.Widget, rounded by shader)
 | Daemon missing / not activated | Apps still search; footer shows "Search service unavailable"; retry with 5 s backoff on typing. |
 | Daemon crashes | Bus-name owner change detected; proxy reconnects when it returns; no shell crash. |
 | Index truncated at cap | Status `truncated: true`; search still works; footer notes the cap once. |
-| inotify watch limit | Status `degraded`, `watcher: "unavailable"`; manual `Reindex`; open-time reconcile if stale > 10 min. |
-| Home on slow/network FS | Caps and excludes still apply; scan is background; UI remains app-only until ready. |
+| inotify watch limit | Status `degraded`, `watcher: "unavailable"`; manual `Reindex`; `EnsureFresh()` on open if stale > 10 min. |
+| Home on slow/network FS | Caps and excludes still apply; scan is background; queries answer from cache or the last complete snapshot, apps are always available. |
 | Shader/clone failure | Auto-fallback to frosted; log once. |
+| App icon texture failure | Generic icon placeholder; the grid stays usable. |
+| `installed-changed` while grid is open | Grid marked dirty; visible actors remain; rebuild after close. |
+| Settings schema missing/corrupt | Enable aborts with a clear log; `make test` compiles the schema so a release cannot hit this. |
+| Prefs window open while Sift is disabled | Settings can still be edited; they apply on the next enable. |
 | Stale file path | Row removed on activation failure; debounced reindex requested. |
 | Shell version mismatch | Extension declares 51 only; enable aborts with a clear log if required APIs are absent. |
 | Extension disabled while open | Grab popped, actors destroyed, Overview restored. |
@@ -638,6 +825,9 @@ panel (St.Widget, rounded by shader)
   contents. It opens nothing and executes nothing.
 - Cache and config are user-only (0700 directory, 0600 cache). Queries and paths are not
   logged in normal operation; debug logging is opt-in.
+- The app grid lists only what `Shell.AppSystem` already exposes in the shell; it does
+  not read `.desktop` files or icon directories itself. The prefs window is an ordinary
+  user-scoped GSettings client with no privileged surface.
 - The extension opens files only through the desktop's default handler and reveals via
   the standard FileManager1 interface. No shell interpolation, no command execution.
 - No network access in v1.
@@ -655,30 +845,33 @@ panel (St.Widget, rounded by shader)
 ├── .editorconfig
 ├── .gitignore
 ├── rust-toolchain.toml
+├── THIRD_PARTY_NOTICES              MPL/MIT dependency and attribution notices
 ├── .github/workflows/
 │   ├── ci.yml                       required fast checks
+│   ├── ci-image.yml                 build/publish the pinned GNOME 51 test image
 │   ├── shell-smoke.yml              GNOME 51 headless harness (main + nightly)
 │   └── release.yml                  tag artifacts
 ├── docs/
 │   ├── research/phase-0-findings.md
-│   ├── superpowers/specs/2026-11-11-spotlight-design.md
+│   ├── superpowers/specs/2026-11-11-sift-design.md
 │   ├── perf/                        committed measurements and notes
 │   └── superpowers/plans/           implementation plan (after approval)
 ├── extension/
-│   ├── metadata.json                uuid, name, shell-version ["51"], schema
+│   ├── metadata.json                uuid, name, shell-version ["51"], settings-schema
 │   ├── extension.js                 lifecycle, enable/disable, test hooks
-│   ├── stylesheet.css               panel/row/entry styles
-│   ├── prefs.js                     (not in v1; no prefs window)
+│   ├── stylesheet.css               panel/row/entry/grid/prefs styles
+│   ├── prefs.js                     Adw preferences window (§13.3)
 │   ├── src/
 │   │   ├── overlay.js               actor tree, focus, keyboard, modal, animation
+│   │   ├── appGrid.js               IconGrid/AppIcon, paging, selection, lazy build
 │   │   ├── glass.js                 backdrop clones, blur, shader, fallback
 │   │   ├── overview.js              wrappers, keybindings, gestures, restore
 │   │   ├── apps.js                  Shell.AppSystem snapshot + scoring
 │   │   ├── files.js                 file result icons/actions
 │   │   ├── daemon.js                D-Bus proxy, status, query sequencing
 │   │   ├── results.js               merge, selection, row binding
-│   │   └── lib/                     pure JS: scoring, merge, format (GJS-testable)
-│   ├── schemas/org.gnome.shell.extensions.spotlight.gschema.xml
+│   │   └── lib/                     pure JS: scoring, merge, format, grid math
+│   ├── schemas/org.gnome.shell.extensions.sift.gschema.xml
 │   └── tests/                       pure unit tests + headless hooks
 ├── daemon/
 │   ├── Cargo.toml
@@ -694,8 +887,10 @@ panel (St.Widget, rounded by shader)
 │   │   └── status.rs                shared status model
 │   └── tests/                       unit + D-Bus integration (dbus-run-session)
 ├── packaging/
-│   └── io.github.alphabeast97.Spotlight.service.in
+│   ├── install.sh                   standalone release installer (also used by make)
+│   └── io.github.alphabeast97.Sift.service.in
 └── tools/
+    ├── ci/gnome51/Dockerfile        pinned Arch snapshot + GNOME 51 test image
     ├── test/headless.js             shell automation script
     ├── test/run-shell-test.sh       pack + run under dbus-run-session
     └── perf/frame-meter.js          debug-only frame interval recorder
@@ -716,18 +911,27 @@ panel (St.Widget, rounded by shader)
 
 **Rust integration tests**
 
-- Start `spotlightd` in a temp XDG environment with a fixture tree under
-  `dbus-run-session`, call `Ping`/`Query`/`Reindex` over a real session bus, assert
-  results, status transitions, and that a second instance exits cleanly.
+- Start `siftd` in a temp XDG environment with a fixture tree under
+  `dbus-run-session`, call `Ping`/`Query`/`Reindex`/`EnsureFresh`/`Quit` over a real
+  session bus, assert results, status transitions, and that a second instance exits
+  cleanly.
+- Cold start with no cache: `Query` returns promptly with empty `files` while `state` is
+  `indexing`; after the first scan it returns results. During a rebuild, a query sees the
+  previous complete snapshot, never a half-built one.
+- `Reindex` re-reads an edited config (for example `roots = []`); `Quit` flushes the
+  cache, releases the bus name, and exits.
 - Test D-Bus argument validation and JSON shape.
 
 **GJS unit tests (no shell imports)**
 
 - `gjs -m tests/unit/all.js` with a tiny assert harness (no npm test framework).
 - Cover app scoring, merge order/selection stability, path abbreviation, calc-row
-  heuristics mirroring the daemon, and key handling state.
+  heuristics mirroring the daemon, key handling state, and grid math: columns from
+  width, rows from height, page count, index ↔ (page, cell), and edge clamping.
+- Schema test: `glib-compile-schemas --strict` then `gsettings` in a temp
+  `GSETTINGS_SCHEMA_DIR` asserts every key, type, range, and default from §13.3.
 - ESLint (flat config) enforces GNOME-style 4 spaces, single quotes, semicolons, no
-  unused vars; `no-undef` with GJS globals.
+  unused vars; `no-undef` with GJS globals. `prefs.js` is linted with the extension.
 
 **Headless shell smoke test (GNOME 51)**
 
@@ -739,13 +943,20 @@ panel (St.Widget, rounded by shader)
   - `Main.overview.toggle()` opens the overlay, and again closes it;
   - `Main.overview.show()` / `hide()` / `showApps()` / `focusSearch()` route to it;
   - querying "term" yields Terminal in the results (app path);
-  - Escape closes; query clears on close;
+  - `Main.overview.show(ControlsState.APP_GRID)` and `showApps()` open the grid view;
+    the grid contains installed apps, and Super+A's stock path reaches it;
+  - entering the grid clears a non-empty query; typing in the grid switches to search
+    and the character lands in the entry;
+  - Escape closes from either view; query clears on close;
+  - `grid-icon-size` changed through the keyfile GSettings backend relayouts an open
+    grid and `max-results` changes the visible row count, with no reopen;
   - disabling the extension restores `Main.overview` methods and leaves no modal grab;
   - re-enabling works.
-- File/calc end-to-end variant: the test wrapper sets `SPOTLIGHT_DAEMON` and
-  `SPOTLIGHT_CONFIG` so the extension spawns the built daemon against a fixture root;
-  the script asserts a file result and a calculator result. This is the only test that
-  exercises the whole path.
+- File/calc end-to-end variant: `run-shell-test.sh` starts the built `siftd` on the
+  private session bus with a fixture config/root before launching the shell; the
+  extension connects through its normal proxy and never spawns a process. The script
+  asserts a file result and a calculator result. This is the only test that exercises
+  the whole path.
 - `gnome-shell-test-tool` creates a scratch XDG home and uses `GSETTINGS_BACKEND=keyfile`,
   so it cannot touch the developer's settings. It needs a private session bus; the
   wrapper provides `dbus-run-session`.
@@ -755,25 +966,40 @@ panel (St.Widget, rounded by shader)
 - Real session on GNOME 51.1 / Intel i915: warm open, typing, 60 fps frame meter,
   light/dark, 100%/200% scaling, two monitors, fullscreen app, BMS on/off, disable/enable,
   logout/login.
+- App grid: Super+A, `showApps`, empty-state button, paging with dots and keys, 100+ app
+  case, typing switches to search, icon size changes live, no drag/folders.
+- Preferences: `gnome-extensions prefs sift@alphabeast97.github.io`; change every toggle
+  and slider, verify the live effect, close/reopen persistence,
+  `gsettings reset-recursively` restores defaults, and "Rebuild index" applies an edited
+  `config.toml` (for example `roots = []`).
 - Fresh user install and uninstall.
 
 ### 18.2 CI
 
-Fast job (every push/PR, required):
+Fast job (every push/PR once the repo exists at M5, required):
 
 - Rust: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
-- GJS lint + pure tests (`gjs` installed).
-- Extension pack (`gnome-extensions pack`) + metadata/schema sanity (UUID, shell 51,
-  schema id).
+- GJS lint + pure tests (`gjs` installed), including the grid math and schema tests.
+- Extension pack (`gnome-extensions pack` with the compiled schema) + metadata/schema
+  sanity: UUID, shell 51, `settings-schema` matches the XML id, every key compiles.
 - D-Bus integration tests under `dbus-run-session`.
 
-Container job (main + nightly, required on main):
+Container job (main + nightly, required on main after M5):
 
-- `archlinux` container with GNOME Shell 51, GJS, Mesa (llvmpipe), D-Bus, Python. The
-  image digest is **pinned** to a GNOME 51 build and treated as part of the test matrix;
-  moving it to GNOME 52 is a deliberate version-support task, not an automatic bump.
+- The test image is **built by this repo**, not a stock rolling tag. `ci-image.yml`
+  builds `tools/ci/gnome51/Dockerfile` from an `archive.archlinux.org` snapshot pinned
+  to the GNOME 51 era, installs GNOME Shell 51, `gnome-shell-test-tool`, GJS, Mesa
+  (llvmpipe), D-Bus, and Python, and publishes it to GHCR. `shell-smoke.yml` references
+  the image by **digest**.
+- Moving the pin to GNOME 52 is a deliberate version-support task, not an automatic bump.
+  If Arch's archive snapshot is unavailable, the same Dockerfile can build from a
+  Fedora/COPR or a source-built GNOME 51; the interface to the smoke job is unchanged.
 - Build the extension zip and daemon, run the headless smoke test.
 - Software rendering means this is a correctness gate, not a frame-rate gate.
+- Until M5 the same image is built locally and the jobs run through `make ci`/`act`;
+  GHCR publishing and required checks begin when the repository is created at M5. The
+  image digest and workflow files are written in M1 so publishing is a wiring step, not
+  a redesign.
 
 Risk: the headless harness needs EGL/GBM; on a GPU-less runner it must run on llvmpipe
 (Mesa surfaceless). If that proves impossible in the container, fall back to
@@ -782,8 +1008,9 @@ not change the product design. The local harness is already proven on this machi
 
 Release job (tag `v*`):
 
-- Build `spotlightd` (x86_64-unknown-linux-gnu) and the extension zip.
-- Publish `install.sh`, artifacts, and `SHA256SUMS` on the GitHub release.
+- Build `siftd` (x86_64-unknown-linux-gnu) and the extension zip.
+- Publish the standalone `packaging/install.sh`, both artifacts, and `SHA256SUMS` on the
+  GitHub release.
 - No push or tag until the user has verified the final local build.
 
 ### 18.3 Local commands
@@ -793,7 +1020,8 @@ make build        # daemon release + extension zip
 make test         # rust tests, GJS unit tests, lint
 make test-shell   # headless GNOME Shell smoke (dbus-run-session)
 make install      # binary + D-Bus service file + extension + enable
-make uninstall    # disable + remove; keep user config/cache unless PURGE=1
+make prefs        # open the installed extension's preferences window
+make uninstall    # disable + remove; keep config/cache unless PURGE=1 (maps to --purge)
 make fmt / lint
 ```
 
@@ -802,21 +1030,38 @@ Conventional commits: `feat:`, `fix:`, `docs:`, `test:`, `ci:`, `build:`, `refac
 
 ## 19. Packaging and install
 
-- `make install` (no root):
-  1. `cargo build --release --manifest-path daemon/Cargo.toml`.
-  2. Install `spotlightd` to `~/.local/bin/`.
-  3. Generate the D-Bus service file with the absolute binary path into
-     `~/.local/share/dbus-1/services/`.
-  4. `gnome-extensions pack extension/ -o dist/` and
-     `gnome-extensions install --force dist/<uuid>.zip`.
-  5. `gnome-extensions enable <uuid>` (with a logout/login note on Wayland if the shell
-     has not seen the extension yet).
-- Upgrades: rerun `make install`; the daemon is replaced, the extension reinstalled, and
-  the shell reloads it on disable/enable or next login. D-Bus activation restarts the
-  daemon on the next call.
+`packaging/install.sh` is the one installer. It works from a release tarball (binary and
+extension zip next to it) and is reused by `make install` with locally built artifacts;
+v1 does **not** download anything, so there is no network trust path in the installer.
+
+`make install` (no root) runs it with local artifacts:
+
+1. `cargo build --release --manifest-path daemon/Cargo.toml`.
+2. Call `Quit` on the session bus if `siftd` is running (ignore errors), wait up to 2 s
+   for the bus name to disappear, then install the new `siftd` to `~/.local/bin/` via a
+   temp file + `mv` (an atomic replace avoids `ETXTBSY` if the old process lingers). If
+   no session bus is reachable, the installer notes that a logout is needed for the
+   running daemon to be replaced.
+3. Generate the D-Bus service file with the absolute binary path into
+   `~/.local/share/dbus-1/services/`.
+4. `gnome-extensions pack extension/ --schema=extension/schemas/org.gnome.shell.extensions.sift.gschema.xml -o dist/`
+   and `gnome-extensions install --force dist/<uuid>.zip`.
+5. `gnome-extensions enable <uuid>` (with a logout/login note on Wayland if the shell
+   has not seen the extension yet).
+
+- `gnome-extensions prefs <uuid>` opens the preferences window (§13.3). Settings are
+  ordinary GSettings under `org.gnome.shell.extensions.sift` and can also be scripted
+  with `gsettings`.
+
+- The standalone script accepts `--prefix` (default `~/.local`) and `--uninstall`
+  (`--purge` also removes config/cache). It checks that `gnome-extensions` and
+  `gjs`/GNOME 51 are present and prints a clear next step if not.
+- Upgrades: rerun the installer; it quits the old daemon, replaces the binary, and
+  reinstalls the extension. The shell reloads it on disable/enable or next login; D-Bus
+  activation starts the new daemon on the next call.
 - Uninstall: disable + uninstall the extension, remove the binary and service file;
-  keep config/cache unless `PURGE=1`.
-- Distribution limits: an EGO zip cannot install `spotlightd`. V1 documents the script.
+  keep config/cache unless `--purge`.
+- Distribution limits: an EGO zip cannot install `siftd`. V1 documents the script.
   AUR and Flatpak (`--talk-name` for the daemon bus name) are future release work.
 
 ## 20. Milestones
@@ -830,6 +1075,8 @@ are added in that milestone, not retrofitted.
   clone + `Shell.BlurEffect` + rounded shader.
 - Verify on the real session: clone correctness (window, video, fullscreen), visual
   look, frame interval via the debug frame meter, unredirect behavior, BMS enabled.
+- Measure both panel rects: the default search panel and the maximum grid panel
+  (1040 × 70% of the monitor), including one view-switch resize.
 - Verify the Overview hooks: `overlay-key`, `toggle-overview`, Activities, hot corner,
   `showApps`, gestures, disable restore.
 - Record measurements and decisions in `docs/perf/` and
@@ -840,16 +1087,27 @@ are added in that milestone, not retrofitted.
 ### M1 — Extension foundation
 
 - Repo scaffolding, lint, unit-test harness, extension packaging, headless smoke runner.
+- Build the pinned GNOME 51 image locally with Docker/podman from
+  `tools/ci/gnome51/Dockerfile` and run the headless harness against it. Write
+  `ci-image.yml` and `shell-smoke.yml`, but do not publish to GHCR or push; the repo does
+  not exist yet.
 - Overview wrappers + keybinding/gesture handling + restore tests.
 - Overlay actor, entry, keyboard navigation, empty state, modal/focus/click-outside.
 - App search, rows, activation, multi-monitor placement.
-- **Exit:** Super/Activities/hot corner open Spotlight; Esc closes; disable restores the
-  stock Overview; `make test` and `make test-shell` pass.
+- GSettings schema with the §13.3 defaults; the extension reads and applies them (the
+  prefs UI arrives in M4).
+- App grid view: `IconGrid`/`AppIcon` reuse, lazy chunked build, paging, keyboard
+  selection, Super+A/`showApps` routing.
+- **Exit:** Super/Activities/hot corner open Sift; Super+A opens the grid and typing
+  returns to search; Esc closes; disable restores the stock Overview; `make test` and
+  `make test-shell` pass on the locally built pinned image; the Actions workflows are
+  ready but not pushed.
 
 ### M2 — Daemon and search
 
 - Rust crate: config, walker, cache, index snapshots, watcher, query, calc.
 - D-Bus interface, service file, activation, status signals.
+- Daemon lifecycle: `Quit` with cache flush, `Reindex` re-reads config, `Ping` version.
 - Extension daemon proxy, debounce, sequencing, footer status, error state.
 - File rows (icons, open, reveal), calc row (copy), merge/selection.
 - **Exit:** file and calculator results work end-to-end; 250k benchmark within budget;
@@ -858,7 +1116,11 @@ are added in that milestone, not retrofitted.
 ### M3 — Glass integration
 
 - `glass.js`: bounded clones, blur, shader, tint/rim/lens, fallback modes, cleanup.
+- Glass parameters read live from GSettings (mode/opacity/blur/tint); changes apply
+  without reopening.
 - Open/close animation, fixed results height, event-driven backdrop updates.
+- Both panel rects: search glass and the larger grid; freeze clones during the view
+  switch. If the grid misses the budget, make its frosted fallback explicit.
 - Real-session frame measurements; tune or choose frosted default.
 - **Exit:** P95 frame interval ≤ 16.7 ms on the target machine (or documented fallback);
   no leaks across 20 open/close cycles; BMS on/off both look correct.
@@ -866,16 +1128,21 @@ are added in that milestone, not retrofitted.
 ### M4 — Polish and packaging
 
 - Light/dark theming, high-contrast check, a11y labels, path abbreviations, icons.
-- Install/uninstall script, README, `THIRD_PARTY_NOTICES`, LICENSE.
+- `prefs.js`: Adw window with every §13.3 key, live apply, reset-safe defaults;
+  schema test added to `make test`.
+- App-grid polish: icon-size relayout, page-dot labels, empty/100+ app cases.
+- Standalone `packaging/install.sh` (install/upgrade/uninstall/`--purge`), README,
+  `THIRD_PARTY_NOTICES`, LICENSE.
 - Release artifacts and checksums.
-- **Exit:** clean install on a fresh user works; uninstall leaves no extension, binary,
-  service file, or active keybinding.
+- **Exit:** clean install on a fresh user works; every prefs control changes the live UI;
+  uninstall leaves no extension, binary, service file, or active keybinding.
 
 ### M5 — Verification and handover
 
-- Full CI green; manual matrix from §18.1; fix findings.
+- Full local verification; manual matrix from §18.1; fix findings.
 - User verifies the local build and approves.
-- Only then: create the GitHub repository, push, and tag the release.
+- Only then: create the GitHub repository, push, publish the CI image to GHCR, enable the
+  required workflows, and tag the release.
 
 ## 21. Feasibility risks (ranked)
 
@@ -885,9 +1152,11 @@ are added in that milestone, not retrofitted.
 2. **Super routing edge cases** (`overlay-key` vs `toggle-overview`, sticky keys, second
    press, touchpad gesture). Mitigation: M0/M1 tests for each entry point; disable the
    swipe tracker; keep native `visible` false and do not emit native signals.
-3. **Glass performance/quality varies by GPU and window type.** Mitigation: bounded
-   frame, surface clones, event-driven updates, frame meter, frosted fallback selected
-   at the milestone gate, BMS compatibility tested.
+3. **Glass performance/quality varies by GPU and window type.** The grid rect is ~2–3×
+   the search area, so it is measured separately. Mitigation: bounded frame, surface
+   clones, event-driven updates, frozen clones during view switches, frame meter,
+   frosted fallback (search and/or grid) selected at the milestone gate, BMS
+   compatibility tested.
 4. **Daemon distribution.** EGO cannot install a binary. Mitigation: script install now;
    AUR/Flatpak later; the extension degrades to app search if the daemon is absent.
 5. **Index correctness under churn and inotify limits.** Mitigation: cache + startup
@@ -900,23 +1169,37 @@ are added in that milestone, not retrofitted.
    math. Mitigation: `LICENSE` + `THIRD_PARTY_NOTICES` before the first push.
 9. **Blur my Shell conflicts.** Mitigation: off by default; opt-in class only; clone
    surfaces, not window actors; test with BMS enabled.
-10. **Scope creep.** Requests for the window picker/app grid/recents are out of scope by
-    design; the anti-goals in §4 are the line.
+10. **Scope creep.** The app grid and prefs window are now in scope; window picker,
+    recents, folders, drag ordering, plugins, and live currency remain out. The
+    anti-goals in §4 are the line.
+11. **Shell app-grid API drift and first-open cost.** `IconGrid`/`AppIcon` are exported
+    but are shell internals and can move in 52. Mitigation: 51-only pin, all reuse kept
+    in `appGrid.js`, lazy chunked build, headless grid test, and a small custom
+    `Clutter.FlowLayout` as the contingency if the components misbehave.
 
 ## 22. What is left to the builder
 
 The implementation plan decides: exact test file names, function signatures, cache byte
-layout, D-Bus helper structure, row widget internals, shader source layout, and commit
-splitting. Exact glass colors, blur radius, and lens strength are tuned in M0 against the
-real screen; starting values are listed in §12. No product behavior is left open.
+layout, D-Bus helper structure, row/grid widget internals, shader source layout, and
+commit splitting. Exact glass colors, blur radius, and lens strength are tuned in M0
+against the real screen; starting values are listed in §12. The prefs row order and
+widget widths are cosmetic and may move. No product behavior is left open.
 
 ## 23. Approval checklist
 
-- [ ] Scope: Spotlight-only; Activities and hot corner route to it.
+- [ ] Scope: search + app grid + prefs; Activities and hot corner route to Sift; no
+      window/workspace picker.
+- [ ] App grid: Super+A, `showApps`, entry and empty-state buttons; `IconGrid`/`AppIcon`
+      reuse; paged, keyboard-navigable, lazily built; no folders or drag.
+- [ ] Prefs: Adw window with all §13.3 keys, live apply; no file-search switch
+      (config.toml controls indexing).
 - [ ] Architecture: GJS UI/glass + Rust daemon over D-Bus.
-- [ ] Glass: bounded liquid glass with frosted fallback; BMS optional only.
+- [ ] Glass: bounded liquid glass with frosted fallback; BMS optional only; the larger
+      grid rect is measured separately and may fall back to frosted.
+- [ ] Daemon lifecycle: `Quit` before upgrade, `Reindex` re-reads config, cold start is
+      app-only until the first scan.
 - [ ] GNOME 51 only, GPL-3.0-or-later.
 - [ ] Name/UUID/bus name (or rename now).
 - [ ] File index defaults (`$HOME`, hidden skipped, excludes, 250k cap).
-- [ ] No prefs window, no recents, no live currency, query clears on close.
+- [ ] No recents, no live currency, query clears on close.
 - [ ] Milestones and CI strategy.
