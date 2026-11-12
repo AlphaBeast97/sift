@@ -1,7 +1,7 @@
 UUID := sift@alphabeast97.github.io
 SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
 
-.PHONY: test test-gjs test-schema lint build
+.PHONY: test test-gjs test-schema test-shell lint build
 
 test-gjs:
 	gjs -m extension/tests/unit/all.js
@@ -18,5 +18,8 @@ lint:
 build:
 	mkdir -p dist
 	gnome-extensions pack extension --schema=$(SCHEMA) -o dist --force
+
+test-shell: build
+	tools/test/run-shell-test.sh
 
 test: test-gjs test-schema lint

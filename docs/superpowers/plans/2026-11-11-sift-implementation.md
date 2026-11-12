@@ -345,7 +345,7 @@ function assert(condition, message) {
         throw new Error(message);
 }
 
-async function waitFor(predicate, message, timeout = 2000) {
+async function waitFor(predicate, message, timeout = 5000) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
         if (predicate())
@@ -356,10 +356,11 @@ async function waitFor(predicate, message, timeout = 2000) {
 }
 
 export async function run() {
+    await waitFor(() => Extension.lookupByUUID(UUID) !== null,
+        'extension instance exists');
     const ext = Extension.lookupByUUID(UUID);
-    assert(ext !== null, 'extension instance exists');
     assert(ext.getTestAPI().settings !== null, 'extension enabled');
-    assert(Main.extensionManager.lookup(UUID).state === ExtensionState.ACTIVE,
+    await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.ACTIVE,
         'extension is active');
     await Scripting.waitLeisure();
 
@@ -379,18 +380,15 @@ export async function run() {
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
-uuid=sift@alphabeast97.github.io
-mkdir -p "$root/dist"
-gnome-extensions pack "$root/extension" \
-    --schema="$root/extension/schemas/org.gnome.shell.extensions.sift.gschema.xml" \
-    -o "$root/dist" --force
 exec dbus-run-session -- \
     gnome-shell-test-tool --headless \
-    --extension "$root/dist/$uuid.shell-extension.zip" \
+    --extension "$root/dist/sift@alphabeast97.github.io.shell-extension.zip" \
     "$root/tools/test/headless.js"
 ```
 
-Add `test-shell: build` and `chmod +x tools/test/run-shell-test.sh`.
+The Makefile target builds the zip first: `test-shell: build`, then
+`tools/test/run-shell-test.sh`. Add `test-shell` to `.PHONY` and
+`chmod +x tools/test/run-shell-test.sh`.
 
 - [ ] **Step 3: Run it**
 
