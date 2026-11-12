@@ -401,7 +401,7 @@ git commit -m "test: add headless shell smoke harness"
 
 **Files:**
 - Create: `tools/ci/gnome51/Dockerfile`
-- Create: `.github/workflows/ci.yml`, `.github/workflows/ci-image.yml`, `.github/workflows/shell-smoke.yml`
+- Create: `.github/workflows/ci.yml`, `.github/workflows/ci-image.yml`, `.github/workflows/shell-smoke.yml`, `.github/workflows/release.yml`
 - Create: `docs/perf/ci-image.md`
 - Modify: `Makefile`
 
@@ -437,6 +437,7 @@ Expected: the smoke test passes on llvmpipe. If EGL fails, add the `xvfb-run` pa
 - `ci.yml`: Rust fmt/clippy/test, GJS lint/unit/schema, extension pack sanity, D-Bus integration. Every job runs inside the same pinned `sift-gnome51` image; do not assume `ubuntu-latest` has GNOME 51 typelibs.
 - `ci-image.yml`: build the Dockerfile and push to `ghcr.io/<owner>/sift-gnome51` with a digest, on `workflow_dispatch` and `main`.
 - `shell-smoke.yml`: `needs` the image digest, builds artifacts, runs `make test-shell` inside the container.
+- `release.yml`: on tag push, build `dist/siftd`, the extension zip, and `dist/SHA256SUMS` in the pinned image, then attach all three to the GitHub release with `softprops/action-gh-release`.
 Do not add a remote or push. Record the local image ID and the exact package snapshot URL in `docs/perf/ci-image.md`.
 
 - [ ] **Step 4: Commit**
@@ -541,7 +542,7 @@ Expected: FAIL — modules not found.
 Overlay actor tree:
 
 ```text
-SiftOverlay (fullscreen St.Widget, chrome, hidden)
+SiftOverlay (fullscreen St.Widget, reactive, chrome, hidden)
 └── panel (St.Widget, style_class sift-panel)
     ├── glass (GlassPanel stub)
     └── content (St.BoxLayout, vertical)
@@ -550,7 +551,7 @@ SiftOverlay (fullscreen St.Widget, chrome, hidden)
         └── footer (32 px)
 ```
 
-Open sequence: refuse unless `Main.sessionMode.currentMode === 'user'`; choose `global.display.get_current_monitor()`; compute geometry; `Main.pushModal(this, {actionMode: Shell.ActionMode.OVERVIEW})`; store the returned grab and bail if falsy; show; focus `this.entry`; send nothing to the daemon yet; animate opacity 0→255 and scale 0.98→1 over 120 ms (0 ms when `animations` is false or `St.Settings.get().enable_animations` is false). Close: pop that exact grab, hide, clear query, emit `closed`. Connect `captured-event` for keys and `button-press-event` for click-outside; close only when the event coordinates are outside the panel rect. In `handleKey`, read `preedit` from `this.entry.clutter_text.has_preedit()`; when it is true, return `EVENT_PROPAGATE` without acting so the IME owns the key. Connect `monitors-changed` to close and reopen at the new monitor. Attach the fullscreen actor to chrome once in the constructor with `Main.layoutManager.addChrome(this, {affectsInputRegion: true})`; open/close only show/hide it, and `destroy()` calls `Main.layoutManager.removeChrome(this)`.
+Open sequence: refuse unless `Main.sessionMode.currentMode === 'user'`; choose `global.display.get_current_monitor()`; compute geometry; `Main.pushModal(this, {actionMode: Shell.ActionMode.OVERVIEW})`; store the returned grab and bail if falsy; show; focus `this.entry`; send nothing to the daemon yet; animate opacity 0→255 and scale 0.98→1 over 120 ms (0 ms when `animations` is false or `St.Settings.get().enable_animations` is false). Close: pop that exact grab, hide, clear query, emit `closed`. Connect `captured-event` for keys and `button-press-event` for click-outside; close only when the event coordinates are outside the panel rect. In `handleKey`, read `preedit` from `this.entry.clutter_text.has_preedit()`; when it is true, return `EVENT_PROPAGATE` without acting so the IME owns the key. Connect `monitors-changed` to close and reopen at the new monitor. Set `this.reactive = true` so backdrop clicks are delivered. Attach the fullscreen actor to chrome once in the constructor with `Main.layoutManager.addChrome(this)` (input tracking is automatic); open/close only show/hide it, and `destroy()` calls `Main.layoutManager.removeChrome(this)`. Apart from the `preedit` case above, `handleKey` returns `EVENT_STOP` only when `resolveKey` yields an action and `EVENT_PROPAGATE` otherwise, so printable keys reach the entry.
 
 `ResultsView` starts with 12 reusable rows and `setMaxRows(n)`. For this task it renders placeholder rows from an injected `rows` array; Task 8 fills real content. The overlay reads `maxRows` from `settings` on open, recomputes geometry when `changed::max-results` fires while open, and forwards the new limit to both `ResultsView` and the panel height.
 
@@ -770,6 +771,12 @@ api.overlay.entry.set_text(target.get_name());
 await Scripting.waitLeisure();
 assert(api.overlay.rowCount > 0, 'app results render');
 assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
+
+api.settings.set_int('max-results', 4);
+await Scripting.waitLeisure();
+assert(api.overlay.maxRows === 4 && api.overlay.rowCount <= 4,
+    'max-results applies live without reopening');
+api.settings.set_int('max-results', 6);
 ```
 
 Expected: `make test-gjs` and `make test-shell` pass.
@@ -849,7 +856,7 @@ AppGrid (St.BoxLayout, vertical)
 └── PageIndicators.PageIndicators (28 px strip)
 ```
 
-On open: if dirty or empty, create `AppDisplay.AppIcon(record.app, {isDraggable: false})` actors in idle chunks of 30, set `can_focus = false`, and shadow `tile.popupMenu = () => {}` so v1 has no context menus. Construct the grid with `new IconGrid.IconGrid({allow_incomplete_pages: true})` so the last page keeps its natural order, then `IconGrid.setGridModes([{rows, columns}])`, `grid.layout_manager.fixed_icon_size = iconSize`, `grid.connect('pages-changed', ...)` and `PageIndicators.setNPages/setCurrentPosition`; after `setNPages`, iterate `indicators.get_children()` and set each dot's `accessible_name` to `Page N`. First tile `setForcedHighlight(true)` on open. `goToPage(page, animate)` with animation off when `animations` is false. Rebuild only after `installed-changed` while the grid is closed. `SiftOverlay.destroy()` calls `appGrid.destroy()`; `close()` clears the forced highlight and keeps the cached actors.
+On open: if dirty or empty, create `AppDisplay.AppIcon(record.app, {isDraggable: false})` actors in idle chunks of 30, set `can_focus = false`, and shadow `tile.popupMenu = () => {}` so v1 has no context menus. Construct the grid with `new IconGrid.IconGrid({allow_incomplete_pages: true})` so the last page keeps its natural order, then `grid.setGridModes([{rows, columns}])`, `grid.layout_manager.fixed_icon_size = iconSize`, `grid.connect('pages-changed', ...)` and `PageIndicators.setNPages/setCurrentPosition`; after `setNPages`, iterate `indicators.get_children()` and set each dot's `accessible_name` to `Page N`. First tile `setForcedHighlight(true)` on open. `goToPage(page, animate)` with animation off when `animations` is false. Rebuild only after `installed-changed` while the grid is closed. `SiftOverlay.destroy()` calls `appGrid.destroy()`; `close()` clears the forced highlight and keeps the cached actors.
 
 Overlay: the entry's grid button opens the grid from search and returns to search from the grid (clearing the query when entering the grid). View switch clears the query, resizes in one 150 ms ease (0 ms when animations off), stops entry text propagation while keeping focus, and dispatches `grid-*` actions to `AppGrid`. `grid-first`/`grid-last` call `select(0)`/`select(itemCount - 1)`; `grid-page-*` call `page(±1)`. Handles the `search-type` action by switching to search before returning `EVENT_PROPAGATE`.
 
@@ -1343,8 +1350,8 @@ git commit -m "feat: add sift dbus interface and status model"
 - [ ] **Step 1: Write the D-Bus integration test**
 
 ```rust
-#[test]
-fn cold_start_query_reindex_quit_and_second_instance() {
+#[tokio::test]
+async fn cold_start_query_reindex_quit_and_second_instance() {
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
     std::fs::create_dir_all(home.join("docs")).unwrap();
@@ -1354,38 +1361,39 @@ fn cold_start_query_reindex_quit_and_second_instance() {
     let cache = tmp.path().join("cache.bin");
 
     let mut child = spawn_daemon(&config, &cache, &["--scan-delay-ms", "200"]);
-    let proxy = wait_for_proxy();
-    assert!(proxy.call("Ping", &()).unwrap().body().deserialize::<String>().unwrap().starts_with("0.1.0"));
+    let proxy = wait_for_proxy().await;
+    let ping: String = proxy.call("Ping", &()).await.unwrap();
+    assert!(ping.starts_with("0.1.0"));
 
-    let cold: String = proxy.call("Query", &("report", 10u32)).unwrap().body().deserialize().unwrap();
+    let cold: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
     assert!(cold.contains("\"files\":[]"), "cold start answers without a cache");
 
-    wait_for_status(&proxy, "\"state\":\"ready\"");
-    let warm: String = proxy.call("Query", &("report", 10u32)).unwrap().body().deserialize().unwrap();
+    wait_for_status(&proxy, "\"state\":\"ready\"").await;
+    let warm: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
     assert!(warm.contains("report.pdf"));
     assert!(cache.exists(), "ready scan writes the cache");
 
     let mut second = spawn_daemon(&config, &cache, &[]);
-    assert!(wait_for_exit(&mut second, Duration::from_secs(2)),
+    assert!(wait_for_exit(&mut second, Duration::from_secs(2)).await,
         "second instance exits when the bus name is taken");
 
     std::fs::write(&config, "roots = []\n").unwrap();
-    proxy.call("Reindex", &()).unwrap();
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let _: () = proxy.call("Reindex", &()).await.unwrap();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let reply: String = proxy.call("Query", &("report", 10u32)).unwrap().body().deserialize().unwrap();
+        let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
         if reply.contains("\"files\":[]")
             break;
-        assert!(std::time::Instant::now() < deadline, "reindex never emptied the index");
-        std::thread::sleep(Duration::from_millis(50));
+        assert!(tokio::time::Instant::now() < deadline, "reindex never emptied the index");
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
-    proxy.call("Quit", &()).unwrap();
-    assert!(wait_for_exit(&mut child, Duration::from_secs(2)), "Quit exits");
+    let _: () = proxy.call("Quit", &()).await.unwrap();
+    assert!(wait_for_exit(&mut child, Duration::from_secs(2)).await, "Quit exits");
 }
 ```
 
-`spawn_daemon` uses `env!("CARGO_BIN_EXE_siftd")` with `--config`, `--cache`, optional `--scan-delay-ms`. The test uses `zbus::blocking::Connection` and `zbus::blocking::Proxy`. Helpers: `wait_for_proxy` polls `NameHasOwner`, `wait_for_status` polls the `Status` property for a JSON substring, and `wait_for_exit` polls `try_wait` (no extra dependency). The whole suite runs under `dbus-run-session` via `make test-rust`.
+`spawn_daemon` uses `env!("CARGO_BIN_EXE_siftd")` with `--config`, `--cache`, optional `--scan-delay-ms`. The test is `#[tokio::test]` and uses async `zbus::Connection`/`zbus::Proxy`; `Proxy::call` returns the deserialized reply directly, so there is no `.body()`. Add `tokio` to `[dev-dependencies]` with the `macros`, `rt`, and `time` features. Helpers: `wait_for_proxy().await` opens the session connection, builds the proxy with `zbus::Proxy::new(...).await`, and polls `NameHasOwner`; `wait_for_status(&proxy, ...).await` polls `proxy.get_property::<String>("Status").await` for a JSON substring; `wait_for_exit(&mut child, ...).await` polls `try_wait` (no extra dependency). The whole suite runs under `dbus-run-session` via `make test-rust`.
 
 - [ ] **Step 2: Run and watch it fail**
 
@@ -1514,7 +1522,7 @@ git commit -m "feat: keep the index current with inotify"
 
 - [ ] **Step 1: Extend the no-daemon headless test**
 
-`make test-shell` runs with no D-Bus service. Assert:
+`make test-shell` runs with no D-Bus service. Add `import GLib from 'gi://GLib';` to the top of `headless.js`, then assert only when `GLib.getenv('SIFT_E2E') !== '1'` (Task 20 runs the same script with a daemon):
 
 ```js
 api.overlay.open();
@@ -1661,21 +1669,23 @@ Do not use `exec` for `gnome-shell-test-tool`; the EXIT trap must kill the daemo
 - [ ] **Step 2: Extend headless**
 
 ```js
-api.overlay.open();
-api.overlay.entry.set_text('sift-e2e-report');
-await Scripting.waitLeisure();
-await waitFor(() => api.overlay.rows.some(r =>
-    r.kind === 'file' && r.title === 'sift-e2e-report.pdf'), 'file result', 3000);
+if (GLib.getenv('SIFT_E2E') === '1') {
+    api.overlay.open();
+    api.overlay.entry.set_text('sift-e2e-report');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(r =>
+        r.kind === 'file' && r.title === 'sift-e2e-report.pdf'), 'file result', 3000);
 
-api.overlay.entry.set_text('1+1');
-await waitFor(() => api.overlay.rows.some(r =>
-    r.kind === 'calc' && r.title === '2'), 'calc result', 3000);
+    api.overlay.entry.set_text('1+1');
+    await waitFor(() => api.overlay.rows.some(r =>
+        r.kind === 'calc' && r.title === '2'), 'calc result', 3000);
 
-// Rapid typing: the last query owns the rows.
-for (const text of ['s', 'si', 'sif', 'sift'])
-    api.overlay.entry.set_text(text);
-await Scripting.sleep(600);
-assert(api.overlay.rows.every(r => r.kind !== 'calc'), 'stale calc reply dropped');
+    // Rapid typing: the last query owns the rows.
+    for (const text of ['s', 'si', 'sif', 'sift'])
+        api.overlay.entry.set_text(text);
+    await Scripting.sleep(600);
+    assert(api.overlay.rows.every(r => r.kind !== 'calc'), 'stale calc reply dropped');
+}
 ```
 
 - [ ] **Step 3: Run**
@@ -1760,7 +1770,7 @@ git commit -m "feat: render bounded liquid glass"
 ### Task 22: Glass settings, view switch, and cleanup
 
 **Files:**
-- Modify: `extension/src/glass.js`, `extension/src/overlay.js`, `extension/src/extension.js`, `tools/test/headless.js`
+- Modify: `extension/src/glass.js`, `extension/src/overlay.js`, `extension/extension.js`, `tools/test/headless.js`
 - Test: `tools/test/headless.js`
 
 **Interfaces:**
@@ -1989,7 +1999,7 @@ prefs:
 	gnome-extensions prefs $(UUID)
 
 uninstall:
-	packaging/install.sh --uninstall --prefix "$(PREFIX)"
+	packaging/install.sh --uninstall --prefix "$(PREFIX)" $(if $(PURGE),--purge)
 ```
 
 - [ ] **Step 2: Test the installer syntax and uninstall path**
