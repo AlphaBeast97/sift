@@ -204,13 +204,15 @@ export function run() {
     equal(settings.get_boolean('animations'), true);
     equal(settings.get_int('max-results'), 6);
     equal(settings.get_int('grid-icon-size'), 96);
-    equal(settings.get_range('max-results').deepUnpack().join(','), '4,12');
-    equal(settings.get_range('blur-radius').deepUnpack().join(','), '0,64');
-    almost(settings.get_range('glass-opacity').deepUnpack()[0], 0.30);
-    almost(settings.get_range('glass-opacity').deepUnpack()[1], 0.95);
-    almost(settings.get_range('glass-tint').deepUnpack()[0], 0.0);
-    almost(settings.get_range('glass-tint').deepUnpack()[1], 1.0);
-    equal(settings.get_range('grid-icon-size').deepUnpack().join(','), '48,128');
+    const range = key => settings.get_range(key).recursiveUnpack()[1];
+
+    equal(range('max-results').join(','), '4,12');
+    equal(range('blur-radius').join(','), '0,64');
+    almost(range('glass-opacity')[0], 0.30);
+    almost(range('glass-opacity')[1], 0.95);
+    almost(range('glass-tint')[0], 0.0);
+    almost(range('glass-tint')[1], 1.0);
+    equal(range('grid-icon-size').join(','), '48,128');
     equal(schema.list_keys().sort().join(','),
         'animations,blur-radius,glass-mode,glass-opacity,glass-tint,grid-icon-size,max-results');
 }
@@ -265,7 +267,7 @@ Targets required now:
 
 ```make
 UUID := sift@alphabeast97.github.io
-SCHEMA := extension/schemas/org.gnome.shell.extensions.sift.gschema.xml
+SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
 
 test-gjs:
 	gjs -m extension/tests/unit/all.js
@@ -286,6 +288,10 @@ build:
 
 test: test-gjs test-schema lint
 ```
+
+The zip carries only the schema XML; `gnome-extensions install` (and the shell's
+downloader) runs `glib-compile-schemas` in the installed `schemas/` directory.
+Do not add `gschemas.compiled` to the zip by hand.
 
 `schema.test.js` is a module exporting `run()`; `schema.js` is a one-line runner that calls `run()` and prints `ok schema`. ESLint flat config: 4 spaces, single quotes, semicolons, `no-unused-vars`, `no-undef`, with GJS globals `global`, `print`, `log`, `logError`, `_`, `N_`, `C_`. Commit `package-lock.json` from `npm install`.
 

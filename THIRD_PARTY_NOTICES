@@ -1,0 +1,17 @@
+Sift is licensed GPL-3.0-or-later (see LICENSE).
+
+Isle - liquid-glass shader math
+  License: GPL-3.0-or-later
+  Source: https://github.com/zickrian/isle
+
+nucleo-matcher
+  License: MPL-2.0
+  Source: https://github.com/helix-editor/nucleo
+
+fend-core
+  License: MIT
+  Source: https://github.com/printfn/fend
+
+Blur my Shell is an optional compatibility target; no Blur my Shell code is
+bundled or required. Rust dependency licenses are available from crates.io and
+recorded in Cargo.lock.

@@ -1,0 +1,9 @@
+{
+  "uuid": "sift@alphabeast97.github.io",
+  "name": "Sift",
+  "description": "Fast search, a calculator, and an app grid with liquid glass for GNOME Shell.",
+  "shell-version": ["51"],
+  "session-modes": ["user"],
+  "settings-schema": "org.gnome.shell.extensions.sift",
+  "version-name": "0.1.0"
+}

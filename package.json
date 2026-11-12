@@ -1,0 +1,15 @@
+{
+  "name": "sift",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spotlight-style search for GNOME Shell 51",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint extension tools"
+  },
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.14.0"
+  }
+}
