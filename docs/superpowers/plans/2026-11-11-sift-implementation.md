@@ -55,7 +55,7 @@ The spec implies these inputs but no single task's happy path exercises them. Ea
 
 - [ ] **Step 1: Build the throwaway spike extension**
 
-Create a minimal extension (`uuid: sift-spike@alphabeast97.github.io`) with a centered 720×420 panel, one wallpaper clone and one window-surface clone, `Shell.BlurEffect` in `ACTOR` mode, and a rounded `Clutter.ShaderEffect` adapted from Isle's `glass.js` / `shader.js`. Shadow `Main.overview.show/hide/toggle/showApps/focusSearch` with the wrappers from design §8.2, set `Main.overview._swipeTracker.enabled = false`, and call `Main.pushModal(panel, {actionMode: Shell.ActionMode.OVERVIEW})` on open. Include a second 1040×70%-height panel rect behind a temporary Super+G toggle for the grid-size measurement.
+Create a minimal extension (throwaway UUID) with a centered 720×420 panel, one wallpaper clone and one window-surface clone, `Shell.BlurEffect` in `ACTOR` mode, and a rounded `Clutter.ShaderEffect` adapted from Isle's `glass.js` / `shader.js`. Shadow `Main.overview.show/hide/toggle/showApps/focusSearch` with the wrappers from design §8.2, set `Main.overview._swipeTracker.enabled = false`, and call `Main.pushModal(panel, {actionMode: Shell.ActionMode.OVERVIEW})` on open. Include a second 1040×70%-height panel rect behind a temporary Ctrl+G toggle (Super+G is intercepted by Mutter's overlay key) for the grid-size measurement.
 
 - [ ] **Step 2: Add the frame meter**
 
@@ -75,12 +75,15 @@ Add `export function percentile(values, p)` in `extension/src/lib/stats.js` so t
 Run:
 
 ```bash
-gnome-extensions pack spike -o /tmp/sift-spike --force
-gnome-extensions install --force /tmp/sift-spike/sift-spike@alphabeast97.github.io.shell-extension.zip
-gnome-extensions enable sift-spike@alphabeast97.github.io
+mkdir -p /tmp/spike-pack
+gnome-extensions pack spike -o /tmp/spike-pack --force
+gnome-extensions install --force /tmp/spike-pack/<spike-uuid>.shell-extension.zip
+gnome-extensions enable <spike-uuid>
 ```
 
-Log out and back in if the running shell has not seen the extension. With `SIFT_PERF=1`, record in `docs/perf/m0-spike.md`:
+Log out and back in if the running shell has not seen the extension (installing
+over a running shell does not reload changed code). The meter logs each close;
+record in `docs/perf/m0-spike.md`:
 
 - search rect and grid rect frame P50/P95/max, open, typing, close;
 - clone correctness over a window, video, fullscreen app, and with Blur my Shell enabled;
@@ -147,7 +150,7 @@ git rm -r spike
 
 - [ ] **Step 3: Verify no reference to the spike remains**
 
-Run: `git grep -n "sift-spike"`
+Run: `git grep -n "sift-spike[@]"`
 Expected: no output.
 
 - [ ] **Step 4: Commit**
@@ -612,6 +615,15 @@ assert(api.overlay.view === 'search' && api.overlay.entry.clutter_text.has_key_f
 Main.overview.hide();
 await Scripting.waitLeisure();
 assert(!api.overlay.visible, 'hide() closes');
+
+// A restored session (or another extension) can show the native overview
+// behind the takeover; hide must still dismiss it.
+Object.getPrototypeOf(Main.overview).show.call(Main.overview);
+await Scripting.waitLeisure();
+assert(Main.overview.visible, 'native overview shown behind the takeover');
+Main.overview.hide();
+await Scripting.waitLeisure();
+assert(!Main.overview.visible, 'hide closes the native overview too');
 ```
 
 Then disable via the extension manager and assert the grabs and patches are gone:
@@ -631,9 +643,13 @@ assert(Main.overview.visible, 'stock overview opens after disable');
 Main.overview.hide();
 await Scripting.waitLeisure();
 
+Main.overview.show();
+await Scripting.waitLeisure();
+assert(Main.overview.visible, 'native overview shown before enable');
 Main.extensionManager.enableExtension(UUID);
 await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.ACTIVE,
     'extension re-enables after the restore check');
+assert(!Main.overview.visible, 'enable closes a pre-existing overview');
 api = Extension.lookupByUUID(UUID).getTestAPI();
 ```
 
@@ -652,6 +668,11 @@ Follow design §8.2 exactly. For each of `show`, `hide`, `toggle`, `focusSearch`
 - assign a wrapper; store the wrapper in `this._wrappers[name]`;
 - on destroy, restore the exact saved value if `hasOwn`, otherwise `delete Main.overview[name]`.
 
+Before returning from `install()`, if the native overview is visible, close it with
+the saved original `hide`. Every wrapper that opens Sift does the same first, and
+`hide()` closes Sift and then calls the saved original if the native overview is
+still visible; otherwise Escape cannot dismiss a restored overview.
+
 `show(state)` maps `state === OverviewControls.ControlsState.APP_GRID` to `overlay.showApps()`, otherwise `overlay.open('search')`. `shouldToggleByCornerOrButton()` returns false while the overlay is animating and for 0.5 s after the last open; otherwise true.
 
 Handle `toggle-overview` only when `Gio.Settings` for `org.gnome.shell.keybindings` has a non-empty `toggle-overview` binding: remove and re-add it with `Main.wm.addKeybinding(...)` using that settings object, `Meta.KeyBindingFlags.IGNORE_AUTOREPEAT`, `Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW`, and `() => overlay.toggle()`. On destroy, remove ours and re-add the stock dynamic handler `() => Main.overview.toggle()` with the same settings/flags/modes.
@@ -665,7 +686,7 @@ Wire `enable()` in this order: settings → overlay → takeover; `disable()` re
 - [ ] **Step 4: Run the headless test**
 
 Run: `make test-shell`
-Expected: PASS for all five entry points.
+Expected: PASS for all entry points and both pre-existing-overview cases.
 
 - [ ] **Step 5: Commit**
 

@@ -268,10 +268,16 @@ On enable:
    `Main.overview.show(ControlsState.APP_GRID)` whenever `Main.overview.visible` is
    false, which is always true under the takeover, so the stock `<Super>a` binding
    reaches our wrapper. `toggle-application-view` is left untouched.
-4. Set `Main.overview._swipeTracker.enabled = false` (a public GObject property) and
+4. The native Overview may already be visible when Sift enables (a restored
+   session). Close it through the saved original `hide` at the end of install.
+   Every wrapper that opens Sift closes the native Overview the same way first,
+   and `hide()` closes Sift and then the native Overview if it is still visible.
+   A wrapper that only closes Sift makes Escape a no-op and traps the user in the
+   stock Overview; the M0 spike reproduced this.
+5. Set `Main.overview._swipeTracker.enabled = false` (a public GObject property) and
    restore its previous value on disable. Do not destroy the tracker.
-5. Track open/closed state ourselves; do not rely on `Main.overview.visible`.
-6. On disable: close and destroy the overlay and grid, pop the modal grab, restore each
+6. Track open/closed state ourselves; do not rely on `Main.overview.visible`.
+7. On disable: close and destroy the overlay and grid, pop the modal grab, restore each
    saved value or delete the shadow (per step 1), re-add the original binding if removed,
    restore the swipe tracker, and verify no signal handlers remain.
 
