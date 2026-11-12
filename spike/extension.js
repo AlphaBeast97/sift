@@ -370,21 +370,39 @@ export default class SiftSpike extends Extension {
         Main.layoutManager.addChrome(this._panel);
 
         Main.overview.show = () => {
+            this._closeNativeOverview();
             this._lastOpen = Date.now();
             this._panel.open();
         };
         Main.overview.showApps = () => {
+            this._closeNativeOverview();
             this._lastOpen = Date.now();
             this._panel.open();
         };
-        Main.overview.hide = () => this._panel.close();
-        Main.overview.toggle = () => this._panel.toggle();
+        Main.overview.hide = () => {
+            this._panel.close();
+            this._closeNativeOverview();
+        };
+        Main.overview.toggle = () => {
+            if (this._panel.visible) {
+                this._panel.close();
+                return;
+            }
+            this._closeNativeOverview();
+            this._lastOpen = Date.now();
+            this._panel.open();
+        };
         Main.overview.focusSearch = () => {
+            this._closeNativeOverview();
             this._lastOpen = Date.now();
             this._panel.open();
         };
         Main.overview.shouldToggleByCornerOrButton = () =>
             Date.now() - this._lastOpen > 500;
+
+        // A restored session can bring up the native overview before or while
+        // extensions enable; close it with the original hide, never our shadow.
+        this._closeNativeOverview();
 
         this._bindingAdded = false;
         if (this._keySettings.get_strv('toggle-overview').length > 0) {
@@ -406,8 +424,14 @@ export default class SiftSpike extends Extension {
         return {panel: this._panel};
     }
 
+    _closeNativeOverview() {
+        if (Main.overview.visible)
+            this._saved.get('hide').value.call(Main.overview);
+    }
+
     disable() {
         this._panel?.close();
+        this._closeNativeOverview();
 
         for (const [name, saved] of this._saved) {
             if (saved.hasOwn)
