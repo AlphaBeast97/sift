@@ -1,0 +1,8 @@
+{
+  "uuid": "sift-spike@alphabeast97.github.io",
+  "name": "Sift Spike",
+  "description": "Throwaway glass and overview takeover spike for Sift.",
+  "shell-version": ["51"],
+  "session-modes": ["user"],
+  "version-name": "0.0.1"
+}
