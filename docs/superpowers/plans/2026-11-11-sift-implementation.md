@@ -763,8 +763,9 @@ Rows: `appRow(record)` maps a record to `{kind: 'app', key: 'app:' + id, title: 
 Add `import Shell from 'gi://Shell';` to the top of `headless.js`, then:
 
 ```js
-const target = Shell.AppSystem.get_default().get_installed()
-    .find(a => a.get_name().length >= 4);
+const installed = Shell.AppSystem.get_default().get_installed();
+const target = installed.find(a => a.get_name().length >= 4 &&
+    installed.filter(b => b.get_name() === a.get_name()).length === 1);
 assert(target !== undefined, 'installed apps available');
 api.overlay.open();
 api.overlay.entry.set_text(target.get_name());
@@ -1141,7 +1142,7 @@ git commit -m "feat: add versioned index cache"
 
 **Interfaces:**
 - Consumes: `Entry`, `EntryKind`.
-- Produces: `Match { path: PathBuf, name: String, kind: EntryKind, score: u16 }`, `query(entries: &[Entry], text: &str, limit: usize) -> Vec<Match>`.
+- Produces: `Match { path: PathBuf, name: String, kind: EntryKind, score: u32 }`, `query(entries: &[Entry], text: &str, limit: usize) -> Vec<Match>`.
 
 - [ ] **Step 1: Write query tests**
 
@@ -1172,6 +1173,16 @@ fn clamps_limit_and_handles_empty() {
     assert_eq!(query(&entries, "a", 500).len(), 10);
     assert!(query(&entries, "   ", 10).is_empty());
     assert_eq!(query(&entries, "a", 0).len(), 1);
+}
+
+#[test]
+fn answers_from_a_quarter_million_entries() {
+    let entries: Vec<Entry> = (0..250_000)
+        .map(|i| entry(&format!("/h/file-{i:06}.txt"), EntryKind::File))
+        .collect();
+    let got = query(&entries, "file-249999", 10);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].name, "file-249999.txt");
 }
 ```
 
@@ -1360,18 +1371,28 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
     std::fs::write(&config, format!("roots = [\"{}\"]\n", home.display())).unwrap();
     let cache = tmp.path().join("cache.bin");
 
-    let mut child = spawn_daemon(&config, &cache, &["--scan-delay-ms", "200"]);
+    let mut child = spawn_daemon(&config, &cache, &["--scan-delay-ms", "1000"]);
     let proxy = wait_for_proxy().await;
+    wait_for_status(&proxy, "\"state\":\"indexing\"").await;
     let ping: String = proxy.call("Ping", &()).await.unwrap();
     assert!(ping.starts_with("0.1.0"));
 
     let cold: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
     assert!(cold.contains("\"files\":[]"), "cold start answers without a cache");
 
+    let invalid = proxy.call::<_, _, String>("Query", &("x".repeat(129), 10u32)).await;
+    assert!(invalid.is_err(), "over-long queries are rejected");
+    let bad_limit = proxy.call::<_, _, String>("Query", &("report", 0u32)).await;
+    assert!(bad_limit.is_err(), "limit 0 is rejected");
+
     wait_for_status(&proxy, "\"state\":\"ready\"").await;
     let warm: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
     assert!(warm.contains("report.pdf"));
     assert!(cache.exists(), "ready scan writes the cache");
+    let json: serde_json::Value = serde_json::from_str(&warm).unwrap();
+    assert!(json["files"].is_array(), "files is an array");
+    assert!(json.get("calc").is_none(), "calc is omitted when absent");
+    let _: () = proxy.call("EnsureFresh", &()).await.unwrap();
 
     let mut second = spawn_daemon(&config, &cache, &[]);
     assert!(wait_for_exit(&mut second, Duration::from_secs(2)).await,
@@ -1379,6 +1400,8 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
 
     std::fs::write(&config, "roots = []\n").unwrap();
     let _: () = proxy.call("Reindex", &()).await.unwrap();
+    let during: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+    assert!(during.contains("report.pdf"), "rebuild keeps the previous snapshot");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
@@ -1443,7 +1466,7 @@ git commit -m "feat: serve the daemon over dbus with lifecycle commands"
 **Interfaces:**
 - Produces: `Index::apply_batch(&self, config: &Config, paths: &[PathBuf]) -> bool` (true if changed), sorted and deduplicated.
 - Produces: `Index::has_path(&self, path: &Path) -> bool` (binary search over the sorted entries).
-- Produces: `spawn_watcher(roots, tx) -> notify::Result<RecommendedWatcher>`; events are debounced 500 ms and converted to a path batch.
+- Produces: `enum WatcherEvent { Changed(Vec<PathBuf>), Failed }` and `spawn_watcher(roots, tx: UnboundedSender<WatcherEvent>) -> notify::Result<RecommendedWatcher>`; the watcher task debounces events 500 ms into one `Changed` batch, and sends `Failed` for a runtime notify error.
 
 - [ ] **Step 1: Write incremental tests**
 
@@ -1491,7 +1514,7 @@ Expected: FAIL — `apply_batch` not found.
 
 - [ ] **Step 3: Implement**
 
-Start `notify::recommended_watcher` after the first complete scan; watch each existing root recursively. A watch failure logs once, sets `status.watcher = "unavailable"` and `state = "degraded"`, and leaves the index usable. Event paths go into a `HashSet<PathBuf>` in a Tokio task; after the first event, sleep 500 ms, drain the channel with `try_recv`, then call `apply_batch` under one write lock. No event → no timer.
+Start `notify::recommended_watcher` after the first complete scan; watch each existing root recursively. An initial watch failure is returned as `Err`; the manager logs once, sets `status.watcher = "unavailable"` and `state = "degraded"`, and leaves the index usable. The watcher task collects event paths into a `HashSet<PathBuf>`; after the first event, sleep 500 ms, drain the channel with `try_recv`, send one `WatcherEvent::Changed(paths)`, and send `WatcherEvent::Failed` when a callback yields `Err` (the manager applies the same degraded status). The manager consumes `Changed` and calls `apply_batch` under one write lock. No event → no timer.
 
 `apply_batch`: sort/dedupe paths; for each, if it still exists, add the file or walk the subtree with the same filters and cap; if it does not, remove it and every descendant. Enforce `config.max_entries` across the whole index (stop adding and set `truncated` at the cap). Keep `Vec<Entry>` sorted by path and use binary search for dedupe. On a change, mark the cache dirty; a 30 s one-shot timer while dirty stores the cache and clears the flag (no timer when clean). `Quit` flushes immediately. `EnsureFresh` remains the recovery path when the watcher is unavailable.
 
