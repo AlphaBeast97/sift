@@ -12,6 +12,7 @@ export default [
             globals: {
                 global: 'readonly',
                 print: 'readonly',
+                console: 'readonly',
                 log: 'readonly',
                 logError: 'readonly',
                 _: 'readonly',

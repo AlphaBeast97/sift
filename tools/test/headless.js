@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -62,6 +63,20 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(api.overlay.rowCount > 0, 'app results render');
     assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
+
+    if (GLib.getenv('SIFT_E2E') !== '1') {
+        api.overlay.entry.set_text(target.get_name());
+        await Scripting.waitLeisure();
+        await waitFor(() => api.overlay.rowCount > 0, 'apps still work', 2000);
+        await waitFor(() => api.overlay.footerText === 'Search service unavailable',
+            'footer reports the missing service', 2000);
+
+        api.overlay.entry.set_text(target.get_name().slice(0, -1));
+        await Scripting.waitLeisure();
+        await Scripting.sleep(100);
+        assert(api.overlay.footerText === 'Search service unavailable',
+            'the service footer does not stack');
+    }
 
     api.settings.set_int('max-results', 4);
     await Scripting.waitLeisure();

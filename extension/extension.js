@@ -2,6 +2,7 @@
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Apps} from './src/apps.js';
+import {Daemon} from './src/daemon.js';
 import {OverviewTakeover} from './src/overview.js';
 import {SiftOverlay} from './src/overlay.js';
 
@@ -10,7 +11,16 @@ export default class SiftExtension extends Extension {
         this._settings = this.getSettings();
         this._apps = new Apps();
         this._apps.connect(() => this._overlay?.onAppsChanged());
-        this._overlay = new SiftOverlay({settings: this._settings, apps: this._apps});
+        this._daemon = new Daemon({
+            version: this.metadata['version-name'],
+            onChanged: () => this._overlay?.onDaemonChanged(),
+        });
+        this._overlay = new SiftOverlay({
+            settings: this._settings,
+            apps: this._apps,
+            daemon: this._daemon,
+        });
+        this._daemon.enable();
         this._takeover = new OverviewTakeover({overlay: this._overlay});
         this._takeover.install();
     }
@@ -20,6 +30,8 @@ export default class SiftExtension extends Extension {
         this._takeover = null;
         this._overlay?.destroy();
         this._overlay = null;
+        this._daemon?.disable();
+        this._daemon = null;
         this._apps?.disconnect();
         this._apps = null;
         this._settings = null;
@@ -34,7 +46,7 @@ export default class SiftExtension extends Extension {
             apps: this._apps,
             appGrid: this._overlay?.appGrid ?? null,
             glass: null,
-            daemon: null,
+            daemon: this._daemon,
         };
     }
 }

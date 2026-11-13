@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -15,13 +16,16 @@ import {ResultsView} from './results.js';
 
 const OPEN_ANIMATION_MS = 120;
 const VIEW_ANIMATION_MS = 150;
+const QUERY_DEBOUNCE_MS = 40;
+const MIN_QUERY_LENGTH = 2;
+const FILE_QUERY_LIMIT = 20;
 
 export const SiftOverlay = GObject.registerClass({
     Signals: {
         'closed': {},
     },
 }, class SiftOverlay extends St.Widget {
-    _init({settings, apps = null, onActivate = null} = {}) {
+    _init({settings, apps = null, daemon = null, onActivate = null} = {}) {
         super._init({
             name: 'siftOverlay',
             reactive: true,
@@ -31,6 +35,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this._settings = settings;
         this._apps = apps;
+        this._daemon = daemon;
         this._onActivate = onActivate;
         this._view = 'search';
         this._monitorIndex = 0;
@@ -38,6 +43,13 @@ export const SiftOverlay = GObject.registerClass({
         this._grab = null;
         this._destroyed = false;
         this._animating = false;
+        this._daemonCalc = null;
+        this._daemonFiles = [];
+        this._serviceUnavailable = false;
+        this._queryTimer = 0;
+        this._queryGeneration = 0;
+        this._queryBusy = false;
+        this._latestQuery = null;
 
         this._panel = new St.Widget({
             style_class: 'sift-panel',
@@ -94,7 +106,7 @@ export const SiftOverlay = GObject.registerClass({
         entryBar.add_child(this._entry);
         entryBar.add_child(this._gridButton);
 
-        this._entry.clutter_text.connect('text-changed', () => this.refreshApps());
+        this._entry.clutter_text.connect('text-changed', () => this._onTextChanged());
 
         this._results = new ResultsView({maxRows: this._maxRows});
         this._results.onActivate = (row, options) => this._activateRow(row, options);
@@ -124,14 +136,21 @@ export const SiftOverlay = GObject.registerClass({
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
+        this._statusLabel = new St.Label({
+            style_class: 'sift-footer-hint',
+            y_align: Clutter.ActorAlign.CENTER,
+            visible: false,
+        });
         footer.add_child(this._footerLabel);
+        footer.add_child(this._statusLabel);
 
         content.add_child(entryBar);
         content.add_child(this._results);
         content.add_child(this._gridView);
         content.add_child(footer);
 
-        this._footerLabel.text = this.footerText;
+        this._footerLabel.text = '↑↓ Navigate · Enter Open · Esc Close';
+        this._syncFooter();
 
         Main.layoutManager.addChrome(this);
 
@@ -206,9 +225,17 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     get footerText() {
-        if (this._view === 'grid')
-            return '←→↑↓ Navigate · Enter Open · Esc Close';
-        return '↑↓ Navigate · Enter Open · Esc Close';
+        if (this._daemon?.unavailable || this._serviceUnavailable)
+            return 'Search service unavailable';
+
+        const status = this._daemon?.status;
+        if (status?.state === 'degraded' || status?.watcher === 'unavailable')
+            return 'Search index degraded';
+        if (status?.truncated)
+            return 'Search index truncated';
+        if (status?.state === 'indexing' || status?.state === 'starting')
+            return 'Indexing files…';
+        return '';
     }
 
     setRows(rows) {
@@ -223,7 +250,10 @@ export const SiftOverlay = GObject.registerClass({
         const records = this._apps
             ? this._apps.search(this._entry.text, Math.min(4, this._maxRows))
             : [];
-        const rows = mergeRows({apps: records.map(appRow)}, this._maxRows);
+        const rows = mergeRows({
+            calc: this._daemonCalc,
+            apps: records.map(appRow),
+        }, this._maxRows);
 
         this._results.setRows(rows);
         this._results.select(selectionAfter(rows, previous));
@@ -232,6 +262,99 @@ export const SiftOverlay = GObject.registerClass({
     onAppsChanged() {
         this._grid?.invalidate();
         this.refreshApps();
+    }
+
+    onDaemonChanged() {
+        if (!this._daemon)
+            return;
+
+        if (!this._daemon.unavailable)
+            this._serviceUnavailable = false;
+        this._syncFooter();
+    }
+
+    _onTextChanged() {
+        this._queryGeneration++;
+        this._cancelQueryTimer();
+        this._daemonCalc = null;
+        this._daemonFiles = [];
+        this.refreshApps();
+        this._scheduleQuery();
+    }
+
+    _scheduleQuery() {
+        if (!this._daemon || this._view !== 'search')
+            return;
+
+        const text = this._entry.text.trim();
+        if (text.length < MIN_QUERY_LENGTH)
+            return;
+
+        const generation = this._queryGeneration;
+        this._queryTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, QUERY_DEBOUNCE_MS, () => {
+            this._queryTimer = 0;
+            this._enqueueQuery(text, generation);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _enqueueQuery(text, generation) {
+        this._latestQuery = {text, generation};
+        if (!this._queryBusy)
+            this._sendQuery();
+    }
+
+    _sendQuery() {
+        const query = this._latestQuery;
+        if (!query)
+            return;
+
+        this._latestQuery = null;
+        this._queryBusy = true;
+
+        this._daemon.query(query.text, FILE_QUERY_LIMIT)
+            .then(result => {
+                if (query.generation !== this._queryGeneration)
+                    return;
+                this._serviceUnavailable = false;
+                this._daemonCalc = result.calc;
+                this._daemonFiles = result.files;
+                this.refreshApps();
+                this._syncFooter();
+            })
+            .catch(() => {
+                if (query.generation !== this._queryGeneration)
+                    return;
+                this._serviceUnavailable = true;
+                this._daemonCalc = null;
+                this._daemonFiles = [];
+                this.refreshApps();
+                this._syncFooter();
+            })
+            .finally(() => {
+                this._queryBusy = false;
+                if (this._latestQuery && this._latestQuery.generation === this._queryGeneration)
+                    this._sendQuery();
+                else
+                    this._latestQuery = null;
+            });
+    }
+
+    _cancelQueryTimer() {
+        if (!this._queryTimer)
+            return;
+
+        GLib.source_remove(this._queryTimer);
+        this._queryTimer = 0;
+    }
+
+    _syncFooter() {
+        if (!this._statusLabel)
+            return;
+
+        const text = this.footerText;
+        this._statusLabel.text = text;
+        this._statusLabel.visible = text !== '';
     }
 
     setMaxRows(maxRows) {
@@ -263,6 +386,8 @@ export const SiftOverlay = GObject.registerClass({
         this.show();
         this._animateOpen();
         this._entry.clutter_text.grab_key_focus();
+        this._daemon?.ensureFresh();
+        this._syncFooter();
     }
 
     close() {
@@ -280,12 +405,18 @@ export const SiftOverlay = GObject.registerClass({
         if (!this.visible)
             return;
 
+        this._queryGeneration++;
+        this._cancelQueryTimer();
+        this._latestQuery = null;
+        this._daemonCalc = null;
+        this._daemonFiles = [];
         this.remove_all_transitions();
         this._panel.remove_all_transitions();
         this._animating = false;
         this.visible = false;
         this._entry.text = '';
         this._results.setRows([]);
+        this._syncFooter();
         this.emit('closed');
     }
 
@@ -352,6 +483,8 @@ export const SiftOverlay = GObject.registerClass({
 
         this._destroyed = true;
         this._animating = false;
+        this._queryGeneration++;
+        this._cancelQueryTimer();
 
         if (this._grab) {
             const grab = this._grab;
@@ -499,7 +632,10 @@ export const SiftOverlay = GObject.registerClass({
             this.refreshApps();
         }
 
-        this._footerLabel.text = this.footerText;
+        this._footerLabel.text = grid
+            ? '←→↑↓ Navigate · Enter Open · Esc Close'
+            : '↑↓ Navigate · Enter Open · Esc Close';
+        this._syncFooter();
         this._applyGeometry(this.visible);
     }
 
