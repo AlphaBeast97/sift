@@ -9,6 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
+import {appRow, mergeRows, selectionAfter} from './lib/merge.js';
 import {ResultsView} from './results.js';
 
 const OPEN_ANIMATION_MS = 120;
@@ -18,7 +19,7 @@ export const SiftOverlay = GObject.registerClass({
         'closed': {},
     },
 }, class SiftOverlay extends St.Widget {
-    _init({settings, onActivate = null} = {}) {
+    _init({settings, apps = null, onActivate = null} = {}) {
         super._init({
             name: 'siftOverlay',
             reactive: true,
@@ -27,6 +28,7 @@ export const SiftOverlay = GObject.registerClass({
         });
 
         this._settings = settings;
+        this._apps = apps;
         this._onActivate = onActivate;
         this._view = 'search';
         this._monitorIndex = 0;
@@ -89,8 +91,10 @@ export const SiftOverlay = GObject.registerClass({
         entryBar.add_child(this._entry);
         entryBar.add_child(this._gridButton);
 
+        this._entry.clutter_text.connect('text-changed', () => this.refreshApps());
+
         this._results = new ResultsView({maxRows: this._maxRows});
-        this._results.onActivate = (row, options) => this._onActivate?.(row, options);
+        this._results.onActivate = (row, options) => this._activateRow(row, options);
 
         this._gridView = new St.Widget({
             style_class: 'sift-grid-view',
@@ -141,8 +145,10 @@ export const SiftOverlay = GObject.registerClass({
 
         this._settingsId = settings.connect('changed::max-results', () => {
             this._maxRows = settings.get_int('max-results');
-            if (this.visible && this._view === 'search')
+            if (this.visible && this._view === 'search') {
                 this._applyGeometry();
+                this.refreshApps();
+            }
         });
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => {
             if (!this.visible)
@@ -189,6 +195,20 @@ export const SiftOverlay = GObject.registerClass({
 
     setRows(rows) {
         this._results.setRows(rows);
+    }
+
+    refreshApps() {
+        if (this._view !== 'search')
+            return;
+
+        const previous = this._results.selectedRow?.key ?? null;
+        const records = this._apps
+            ? this._apps.search(this._entry.text, Math.min(4, this._maxRows))
+            : [];
+        const rows = mergeRows({apps: records.map(appRow)}, this._maxRows);
+
+        this._results.setRows(rows);
+        this._results.select(selectionAfter(rows, previous));
     }
 
     setMaxRows(maxRows) {
@@ -414,6 +434,18 @@ export const SiftOverlay = GObject.registerClass({
         this.close();
     }
 
+    _activateRow(row, {newWindow = false} = {}) {
+        if (row.kind === 'app' && row.app) {
+            if (newWindow && row.app.can_open_new_window())
+                row.app.open_new_window(-1);
+            else
+                row.app.activate();
+        }
+
+        this._onActivate?.(row, {newWindow});
+        this.close();
+    }
+
     _toggleView() {
         this._setView(this._view === 'grid' ? 'search' : 'grid');
         this._entry.clutter_text.grab_key_focus();
@@ -430,6 +462,8 @@ export const SiftOverlay = GObject.registerClass({
 
         if (grid)
             this._entry.text = '';
+        else
+            this.refreshApps();
 
         this._footerLabel.text = this.footerText;
         this._applyGeometry();

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import Shell from 'gi://Shell';
+
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
@@ -51,6 +53,22 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'search' && api.overlay.entry.clutter_text.has_key_focus(),
         'focusSearch focuses the entry text');
+
+    const installed = Shell.AppSystem.get_default().get_installed();
+    const target = installed.find(a => a.get_name().length >= 4 &&
+        installed.filter(b => b.get_name() === a.get_name()).length === 1);
+    assert(target !== undefined, 'installed apps available');
+    api.overlay.entry.set_text(target.get_name());
+    await Scripting.waitLeisure();
+    assert(api.overlay.rowCount > 0, 'app results render');
+    assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
+
+    api.settings.set_int('max-results', 4);
+    await Scripting.waitLeisure();
+    assert(api.overlay.maxRows === 4 && api.overlay.rowCount <= 4,
+        'max-results applies live without reopening');
+    api.settings.set_int('max-results', 6);
+    api.overlay.entry.set_text('');
 
     Main.overview.hide();
     await Scripting.waitLeisure();
