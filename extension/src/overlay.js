@@ -33,6 +33,7 @@ export const SiftOverlay = GObject.registerClass({
         this._maxRows = settings.get_int('max-results');
         this._grab = null;
         this._destroyed = false;
+        this._animating = false;
 
         this._panel = new St.Widget({
             style_class: 'sift-panel',
@@ -156,6 +157,10 @@ export const SiftOverlay = GObject.registerClass({
         return this._view;
     }
 
+    get animating() {
+        return this._animating;
+    }
+
     get entry() {
         return this._entry;
     }
@@ -232,6 +237,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this.remove_all_transitions();
         this._panel.remove_all_transitions();
+        this._animating = false;
         this.visible = false;
         this._entry.text = '';
         this._results.setRows([]);
@@ -300,6 +306,7 @@ export const SiftOverlay = GObject.registerClass({
             return;
 
         this._destroyed = true;
+        this._animating = false;
 
         if (this._grab) {
             const grab = this._grab;
@@ -464,17 +471,22 @@ export const SiftOverlay = GObject.registerClass({
         this._panel.remove_all_transitions();
 
         if (!this._animationsEnabled()) {
+            this._animating = false;
             this.opacity = 255;
             this._panel.set_scale(1, 1);
             return;
         }
 
+        this._animating = true;
         this.opacity = 0;
         this._panel.set_scale(0.98, 0.98);
         this.ease({
             opacity: 255,
             duration: OPEN_ANIMATION_MS,
             mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onComplete: () => {
+                this._animating = false;
+            },
         });
         this._panel.ease({
             scale_x: 1,
