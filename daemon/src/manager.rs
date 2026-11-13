@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use notify::RecommendedWatcher;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
@@ -12,8 +13,10 @@ use crate::config::Config;
 use crate::dbus::Command;
 use crate::index::{self, Index, ScanResult};
 use crate::status::StatusModel;
+use crate::watcher::{self, WatcherEvent};
 
 const CACHE_REFRESH_SECS: u64 = 600;
+const CACHE_WRITE_DELAY: Duration = Duration::from_secs(30);
 const TICK_MS: u64 = 500;
 
 enum ScanOutcome {
@@ -39,6 +42,7 @@ pub fn spawn_manager(
     scan_delay: Duration,
 ) -> JoinHandle<()> {
     let (scan_tx, scan_rx) = mpsc::unbounded_channel();
+    let (watch_tx, watch_rx) = mpsc::unbounded_channel();
     let manager = Manager {
         config_path,
         home: crate::config::home_dir(),
@@ -48,6 +52,12 @@ pub fn spawn_manager(
         status,
         scan_delay,
         scan_tx,
+        watch_tx,
+        watcher: None,
+        watcher_roots: Vec::new(),
+        watcher_ok: true,
+        pending: Vec::new(),
+        cache_deadline: None,
         cancel: Arc::new(AtomicBool::new(false)),
         progress: Arc::new(AtomicUsize::new(0)),
         dirty: false,
@@ -56,7 +66,7 @@ pub fn spawn_manager(
         quit_ack: None,
     };
 
-    tokio::spawn(async move { manager.run(commands, scan_rx).await })
+    tokio::spawn(async move { manager.run(commands, scan_rx, watch_rx).await })
 }
 
 struct Manager {
@@ -68,6 +78,12 @@ struct Manager {
     status: Arc<StatusModel>,
     scan_delay: Duration,
     scan_tx: mpsc::UnboundedSender<ScanOutcome>,
+    watch_tx: mpsc::UnboundedSender<WatcherEvent>,
+    watcher: Option<RecommendedWatcher>,
+    watcher_roots: Vec<PathBuf>,
+    watcher_ok: bool,
+    pending: Vec<PathBuf>,
+    cache_deadline: Option<tokio::time::Instant>,
     cancel: Arc<AtomicBool>,
     progress: Arc<AtomicUsize>,
     dirty: bool,
@@ -81,13 +97,17 @@ impl Manager {
         mut self,
         mut commands: mpsc::UnboundedReceiver<Command>,
         mut scan_rx: mpsc::UnboundedReceiver<ScanOutcome>,
+        mut watch_rx: mpsc::UnboundedReceiver<WatcherEvent>,
     ) {
+        self.start_watcher();
         self.start_scan();
 
         let mut ticker = tokio::time::interval(Duration::from_millis(TICK_MS));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
+            let cache_deadline = self.cache_deadline;
+
             tokio::select! {
                 command = commands.recv(), if !self.quitting => {
                     match command {
@@ -96,6 +116,7 @@ impl Manager {
                                 continue;
                             }
                             self.reload_config();
+                            self.start_watcher();
                             self.start_scan();
                         }
                         Some(Command::EnsureFresh) => {
@@ -130,6 +151,16 @@ impl Manager {
                             self.dirty = !cache_ok;
                             if !cache_ok {
                                 eprintln!("siftd: could not write index cache");
+                                self.schedule_cache_write();
+                            }
+
+                            let state = if self.watcher_ok { "ready" } else { "degraded" };
+                            self.status.update(|status| status.state = state.to_owned());
+
+                            // Changes seen during the scan are not part of its snapshot.
+                            let pending = std::mem::take(&mut self.pending);
+                            if !pending.is_empty() {
+                                self.apply_changes(&pending);
                             }
                         }
                         Some(ScanOutcome::Cancelled) | None => {
@@ -142,12 +173,105 @@ impl Manager {
                         return;
                     }
                 }
+                event = watch_rx.recv(), if self.watcher.is_some() => {
+                    match event {
+                        Some(WatcherEvent::Changed(paths)) => {
+                            if self.scanning {
+                                self.pending.extend(paths);
+                            } else {
+                                self.apply_changes(&paths);
+                            }
+                        }
+                        Some(WatcherEvent::Failed) | None => {
+                            if self.watcher_ok {
+                                eprintln!("siftd: file watcher failed; file results may be stale");
+                            }
+                            self.watcher_failed();
+                        }
+                    }
+                }
+                _ = tokio::time::sleep_until(
+                    cache_deadline.unwrap_or_else(tokio::time::Instant::now)
+                ), if cache_deadline.is_some() => {
+                    if self.write_cache() {
+                        self.dirty = false;
+                        self.cache_deadline = None;
+                    } else {
+                        eprintln!("siftd: could not write index cache");
+                        self.schedule_cache_write();
+                    }
+                }
                 _ = ticker.tick(), if self.scanning => {
                     let progress = self.progress.load(Ordering::Relaxed);
                     let current = self.index.len();
                     self.status.update(|status| status.indexed = current.max(progress));
                 }
             }
+        }
+    }
+
+    fn start_watcher(&mut self) {
+        let roots = self.config.read().unwrap().roots.clone();
+        if self.watcher.is_some() && self.watcher_roots == roots {
+            return;
+        }
+
+        self.watcher = None;
+        self.watcher_roots = roots.clone();
+
+        match watcher::spawn_watcher(&roots, self.watch_tx.clone()) {
+            Ok(watcher) => {
+                self.watcher = Some(watcher);
+                if !self.watcher_ok {
+                    self.watcher_ok = true;
+                    self.status
+                        .update(|status| status.watcher = "ok".to_owned());
+                }
+            }
+            Err(error) => {
+                if self.watcher_ok {
+                    eprintln!("siftd: file watcher unavailable: {error}");
+                }
+                self.watcher_failed();
+            }
+        }
+    }
+
+    fn watcher_failed(&mut self) {
+        self.watcher = None;
+        self.watcher_ok = false;
+
+        let scanning = self.scanning;
+        self.status.update(|status| {
+            status.watcher = "unavailable".to_owned();
+            if !scanning {
+                status.state = "degraded".to_owned();
+            }
+        });
+    }
+
+    fn apply_changes(&mut self, paths: &[PathBuf]) {
+        let config = self.config.read().unwrap().clone();
+        if !self.index.apply_batch(&config, paths) {
+            return;
+        }
+
+        self.schedule_cache_write();
+
+        let (indexed, truncated) = {
+            let state = self.index.read();
+            (state.entries.len(), state.truncated)
+        };
+        self.status.update(|status| {
+            status.indexed = indexed;
+            status.truncated = truncated;
+        });
+    }
+
+    fn schedule_cache_write(&mut self) {
+        self.dirty = true;
+        if self.cache_deadline.is_none() {
+            self.cache_deadline = Some(tokio::time::Instant::now() + CACHE_WRITE_DELAY);
         }
     }
 
@@ -233,6 +357,7 @@ impl Manager {
 
     fn begin_quit(&mut self, ack: Option<oneshot::Sender<()>>) {
         self.cancel.store(true, Ordering::Relaxed);
+        self.watcher = None;
         self.quitting = true;
         self.quit_ack = ack;
     }

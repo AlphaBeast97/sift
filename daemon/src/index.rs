@@ -60,6 +60,217 @@ impl Index {
     pub fn len(&self) -> usize {
         self.state.read().unwrap().entries.len()
     }
+
+    #[allow(dead_code)] // specified interface; watcher tests are its only caller for now
+    pub fn has_path(&self, path: &Path) -> bool {
+        self.state
+            .read()
+            .unwrap()
+            .entries
+            .binary_search_by(|entry| entry.path.as_path().cmp(path))
+            .is_ok()
+    }
+
+    pub fn apply_batch(&self, config: &Config, paths: &[PathBuf]) -> bool {
+        if paths.is_empty() || config.roots.is_empty() {
+            return false;
+        }
+
+        let mut paths = paths.to_vec();
+        paths.sort();
+        paths.dedup();
+
+        let mut state = self.state.write().unwrap();
+        let mut changed = false;
+        let mut additions = Vec::new();
+
+        // Remove first so a rename frees its slots before the new subtree is added.
+        for path in &paths {
+            if path.exists() {
+                additions.push(path.clone());
+            } else {
+                changed |= remove_subtree(&mut state.entries, path);
+            }
+        }
+
+        for path in additions {
+            let Some(root) = containing_root(&config.roots, &path) else {
+                changed |= remove_subtree(&mut state.entries, &path);
+                continue;
+            };
+
+            let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+                changed |= remove_subtree(&mut state.entries, &path);
+                continue;
+            };
+            if metadata.file_type().is_symlink() || !is_indexable(config, root, &path) {
+                changed |= remove_subtree(&mut state.entries, &path);
+                continue;
+            }
+
+            let kind = if metadata.is_dir() {
+                EntryKind::Dir
+            } else if metadata.is_file() {
+                EntryKind::File
+            } else {
+                changed |= remove_subtree(&mut state.entries, &path);
+                continue;
+            };
+
+            if path != *root {
+                changed |= insert_entry(
+                    &mut state,
+                    Entry {
+                        name_lower: lower_name(&path),
+                        path: path.clone(),
+                        kind,
+                    },
+                    config.max_entries,
+                );
+            }
+
+            if kind == EntryKind::Dir {
+                let remaining = config.max_entries.saturating_sub(state.entries.len());
+                if remaining == 0 {
+                    state.truncated = true;
+                    continue;
+                }
+                for entry in walk_subtree(config, root, &path, remaining) {
+                    changed |= insert_entry(&mut state, entry, config.max_entries);
+                }
+            }
+        }
+
+        changed
+    }
+}
+
+fn lower_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_lowercase())
+        .unwrap_or_default()
+}
+
+fn containing_root<'a>(roots: &'a [PathBuf], path: &Path) -> Option<&'a Path> {
+    roots
+        .iter()
+        .filter(|root| path.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .map(PathBuf::as_path)
+}
+
+fn is_indexable(config: &Config, root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else {
+        return false;
+    };
+
+    if relative.components().any(|component| {
+        component
+            .as_os_str()
+            .to_str()
+            .is_some_and(|name| name.starts_with('.'))
+    }) {
+        return false;
+    }
+
+    !is_excluded(relative, &config.exclude_dirs)
+}
+
+fn remove_subtree(entries: &mut Vec<Entry>, path: &Path) -> bool {
+    let start = entries.partition_point(|entry| entry.path.as_path() < path);
+    let mut end = start;
+    while end < entries.len() && entries[end].path.starts_with(path) {
+        end += 1;
+    }
+
+    if start == end {
+        return false;
+    }
+
+    entries.drain(start..end);
+    true
+}
+
+fn insert_entry(state: &mut IndexState, entry: Entry, cap: usize) -> bool {
+    match state
+        .entries
+        .binary_search_by(|existing| existing.path.cmp(&entry.path))
+    {
+        Ok(index) => {
+            if state.entries[index] == entry {
+                false
+            } else {
+                state.entries[index] = entry;
+                true
+            }
+        }
+        Err(index) => {
+            if state.entries.len() >= cap {
+                state.truncated = true;
+                return false;
+            }
+            state.entries.insert(index, entry);
+            true
+        }
+    }
+}
+
+fn walk_subtree(config: &Config, root: &Path, path: &Path, limit: usize) -> Vec<Entry> {
+    let patterns = config.exclude_dirs.clone();
+    let filter_root = root.to_path_buf();
+    let mut builder = WalkBuilder::new(path);
+    builder
+        .hidden(true)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .follow_links(false)
+        .same_file_system(true);
+
+    builder.filter_entry(move |entry| {
+        if entry.depth() == 0 {
+            return true;
+        }
+        if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
+            return true;
+        }
+        let relative = entry
+            .path()
+            .strip_prefix(&filter_root)
+            .unwrap_or(entry.path());
+        !is_excluded(relative, &patterns)
+    });
+
+    let mut entries = Vec::new();
+    for result in builder.build() {
+        let Ok(entry) = result else { continue };
+        if entry.depth() == 0 {
+            continue;
+        }
+        let Some(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() || (!file_type.is_file() && !file_type.is_dir()) {
+            continue;
+        }
+
+        entries.push(Entry {
+            path: entry.path().to_path_buf(),
+            name_lower: lower_name(entry.path()),
+            kind: if file_type.is_dir() {
+                EntryKind::Dir
+            } else {
+                EntryKind::File
+            },
+        });
+
+        if entries.len() >= limit {
+            break;
+        }
+    }
+
+    entries
 }
 
 pub fn scan(config: &Config, cancel: &AtomicBool, progress: &AtomicUsize) -> ScanResult {
@@ -264,5 +475,43 @@ mod tests {
         );
         assert_eq!(index.len(), 1);
         assert!(index.read().truncated);
+    }
+
+    #[test]
+    fn apply_batch_adds_removes_and_renames() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old");
+        let new = dir.path().join("new");
+        std::fs::create_dir(&old).unwrap();
+        std::fs::write(old.join("a.txt"), b"x").unwrap();
+        let cfg = crate::config::default_config(dir.path());
+        let index = Index::new(vec![], false);
+        index.apply_batch(&cfg, std::slice::from_ref(&old));
+        assert!(index.has_path(&old.join("a.txt")));
+
+        std::fs::rename(&old, &new).unwrap();
+        index.apply_batch(&cfg, &[old.clone(), new.clone()]);
+        assert!(!index.has_path(&old.join("a.txt")));
+        assert!(index.has_path(&new.join("a.txt")));
+
+        std::fs::remove_dir_all(&new).unwrap();
+        index.apply_batch(&cfg, std::slice::from_ref(&new));
+        assert_eq!(index.len(), 0);
+    }
+
+    #[test]
+    fn apply_batch_ignores_hidden_excluded_and_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".secret"), b"x").unwrap();
+        std::fs::write(dir.path().join("ok.txt"), b"x").unwrap();
+        let cfg = crate::config::default_config(dir.path());
+        let index = Index::new(vec![], false);
+        assert!(index.apply_batch(
+            &cfg,
+            &[dir.path().join("ok.txt"), dir.path().join("ok.txt")]
+        ));
+        assert!(!index.apply_batch(&cfg, &[dir.path().join("ok.txt")]));
+        index.apply_batch(&cfg, &[dir.path().join(".secret")]);
+        assert_eq!(index.len(), 1);
     }
 }

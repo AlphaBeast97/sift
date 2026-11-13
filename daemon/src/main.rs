@@ -13,6 +13,7 @@ mod index;
 mod manager;
 mod query;
 mod status;
+mod watcher;
 
 use config::Config;
 use dbus::SiftService;
