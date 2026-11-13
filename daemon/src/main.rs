@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#[allow(dead_code)] // wired into the indexer in the next task
+#[allow(dead_code)] // wired into D-Bus in a later task
 mod config;
+#[allow(dead_code)] // wired into D-Bus in a later task
+mod index;
 
 fn main() {
     if std::env::args().any(|argument| argument == "--version") {
