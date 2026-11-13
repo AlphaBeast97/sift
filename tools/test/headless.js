@@ -78,6 +78,23 @@ export async function run() {
             'the service footer does not stack');
     }
 
+    if (GLib.getenv('SIFT_E2E') === '1') {
+        api.overlay.open();
+        api.overlay.entry.set_text('sift-e2e-report');
+        await Scripting.waitLeisure();
+        await waitFor(() => api.overlay.rows.some(r =>
+            r.kind === 'file' && r.title === 'sift-e2e-report.pdf'), 'file result', 3000);
+
+        api.overlay.entry.set_text('1+1');
+        await waitFor(() => api.overlay.rows.some(r =>
+            r.kind === 'calc' && r.title === '2'), 'calc result', 3000);
+
+        for (const text of ['s', 'si', 'sif', 'sift'])
+            api.overlay.entry.set_text(text);
+        await Scripting.sleep(600);
+        assert(api.overlay.rows.every(r => r.kind !== 'calc'), 'stale calc reply dropped');
+    }
+
     const fake = {files: [], calc: {expression: '1+1', result: '2'}};
     api.daemon.query = () => Promise.resolve(fake);
     api.overlay.entry.set_text(target.get_name());
