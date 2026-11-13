@@ -78,6 +78,27 @@ export async function run() {
             'the service footer does not stack');
     }
 
+    const fake = {files: [], calc: {expression: '1+1', result: '2'}};
+    api.daemon.query = () => Promise.resolve(fake);
+    api.overlay.entry.set_text(target.get_name());
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'calc'),
+        'calc row merges', 2000);
+    assert(api.overlay.rows[0].kind === 'calc', 'calc ranks before apps');
+
+    api.overlay.handleKey('Down', 0);
+    const selectedKey = api.overlay.rows[api.overlay.selectedIndex].key;
+    assert(api.overlay.rows[api.overlay.selectedIndex].kind === 'app',
+        'an app row is selected');
+
+    fake.files = [{path: '/tmp/sift-report.pdf', name: 'sift-report.pdf', kind: 'file'}];
+    api.overlay.entry.set_text(`${target.get_name()} `);
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'file'),
+        'file results render', 2000);
+    assert(api.overlay.rows[api.overlay.selectedIndex].key === selectedKey,
+        'selection survives a file tail');
+
     api.settings.set_int('max-results', 4);
     await Scripting.waitLeisure();
     assert(api.overlay.maxRows === 4 && api.overlay.rowCount <= 4,

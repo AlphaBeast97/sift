@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
@@ -10,8 +11,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
-import {appRow, mergeRows, selectionAfter} from './lib/merge.js';
+import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
 import {AppGrid} from './appGrid.js';
+import {loadFileIcon, openFile, revealFile} from './files.js';
 import {ResultsView} from './results.js';
 
 const OPEN_ANIMATION_MS = 120;
@@ -45,11 +47,13 @@ export const SiftOverlay = GObject.registerClass({
         this._animating = false;
         this._daemonCalc = null;
         this._daemonFiles = [];
+        this._home = GLib.get_home_dir();
         this._serviceUnavailable = false;
         this._queryTimer = 0;
         this._queryGeneration = 0;
         this._queryBusy = false;
         this._latestQuery = null;
+        this._reindexTimer = 0;
 
         this._panel = new St.Widget({
             style_class: 'sift-panel',
@@ -253,10 +257,22 @@ export const SiftOverlay = GObject.registerClass({
         const rows = mergeRows({
             calc: this._daemonCalc,
             apps: records.map(appRow),
+            files: this._daemonFiles
+                .map(file => fileRow(file, this._home))
+                .filter(Boolean),
         }, this._maxRows);
 
         this._results.setRows(rows);
         this._results.select(selectionAfter(rows, previous));
+
+        for (let i = 0; i < this._results.rowCount; i++) {
+            const row = this._results.rows[i];
+            if (row?.kind !== 'file' && row?.kind !== 'dir')
+                continue;
+            const icon = this._results.iconAt(i);
+            if (icon)
+                loadFileIcon(row.path, icon);
+        }
     }
 
     onAppsChanged() {
@@ -485,6 +501,10 @@ export const SiftOverlay = GObject.registerClass({
         this._animating = false;
         this._queryGeneration++;
         this._cancelQueryTimer();
+        if (this._reindexTimer) {
+            GLib.source_remove(this._reindexTimer);
+            this._reindexTimer = 0;
+        }
 
         if (this._grab) {
             const grab = this._grab;
@@ -595,7 +615,6 @@ export const SiftOverlay = GObject.registerClass({
             return;
 
         St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, String(result));
-        this.close();
     }
 
     _activateRow(row, {newWindow = false} = {}) {
@@ -604,10 +623,41 @@ export const SiftOverlay = GObject.registerClass({
                 row.app.open_new_window(-1);
             else
                 row.app.activate();
+        } else if (row.kind === 'file' || row.kind === 'dir') {
+            if (!this._activateFile(row, newWindow))
+                return;
+        } else if (row.kind === 'calc') {
+            this._copySelected();
         }
 
         this._onActivate?.(row, {newWindow});
         this.close();
+    }
+
+    _activateFile(row, reveal) {
+        if (!Gio.File.new_for_path(row.path).query_exists(null)) {
+            this._daemonFiles = this._daemonFiles.filter(file => file.path !== row.path);
+            this.refreshApps();
+            this._scheduleReindex();
+            return false;
+        }
+
+        if (reveal)
+            revealFile(row.path);
+        else
+            openFile(row.path);
+        return true;
+    }
+
+    _scheduleReindex() {
+        if (this._reindexTimer)
+            return;
+
+        this._reindexTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            this._reindexTimer = 0;
+            this._daemon?.reindex();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _toggleView() {

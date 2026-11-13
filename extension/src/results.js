@@ -102,6 +102,10 @@ export const ResultsView = GObject.registerClass(
             return this._selected >= 0 ? this._rows[this._selected] ?? null : null;
         }
 
+        iconAt(index) {
+            return this._rowActors[index]?.icon ?? null;
+        }
+
         setRows(rows = []) {
             this._rows = rows;
             const count = this.rowCount;
