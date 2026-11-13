@@ -6,9 +6,13 @@ mod calc;
 #[allow(dead_code)] // wired into D-Bus in a later task
 mod config;
 #[allow(dead_code)] // wired into D-Bus in a later task
+mod dbus;
+#[allow(dead_code)] // wired into D-Bus in a later task
 mod index;
 #[allow(dead_code)] // wired into D-Bus in a later task
 mod query;
+#[allow(dead_code)] // wired into D-Bus in a later task
+mod status;
 
 fn main() {
     if std::env::args().any(|argument| argument == "--version") {
