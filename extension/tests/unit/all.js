@@ -1,5 +1,6 @@
 import {run as appScore} from './appScore.test.js';
 import {run as geometry} from './geometry.test.js';
+import {run as gridMath} from './gridMath.test.js';
 import {run as keys} from './keys.test.js';
 import {run as merge} from './merge.test.js';
 import {run as stats} from './stats.test.js';
@@ -10,6 +11,7 @@ const tests = [
     ['keys', keys],
     ['appScore', appScore],
     ['merge', merge],
+    ['gridMath', gridMath],
 ];
 
 for (const [name, run] of tests) {

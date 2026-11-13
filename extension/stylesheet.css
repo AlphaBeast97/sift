@@ -87,6 +87,18 @@
     padding: 0 8px 8px;
 }
 
+.sift-app-grid {
+    spacing: 0;
+}
+
+.sift-app-grid-scroll {
+    clip_to_allocation: true;
+}
+
+.sift-app-grid .page-indicators {
+    height: 28px;
+}
+
 .sift-footer {
     height: 32px;
     padding: 0 16px;

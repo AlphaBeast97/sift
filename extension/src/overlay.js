@@ -10,9 +10,11 @@ import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, mergeRows, selectionAfter} from './lib/merge.js';
+import {AppGrid} from './appGrid.js';
 import {ResultsView} from './results.js';
 
 const OPEN_ANIMATION_MS = 120;
+const VIEW_ANIMATION_MS = 150;
 
 export const SiftOverlay = GObject.registerClass({
     Signals: {
@@ -24,7 +26,7 @@ export const SiftOverlay = GObject.registerClass({
             name: 'siftOverlay',
             reactive: true,
             visible: false,
-            layout_manager: new Clutter.BinLayout(),
+            layout_manager: new Clutter.FixedLayout(),
         });
 
         this._settings = settings;
@@ -40,6 +42,7 @@ export const SiftOverlay = GObject.registerClass({
         this._panel = new St.Widget({
             style_class: 'sift-panel',
             reactive: true,
+            clip_to_allocation: true,
             layout_manager: new Clutter.BinLayout(),
         });
         this._panel.set_pivot_point(0.5, 0.5);
@@ -101,7 +104,15 @@ export const SiftOverlay = GObject.registerClass({
             visible: false,
             x_expand: true,
             y_expand: true,
+            layout_manager: new Clutter.BinLayout(),
         });
+        this._grid = new AppGrid({
+            apps,
+            iconSize: settings.get_int('grid-icon-size'),
+            settings,
+            onActivate: (record, options) => this._activateRow(appRow(record), options),
+        });
+        this._gridView.add_child(this._grid);
 
         const footer = new St.BoxLayout({
             orientation: Clutter.Orientation.HORIZONTAL,
@@ -150,6 +161,9 @@ export const SiftOverlay = GObject.registerClass({
                 this.refreshApps();
             }
         });
+        this._gridSizeId = settings.connect('changed::grid-icon-size', () => {
+            this._grid?.setIconSize(settings.get_int('grid-icon-size'));
+        });
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => {
             if (!this.visible)
                 return;
@@ -169,6 +183,10 @@ export const SiftOverlay = GObject.registerClass({
 
     get entry() {
         return this._entry;
+    }
+
+    get appGrid() {
+        return this._grid;
     }
 
     get rows() {
@@ -211,6 +229,11 @@ export const SiftOverlay = GObject.registerClass({
         this._results.select(selectionAfter(rows, previous));
     }
 
+    onAppsChanged() {
+        this._grid?.invalidate();
+        this.refreshApps();
+    }
+
     setMaxRows(maxRows) {
         this._maxRows = maxRows;
         if (this._view === 'search')
@@ -251,6 +274,8 @@ export const SiftOverlay = GObject.registerClass({
             this._grab = null;
             Main.popModal(grab);
         }
+
+        this._grid?.close();
 
         if (!this.visible)
             return;
@@ -342,7 +367,13 @@ export const SiftOverlay = GObject.registerClass({
             Main.layoutManager.disconnect(this._monitorsId);
             this._monitorsId = 0;
         }
+        if (this._gridSizeId) {
+            this._settings.disconnect(this._gridSizeId);
+            this._gridSizeId = 0;
+        }
 
+        this._grid?.destroy();
+        this._grid = null;
         this._glass?.destroy();
         this._glass = null;
         Main.layoutManager.removeChrome(this);
@@ -460,16 +491,19 @@ export const SiftOverlay = GObject.registerClass({
         this._gridIcon.icon_name = grid ? 'edit-find-symbolic' : 'view-app-grid-symbolic';
         this._gridButton.accessible_name = grid ? 'Show search' : 'Show all applications';
 
-        if (grid)
+        if (grid) {
             this._entry.text = '';
-        else
+            this._grid.open();
+        } else {
+            this._grid.close();
             this.refreshApps();
+        }
 
         this._footerLabel.text = this.footerText;
-        this._applyGeometry();
+        this._applyGeometry(this.visible);
     }
 
-    _applyGeometry() {
+    _applyGeometry(animate = false) {
         const monitor = Main.layoutManager.monitors[this._monitorIndex] ??
             Main.layoutManager.primaryMonitor;
         if (!monitor)
@@ -479,19 +513,44 @@ export const SiftOverlay = GObject.registerClass({
         const topBarBottom = panelBox ? panelBox.y + panelBox.height : monitor.y;
 
         if (this._view === 'grid') {
-            this._setPanelRect(gridPanel(monitor, topBarBottom));
+            this._setPanelRect(gridPanel(monitor, topBarBottom), animate);
             return;
         }
 
         const rect = searchPanel(monitor, topBarBottom, this._maxRows);
         this._results.setMaxRows(rect.rows);
-        this._setPanelRect(rect);
+        this._setPanelRect(rect, animate);
     }
 
-    _setPanelRect(rect) {
+    _setPanelRect(rect, animate = false) {
+        const previous = this._rect;
         this._rect = rect;
-        this._panel.set_position(rect.x, rect.y);
-        this._panel.set_size(rect.width, rect.height);
+
+        if (animate && previous && previous.width > 0 && previous.height > 0 &&
+            this._animationsEnabled()) {
+            this._panel.remove_all_transitions();
+            this._panel.set_pivot_point(0, 0);
+            this._panel.set_position(previous.x, previous.y);
+            this._panel.set_size(rect.width, rect.height);
+            this._panel.set_scale(previous.width / rect.width,
+                previous.height / rect.height);
+            this._panel.ease({
+                x: rect.x,
+                y: rect.y,
+                scale_x: 1,
+                scale_y: 1,
+                duration: VIEW_ANIMATION_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+                onComplete: () => this._panel.set_pivot_point(0.5, 0.5),
+            });
+        } else {
+            this._panel.remove_all_transitions();
+            this._panel.set_scale(1, 1);
+            this._panel.set_pivot_point(0.5, 0.5);
+            this._panel.set_position(rect.x, rect.y);
+            this._panel.set_size(rect.width, rect.height);
+        }
+
         this._glass.setRect(rect);
     }
 

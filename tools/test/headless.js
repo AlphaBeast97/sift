@@ -70,6 +70,33 @@ export async function run() {
     api.settings.set_int('max-results', 6);
     api.overlay.entry.set_text('');
 
+    api.overlay.entry.set_text('fire');
+    api.overlay.showApps();
+    await Scripting.waitLeisure();
+    assert(api.overlay.view === 'grid', 'grid view is active');
+    assert(api.overlay.entry.text === '', 'entering grid clears query');
+    assert(api.appGrid.iconSize === 96, 'default icon size');
+    await waitFor(() => api.appGrid.itemCount > 0, 'grid apps load', 2000);
+
+    api.overlay.handleKey('t', 0);
+    api.overlay.entry.set_text('t');
+    await Scripting.waitLeisure();
+    assert(api.overlay.view === 'search' && api.overlay.entry.text === 't',
+        'typing returns to search');
+
+    api.overlay.showApps();
+    await Scripting.waitLeisure();
+    api.settings.set_int('grid-icon-size', 64);
+    await Scripting.waitLeisure();
+    assert(api.appGrid.iconSize === 64, 'icon size applies live');
+    api.settings.set_int('grid-icon-size', 96);
+
+    api.overlay.handleKey('Escape', 0);
+    await waitFor(() => !api.overlay.visible, 'escape closes the grid');
+
+    api.overlay.open();
+    await Scripting.waitLeisure();
+
     Main.overview.hide();
     await Scripting.waitLeisure();
     assert(!api.overlay.visible, 'hide() closes');

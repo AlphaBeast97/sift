@@ -9,7 +9,7 @@ export default class SiftExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._apps = new Apps();
-        this._apps.connect(() => this._overlay?.refreshApps());
+        this._apps.connect(() => this._overlay?.onAppsChanged());
         this._overlay = new SiftOverlay({settings: this._settings, apps: this._apps});
         this._takeover = new OverviewTakeover({overlay: this._overlay});
         this._takeover.install();
@@ -32,7 +32,7 @@ export default class SiftExtension extends Extension {
             overlay: this._overlay,
             takeover: this._takeover,
             apps: this._apps,
-            appGrid: null,
+            appGrid: this._overlay?.appGrid ?? null,
             glass: null,
             daemon: null,
         };

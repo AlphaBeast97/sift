@@ -62,7 +62,7 @@ export class Apps {
 
     gridApps() {
         return this._getRecords()
-            .filter(record => record.app.should_show())
+            .filter(record => record.app.get_app_info()?.should_show() ?? true)
             .sort((a, b) => a.name.localeCompare(b.name));
     }
 
