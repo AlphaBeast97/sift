@@ -1,1 +1,98 @@
-/* Sift styles are added with the overlay. */
+/* Sift overlay. */
+
+.sift-panel {
+    background-color: rgba(28, 30, 36, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 18px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.sift-glass {
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 18px;
+}
+
+.sift-entry-bar {
+    height: 60px;
+    padding: 0 16px;
+    spacing: 12px;
+}
+
+.sift-search-icon {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.sift-entry {
+    font-size: 20px;
+    color: #ffffff;
+    caret-color: #ffffff;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+}
+
+.sift-entry StLabel.hint-text {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.sift-grid-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sift-grid-button:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.sift-results {
+    padding: 0 8px;
+}
+
+.sift-row {
+    height: 52px;
+    padding: 0 12px;
+    border-radius: 10px;
+}
+
+.sift-row:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.sift-row-selected {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.sift-row-content {
+    spacing: 12px;
+}
+
+.sift-row-icon {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.sift-row-title {
+    font-size: 15px;
+    color: #ffffff;
+}
+
+.sift-row-subtitle {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.sift-grid-view {
+    padding: 0 8px 8px;
+}
+
+.sift-footer {
+    height: 32px;
+    padding: 0 16px;
+}
+
+.sift-footer-hint {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}

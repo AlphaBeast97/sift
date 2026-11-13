@@ -30,6 +30,24 @@ export async function run() {
         'extension is active');
     await Scripting.waitLeisure();
 
+    const api = ext.getTestAPI();
+    api.overlay.open();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible, 'overlay opens');
+    assert(api.overlay.entry.clutter_text.has_key_focus(), 'entry has focus');
+
+    api.overlay.showApps();
+    await Scripting.waitLeisure();
+    assert(api.overlay.view === 'grid', 'grid view opens');
+
+    api.overlay.focusSearch();
+    await Scripting.waitLeisure();
+    assert(api.overlay.view === 'search', 'focusSearch returns to search');
+
+    api.overlay.close();
+    await Scripting.waitLeisure();
+    assert(!api.overlay.visible, 'overlay closes');
+
     Main.extensionManager.disableExtension(UUID);
     await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.INACTIVE,
         'extension is inactive on disable');
