@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+use std::path::Path;
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+
+use zbus::{Connection, Proxy};
+
+const BUS_NAME: &str = "io.github.alphabeast97.Sift";
+const OBJECT_PATH: &str = "/io/github/alphabeast97/Sift";
+const INTERFACE: &str = "io.github.alphabeast97.Sift";
+
+struct Daemon(Child);
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn spawn_daemon(config: &Path, cache: &Path, extra: &[&str]) -> Daemon {
+    let child = Command::new(env!("CARGO_BIN_EXE_siftd"))
+        .arg("--config")
+        .arg(config)
+        .arg("--cache")
+        .arg(cache)
+        .args(extra)
+        .stdin(Stdio::null())
+        .spawn()
+        .expect("spawn siftd");
+    Daemon(child)
+}
+
+async fn wait_for_proxy() -> Proxy<'static> {
+    let connection = Connection::session().await.unwrap();
+    // CacheProperties::No: the test polls Status while it changes.
+    let proxy = zbus::proxy::Builder::<Proxy<'static>>::new(&connection)
+        .destination(BUS_NAME)
+        .path(OBJECT_PATH)
+        .interface(INTERFACE)
+        .cache_properties(zbus::proxy::CacheProperties::No)
+        .build()
+        .await
+        .unwrap();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+
+    loop {
+        if proxy.call::<_, _, String>("Ping", &()).await.is_ok() {
+            return proxy;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "daemon did not appear on the bus"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn wait_for_status(proxy: &Proxy<'_>, needle: &str) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+
+    loop {
+        if let Ok(status) = proxy.get_property::<String>("Status").await
+            && status.contains(needle)
+        {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "status never contained {needle}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + timeout;
+
+    loop {
+        if child.try_wait().unwrap().is_some() {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
+#[tokio::test]
+async fn cold_start_query_reindex_quit_and_second_instance() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join("docs")).unwrap();
+    std::fs::write(home.join("docs/report.pdf"), b"x").unwrap();
+    let config = tmp.path().join("config.toml");
+    std::fs::write(&config, format!("roots = [\"{}\"]\n", home.display())).unwrap();
+    let cache = tmp.path().join("cache.bin");
+
+    let mut child = spawn_daemon(&config, &cache, &["--scan-delay-ms", "1000"]);
+    let proxy = wait_for_proxy().await;
+    wait_for_status(&proxy, "\"state\":\"indexing\"").await;
+
+    let ping: String = proxy.call("Ping", &()).await.unwrap();
+    assert!(ping.starts_with("0.1.0"));
+
+    let cold: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+    assert!(
+        cold.contains("\"files\":[]"),
+        "cold start answers without a cache"
+    );
+
+    let invalid = proxy
+        .call::<_, _, String>("Query", &("x".repeat(129), 10u32))
+        .await;
+    assert!(invalid.is_err(), "over-long queries are rejected");
+    let bad_limit = proxy.call::<_, _, String>("Query", &("report", 0u32)).await;
+    assert!(bad_limit.is_err(), "limit 0 is rejected");
+
+    wait_for_status(&proxy, "\"state\":\"ready\"").await;
+    let warm: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+    assert!(warm.contains("report.pdf"));
+    assert!(cache.exists(), "ready scan writes the cache");
+    let json: serde_json::Value = serde_json::from_str(&warm).unwrap();
+    assert!(json["files"].is_array(), "files is an array");
+    assert!(json.get("calc").is_none(), "calc is omitted when absent");
+    let _: () = proxy.call("EnsureFresh", &()).await.unwrap();
+
+    let mut second = spawn_daemon(&config, &cache, &[]);
+    assert!(
+        wait_for_exit(&mut second.0, Duration::from_secs(2)).await,
+        "second instance exits when the bus name is taken"
+    );
+
+    std::fs::write(&config, "roots = []\n").unwrap();
+    let _: () = proxy.call("Reindex", &()).await.unwrap();
+    let during: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+    assert!(
+        during.contains("report.pdf"),
+        "rebuild keeps the previous snapshot"
+    );
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+        if reply.contains("\"files\":[]") {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "reindex never emptied the index"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    let _: () = proxy.call("Quit", &()).await.unwrap();
+    assert!(
+        wait_for_exit(&mut child.0, Duration::from_secs(2)).await,
+        "Quit exits"
+    );
+}

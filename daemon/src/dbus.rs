@@ -69,6 +69,7 @@ pub fn version() -> String {
 pub struct SiftService {
     index: Arc<Index>,
     status: Arc<StatusModel>,
+    #[allow(dead_code)] // kept per the Task 15 interface; read once config affects queries
     config: Arc<RwLock<Config>>,
     commands: mpsc::UnboundedSender<Command>,
 }

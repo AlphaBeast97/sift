@@ -117,6 +117,12 @@ impl Config {
     }
 }
 
+pub fn home_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
 pub fn config_path() -> PathBuf {
     let config_home = std::env::var_os("XDG_CONFIG_HOME")
         .filter(|path| !path.is_empty())

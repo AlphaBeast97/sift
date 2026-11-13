@@ -18,6 +18,16 @@ pub struct CachedIndex {
     pub truncated: bool,
 }
 
+pub fn cache_path() -> PathBuf {
+    let cache_home = std::env::var_os("XDG_CACHE_HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .unwrap_or_else(|| PathBuf::from(".cache"));
+
+    cache_home.join("sift").join("index-v1.bin")
+}
+
 pub fn load(path: &Path, fingerprint: u64) -> Option<CachedIndex> {
     let bytes = fs::read(path).ok()?;
     parse(&bytes, fingerprint)
