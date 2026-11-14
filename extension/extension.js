@@ -45,7 +45,7 @@ export default class SiftExtension extends Extension {
             takeover: this._takeover,
             apps: this._apps,
             appGrid: this._overlay?.appGrid ?? null,
-            glass: null,
+            glass: this._overlay?.glass ?? null,
             daemon: this._daemon,
         };
     }

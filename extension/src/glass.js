@@ -95,6 +95,7 @@ export class GlassPanel {
         this._displaySignals = [];
         this._windows = [];
         this._rebuildLater = 0;
+        this._frozen = false;
         this._open = false;
         this._shaderFailed = false;
         this._cloneFailed = false;
@@ -191,8 +192,18 @@ export class GlassPanel {
         this._rebuildClones();
     }
 
+    freeze() {
+        this._frozen = true;
+        this._cancelRebuild();
+    }
+
+    thaw() {
+        this._frozen = false;
+    }
+
     close() {
         this._open = false;
+        this._frozen = false;
         this._cancelRebuild();
         this._clearClones();
         this._disconnectDisplay();
@@ -202,6 +213,7 @@ export class GlassPanel {
     }
 
     applySettings() {
+        const previousMode = this._params.effectiveMode;
         this._params = this._readSettings();
         this._setPanelStyle();
 
@@ -222,8 +234,13 @@ export class GlassPanel {
         if (this._frame)
             this._frame.visible = this._open && this.effectiveMode !== 'off';
 
+        if (!this._open || previousMode === this.effectiveMode)
+            return;
+
         if (this.effectiveMode === 'off')
             this._clearClones();
+        else if (previousMode === 'off' && !this._cloneFailed)
+            this._rebuildClones();
     }
 
     destroy() {
@@ -352,7 +369,8 @@ export class GlassPanel {
     }
 
     _queueRebuild() {
-        if (!this._open || this._rebuildLater || this.effectiveMode === 'off')
+        if (!this._open || this._frozen || this._rebuildLater ||
+            this.effectiveMode === 'off')
             return;
 
         this._rebuildLater = global.compositor.get_laters().add(

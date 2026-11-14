@@ -21,6 +21,9 @@ const VIEW_ANIMATION_MS = 150;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
+const GLASS_KEYS = new Set([
+    'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
+]);
 
 export const SiftOverlay = GObject.registerClass({
     Signals: {
@@ -54,6 +57,7 @@ export const SiftOverlay = GObject.registerClass({
         this._queryBusy = false;
         this._latestQuery = null;
         this._reindexTimer = 0;
+        this._glassThawTimer = 0;
 
         this._panel = new St.Widget({
             style_class: 'sift-panel',
@@ -187,6 +191,10 @@ export const SiftOverlay = GObject.registerClass({
         this._gridSizeId = settings.connect('changed::grid-icon-size', () => {
             this._grid?.setIconSize(settings.get_int('grid-icon-size'));
         });
+        this._glassSettingsId = settings.connect('changed', (_settings, key) => {
+            if (GLASS_KEYS.has(key))
+                this.applySettings();
+        });
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => {
             if (!this.visible)
                 return;
@@ -210,6 +218,14 @@ export const SiftOverlay = GObject.registerClass({
 
     get appGrid() {
         return this._grid;
+    }
+
+    get glass() {
+        return this._glass;
+    }
+
+    applySettings() {
+        this._glass?.applySettings();
     }
 
     get rows() {
@@ -425,6 +441,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this._queryGeneration++;
         this._cancelQueryTimer();
+        this._cancelGlassThaw();
         this._latestQuery = null;
         this._daemonCalc = null;
         this._daemonFiles = [];
@@ -527,6 +544,11 @@ export const SiftOverlay = GObject.registerClass({
             this._settings.disconnect(this._gridSizeId);
             this._gridSizeId = 0;
         }
+        if (this._glassSettingsId) {
+            this._settings.disconnect(this._glassSettingsId);
+            this._glassSettingsId = 0;
+        }
+        this._cancelGlassThaw();
 
         this._grid?.destroy();
         this._grid = null;
@@ -689,7 +711,27 @@ export const SiftOverlay = GObject.registerClass({
             ? '←→↑↓ Navigate · Enter Open · Esc Close'
             : '↑↓ Navigate · Enter Open · Esc Close';
         this._syncFooter();
+        this._glass?.freeze();
         this._applyGeometry(this.visible);
+        this._scheduleGlassThaw();
+    }
+
+    _scheduleGlassThaw() {
+        this._cancelGlassThaw();
+        const delay = this._animationsEnabled() ? VIEW_ANIMATION_MS : 0;
+        this._glassThawTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+            this._glassThawTimer = 0;
+            this._glass?.thaw();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _cancelGlassThaw() {
+        if (!this._glassThawTimer)
+            return;
+
+        GLib.source_remove(this._glassThawTimer);
+        this._glassThawTimer = 0;
     }
 
     _applyGeometry(animate = false) {

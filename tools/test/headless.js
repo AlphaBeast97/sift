@@ -123,11 +123,45 @@ export async function run() {
     api.settings.set_int('max-results', 6);
     api.overlay.entry.set_text('');
 
+    const savedGlassMode = api.settings.get_string('glass-mode');
+    const savedBlurRadius = api.settings.get_int('blur-radius');
+    const savedAnimations = api.settings.get_boolean('animations');
+    const searchRect = api.glass.rect;
+
+    api.settings.set_string('glass-mode', 'liquid');
+    await Scripting.waitLeisure();
+    assert(api.glass.effectiveMode === 'liquid', 'glass mode applies live');
+
+    api.settings.set_int('blur-radius', 0);
+    await Scripting.waitLeisure();
+    assert(api.glass.blurRadius === 0, 'blur radius applies live');
+
+    api.settings.set_string('glass-mode', 'off');
+    await Scripting.waitLeisure();
+    assert(api.glass.effectiveMode === 'off', 'glass off applies live');
+
+    api.settings.set_string('glass-mode', savedGlassMode);
+    api.settings.set_int('blur-radius', savedBlurRadius);
+    await Scripting.waitLeisure();
+    assert(api.glass.effectiveMode === 'off' || api.glass.cloneCount > 0,
+        'clones return when glass is re-enabled');
+
+    api.settings.set_boolean('animations', false);
+    await Scripting.waitLeisure();
+    api.overlay.close();
+    api.overlay.open();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible && !api.overlay.animating,
+        'opens without animation');
+    api.settings.set_boolean('animations', savedAnimations);
+    await Scripting.waitLeisure();
+
     api.overlay.entry.set_text('fire');
     api.overlay.showApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'grid view is active');
     assert(api.overlay.entry.text === '', 'entering grid clears query');
+    assert(api.glass.rect.width > searchRect.width, 'glass rect follows the grid');
     assert(api.appGrid.iconSize === 96, 'default icon size');
     await waitFor(() => api.appGrid.itemCount > 0, 'grid apps load', 2000);
 
@@ -146,6 +180,7 @@ export async function run() {
 
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
+    assert(api.glass.cloneCount === 0, 'clones removed on close');
 
     api.overlay.open();
     await Scripting.waitLeisure();
