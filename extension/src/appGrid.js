@@ -214,6 +214,7 @@ export const AppGrid = GObject.registerClass(
                 });
                 tile.can_focus = false;
                 tile.popupMenu = () => {};
+                tile.accessible_name = record.name;
                 this._grid.appendItem(tile);
                 this._tiles.push(tile);
             }

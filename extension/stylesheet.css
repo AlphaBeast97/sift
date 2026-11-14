@@ -60,7 +60,8 @@
 
 .sift-row {
     height: 52px;
-    padding: 0 12px;
+    padding: 0 10px;
+    border: 2px solid transparent;
     border-radius: 10px;
 }
 
@@ -70,6 +71,7 @@
 
 .sift-row-selected {
     background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.85);
 }
 
 .sift-row-content {
@@ -114,4 +116,89 @@
 .sift-footer-hint {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.45);
+}
+
+.sift-empty {
+    padding: 0 16px;
+}
+
+.sift-empty-content {
+    height: 120px;
+    spacing: 8px;
+    padding: 12px 0;
+}
+
+.sift-empty-title {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.sift-empty-hint {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.sift-empty-button {
+    border-radius: 10px;
+    padding: 6px 14px;
+    background-color: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.sift-empty-button:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.sift-light .sift-entry {
+    color: rgba(0, 0, 0, 0.9);
+    caret-color: rgba(0, 0, 0, 0.9);
+}
+
+.sift-light .sift-entry StLabel.hint-text {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+.sift-light .sift-search-icon,
+.sift-light .sift-row-icon {
+    color: rgba(0, 0, 0, 0.7);
+}
+
+.sift-light .sift-grid-button {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.sift-light .sift-grid-button:hover {
+    background-color: rgba(0, 0, 0, 0.14);
+}
+
+.sift-light .sift-row:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sift-light .sift-row-selected {
+    background-color: rgba(0, 0, 0, 0.09);
+    border-color: rgba(0, 0, 0, 0.8);
+}
+
+.sift-light .sift-row-title {
+    color: rgba(0, 0, 0, 0.9);
+}
+
+.sift-light .sift-row-subtitle,
+.sift-light .sift-footer-hint,
+.sift-light .sift-empty-hint {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+.sift-light .sift-empty-title {
+    color: rgba(0, 0, 0, 0.75);
+}
+
+.sift-light .sift-empty-button {
+    background-color: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.85);
+}
+
+.sift-light .sift-empty-button:hover {
+    background-color: rgba(0, 0, 0, 0.14);
 }

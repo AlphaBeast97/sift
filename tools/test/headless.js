@@ -45,6 +45,8 @@ export async function run() {
     Main.overview.show();
     await Scripting.waitLeisure();
     assert(api.overlay.visible && api.overlay.view === 'search', 'show() opens search');
+    assert(api.overlay.emptyVisible, 'empty query shows the empty state');
+    assert(api.overlay.entry.accessible_name === 'Search', 'entry is named Search');
 
     Main.overview.show(OverviewControls.ControlsState.APP_GRID);
     await Scripting.waitLeisure();
@@ -62,6 +64,7 @@ export async function run() {
     api.overlay.entry.set_text(target.get_name());
     await Scripting.waitLeisure();
     assert(api.overlay.rowCount > 0, 'app results render');
+    assert(!api.overlay.emptyVisible, 'results hide the empty state');
     assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
 
     if (GLib.getenv('SIFT_E2E') !== '1') {

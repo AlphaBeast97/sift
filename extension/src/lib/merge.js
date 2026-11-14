@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import {abbreviatePath, parentPath} from './format.js';
 
 export function appRow(record) {
     return {
@@ -29,30 +30,14 @@ export function fileRow(file, home) {
     if (typeof file.name !== 'string' || file.name.length === 0)
         return null;
 
-    const parent = parentPath(file.path);
     return {
         kind: file.kind,
         key: `file:${file.path}`,
         title: file.name,
-        subtitle: abbreviate(parent, home),
+        subtitle: abbreviatePath(parentPath(file.path), home),
         path: file.path,
         icon: file.kind === 'dir' ? 'folder-symbolic' : 'text-x-generic-symbolic',
     };
-}
-
-function parentPath(path) {
-    const index = path.lastIndexOf('/');
-    return index > 0 ? path.slice(0, index) : '/';
-}
-
-function abbreviate(path, home) {
-    if (!home)
-        return path;
-    if (path === home)
-        return '~';
-    if (path.startsWith(`${home}/`))
-        return `~${path.slice(home.length)}`;
-    return path;
 }
 
 export function mergeRows({calc = null, apps = [], files = []} = {}, maxRows) {

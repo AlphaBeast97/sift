@@ -1,4 +1,5 @@
 import {run as appScore} from './appScore.test.js';
+import {run as format} from './format.test.js';
 import {run as geometry} from './geometry.test.js';
 import {run as glassParams} from './glassParams.test.js';
 import {run as gridMath} from './gridMath.test.js';
@@ -11,6 +12,7 @@ const tests = [
     ['geometry', geometry],
     ['keys', keys],
     ['appScore', appScore],
+    ['format', format],
     ['glassParams', glassParams],
     ['merge', merge],
     ['gridMath', gridMath],

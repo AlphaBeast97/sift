@@ -58,6 +58,13 @@ export const SiftOverlay = GObject.registerClass({
         this._latestQuery = null;
         this._reindexTimer = 0;
         this._glassThawTimer = 0;
+        this._themeId = 0;
+
+        this._syncTheme();
+        this._themeId = St.Settings.get().connect('notify::color-scheme', () => {
+            this._syncTheme();
+            this.applySettings();
+        });
 
         this._panel = new St.Widget({
             style_class: 'sift-panel',
@@ -96,7 +103,7 @@ export const SiftOverlay = GObject.registerClass({
             can_focus: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._entry.accessible_name = 'Sift Search';
+        this._entry.accessible_name = 'Search';
         this._gridIcon = new St.Icon({
             icon_name: 'view-app-grid-symbolic',
             icon_size: 18,
@@ -106,6 +113,7 @@ export const SiftOverlay = GObject.registerClass({
             child: this._gridIcon,
             can_focus: false,
             reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
             accessible_name: 'Show all applications',
         });
         this._gridButton.connect('clicked', () => this._toggleView());
@@ -118,6 +126,41 @@ export const SiftOverlay = GObject.registerClass({
 
         this._results = new ResultsView({maxRows: this._maxRows});
         this._results.onActivate = (row, options) => this._activateRow(row, options);
+
+        this._empty = new St.Widget({
+            style_class: 'sift-empty',
+            x_expand: true,
+            y_expand: true,
+            layout_manager: new Clutter.BinLayout(),
+            visible: false,
+        });
+        const emptyContent = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+            style_class: 'sift-empty-content',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._emptyTitle = new St.Label({
+            style_class: 'sift-empty-title',
+            x_align: Clutter.ActorAlign.CENTER,
+            text: 'Search apps, files, and calculations',
+        });
+        this._emptyHint = new St.Label({
+            style_class: 'sift-empty-hint',
+            x_align: Clutter.ActorAlign.CENTER,
+            text: '↑↓ Navigate · Enter Open · Esc Close',
+        });
+        this._showAppsButton = new St.Button({
+            style_class: 'sift-empty-button',
+            label: 'Show all applications',
+            x_align: Clutter.ActorAlign.CENTER,
+            can_focus: false,
+        });
+        this._showAppsButton.connect('clicked', () => this.showApps());
+        emptyContent.add_child(this._emptyTitle);
+        emptyContent.add_child(this._emptyHint);
+        emptyContent.add_child(this._showAppsButton);
+        this._empty.add_child(emptyContent);
 
         this._gridView = new St.Widget({
             style_class: 'sift-grid-view',
@@ -154,6 +197,7 @@ export const SiftOverlay = GObject.registerClass({
 
         content.add_child(entryBar);
         content.add_child(this._results);
+        content.add_child(this._empty);
         content.add_child(this._gridView);
         content.add_child(footer);
 
@@ -224,6 +268,10 @@ export const SiftOverlay = GObject.registerClass({
         return this._glass;
     }
 
+    get emptyVisible() {
+        return this._empty.visible;
+    }
+
     applySettings() {
         this._glass?.applySettings();
     }
@@ -280,6 +328,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this._results.setRows(rows);
         this._results.select(selectionAfter(rows, previous));
+        this._syncEmptyState();
 
         for (let i = 0; i < this._results.rowCount; i++) {
             const row = this._results.rows[i];
@@ -389,6 +438,27 @@ export const SiftOverlay = GObject.registerClass({
         this._statusLabel.visible = text !== '';
     }
 
+    _syncTheme() {
+        const dark = St.Settings.get().color_scheme !==
+            St.SystemColorScheme.PREFER_LIGHT;
+        for (const name of ['sift-dark', 'sift-light'])
+            this.remove_style_class_name(name);
+        this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
+    }
+
+    _syncEmptyState() {
+        const empty = this.visible && this._view === 'search' &&
+            this._results.rowCount === 0;
+        this._empty.visible = empty;
+        this._results.visible = this._view === 'search' && !empty;
+
+        if (empty) {
+            this._emptyTitle.text = this._entry.text.trim()
+                ? 'No matches'
+                : 'Search apps, files, and calculations';
+        }
+    }
+
     setMaxRows(maxRows) {
         this._maxRows = maxRows;
         if (this._view === 'search')
@@ -416,6 +486,7 @@ export const SiftOverlay = GObject.registerClass({
         this._grab = grab;
         this._syncFullscreen();
         this.show();
+        this.refreshApps();
         this._glass?.applySettings();
         this._animateOpen();
         this._glass?.open();
@@ -452,6 +523,7 @@ export const SiftOverlay = GObject.registerClass({
         this.visible = false;
         this._entry.text = '';
         this._results.setRows([]);
+        this._syncEmptyState();
         this._syncFooter();
         this.emit('closed');
     }
@@ -549,6 +621,10 @@ export const SiftOverlay = GObject.registerClass({
             this._glassSettingsId = 0;
         }
         this._cancelGlassThaw();
+        if (this._themeId) {
+            St.Settings.get().disconnect(this._themeId);
+            this._themeId = 0;
+        }
 
         this._grid?.destroy();
         this._grid = null;
@@ -710,6 +786,7 @@ export const SiftOverlay = GObject.registerClass({
         this._footerLabel.text = grid
             ? '←→↑↓ Navigate · Enter Open · Esc Close'
             : '↑↓ Navigate · Enter Open · Esc Close';
+        this._syncEmptyState();
         this._syncFooter();
         this._glass?.freeze();
         this._applyGeometry(this.visible);
