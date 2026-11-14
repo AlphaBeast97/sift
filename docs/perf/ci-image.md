@@ -57,3 +57,6 @@ tag.
   harness starts a private one and exports `DBUS_SYSTEM_BUS_ADDRESS` when
   `/run/dbus/system_bus_socket` is absent. `make test-shell-container` passes
   with it using the local image.
+- `Shell smoke` passes on GitHub in run 43605275298 (2026-11-14): cached image
+  job 26s, smoke 3m26s including the Rust build, extension pack, and
+  `sift shell smoke ok`.
