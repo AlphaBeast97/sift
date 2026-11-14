@@ -21,6 +21,7 @@ const VIEW_ANIMATION_MS = 150;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
+const EMPTY_ROWS = 3;
 const GLASS_KEYS = new Set([
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
 ]);
@@ -329,6 +330,9 @@ export const SiftOverlay = GObject.registerClass({
         this._results.setRows(rows);
         this._results.select(selectionAfter(rows, previous));
         this._syncEmptyState();
+
+        if (this.visible && this._view === 'search')
+            this._applyGeometry();
 
         for (let i = 0; i < this._results.rowCount; i++) {
             const row = this._results.rows[i];
@@ -825,13 +829,19 @@ export const SiftOverlay = GObject.registerClass({
             return;
         }
 
-        const rect = searchPanel(monitor, topBarBottom, this._maxRows);
-        this._results.setMaxRows(rect.rows);
+        const fit = searchPanel(monitor, topBarBottom, this._maxRows);
+        this._results.setMaxRows(fit.rows);
+        const rows = Math.max(this._results.rowCount, EMPTY_ROWS);
+        const rect = searchPanel(monitor, topBarBottom, rows);
         this._setPanelRect(rect, animate);
     }
 
     _setPanelRect(rect, animate = false) {
         const previous = this._rect;
+        if (previous && previous.x === rect.x && previous.y === rect.y &&
+            previous.width === rect.width && previous.height === rect.height)
+            return;
+
         this._rect = rect;
 
         if (animate && previous && previous.width > 0 && previous.height > 0 &&
