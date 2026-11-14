@@ -298,19 +298,19 @@ export class GlassPanel {
         if (!this._effect || !this._rect)
             return;
 
-        // Frosted keeps the shader only for its rounded mask.
-        const maskOnly = this.effectiveMode === 'frosted';
+        // Frosted keeps the backdrop flat: no lens, rim, sheen, or saturation.
+        const frosted = this.effectiveMode === 'frosted';
 
         this._effect.setUniforms({
             width: this._rect.width,
             height: this._rect.height,
             radius: this._params.radius,
-            tint: maskOnly ? [0, 0, 0] : this._params.tint,
-            opacity: maskOnly ? 0 : this._params.opacity,
-            saturation: maskOnly ? 1 : this._params.saturation,
-            lens: maskOnly ? 0 : this._params.lens,
-            rim: maskOnly ? 0 : this._params.rim,
-            sheen: maskOnly ? 0 : this._params.sheen,
+            tint: this._params.tint,
+            opacity: this._params.opacity,
+            saturation: frosted ? 1 : this._params.saturation,
+            lens: frosted ? 0 : this._params.lens,
+            rim: frosted ? 0 : this._params.rim,
+            sheen: frosted ? 0 : this._params.sheen,
         });
     }
 
