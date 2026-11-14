@@ -53,3 +53,7 @@ tag.
   look up the container uid in `/etc/passwd`. The smoke job and
   `make test-shell-container` now mount the host `/etc/passwd` and `/etc/group`
   read-only so any host uid resolves.
+- Containers also have no system bus, which GNOME Shell 51 requires; the test
+  harness starts a private one and exports `DBUS_SYSTEM_BUS_ADDRESS` when
+  `/run/dbus/system_bus_socket` is absent. `make test-shell-container` passes
+  with it using the local image.

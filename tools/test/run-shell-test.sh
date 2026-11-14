@@ -10,6 +10,10 @@ export SIFT_E2E="${SIFT_E2E:-0}"
 
 exec dbus-run-session -- bash -c '
 set -euo pipefail
+# Containers have no system bus; a private session bus satisfies the shell.
+if [ ! -S /run/dbus/system_bus_socket ]; then
+    export DBUS_SYSTEM_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address)
+fi
 if [ "${SIFT_E2E:-0}" = 1 ]; then
     tmp=$(mktemp -d)
     export HOME="$tmp/home"
