@@ -17,13 +17,14 @@ function valueRow(title, subtitle = '') {
 
 function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
     const row = valueRow(title);
+    const adjustment = new Gtk.Adjustment({
+        lower,
+        upper,
+        step_increment: step,
+        page_increment: step * 2,
+    });
     const scale = new Gtk.Scale({
-        adjustment: new Gtk.Adjustment({
-            lower,
-            upper,
-            step_increment: step,
-            page_increment: step * 2,
-        }),
+        adjustment,
         digits: 2,
         draw_value: false,
         hexpand: true,
@@ -35,7 +36,7 @@ function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
         row.subtitle = settings.get_double(key).toFixed(2);
     };
 
-    settings.bind(key, scale, 'value', Gio.SettingsBindFlags.DEFAULT);
+    settings.bind(key, adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
     settings.connect(`changed::${key}`, sync);
     sync();
 
@@ -45,13 +46,14 @@ function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
 
 function addIntRow(group, settings, key, title, {lower, upper, step}) {
     const row = valueRow(title);
+    const adjustment = new Gtk.Adjustment({
+        lower,
+        upper,
+        step_increment: step,
+        page_increment: step * 2,
+    });
     const scale = new Gtk.Scale({
-        adjustment: new Gtk.Adjustment({
-            lower,
-            upper,
-            step_increment: step,
-            page_increment: step * 2,
-        }),
+        adjustment,
         digits: 0,
         draw_value: false,
         hexpand: true,
@@ -63,12 +65,12 @@ function addIntRow(group, settings, key, title, {lower, upper, step}) {
         row.subtitle = String(settings.get_int(key));
     };
 
-    scale.value = settings.get_int(key);
-    scale.connect('value-changed', () => {
-        settings.set_int(key, Math.round(scale.value));
+    adjustment.value = settings.get_int(key);
+    adjustment.connect('value-changed', () => {
+        settings.set_int(key, Math.round(adjustment.value));
     });
     settings.connect(`changed::${key}`, () => {
-        scale.value = settings.get_int(key);
+        adjustment.value = settings.get_int(key);
         sync();
     });
     sync();
