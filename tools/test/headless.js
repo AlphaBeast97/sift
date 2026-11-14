@@ -45,9 +45,9 @@ export async function run() {
     Main.overview.show();
     await Scripting.waitLeisure();
     assert(api.overlay.visible && api.overlay.view === 'search', 'show() opens search');
-    assert(api.overlay.emptyVisible, 'empty query shows the empty state');
-    assert(api.glass.rect.height === 92 + 3 * 52,
-        'empty state uses the minimum panel height');
+    assert(!api.overlay.emptyVisible, 'the empty query shows only the search bar');
+    assert(api.glass.rect.height === 60,
+        'the empty query uses the compact bar height');
     assert(api.overlay.entry.accessible_name === 'Search', 'entry is named Search');
 
     Main.overview.show(OverviewControls.ControlsState.APP_GRID);
@@ -68,6 +68,8 @@ export async function run() {
     assert(api.overlay.rowCount > 0, 'app results render');
     assert(!api.overlay.emptyVisible, 'results hide the empty state');
     assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
+    assert(api.glass.rect.height === 92 + api.overlay.rowCount * 52,
+        'typing expands the panel to its results');
 
     if (GLib.getenv('SIFT_E2E') !== '1') {
         api.overlay.entry.set_text(target.get_name());
@@ -133,6 +135,30 @@ export async function run() {
         'panel height follows the visible result rows');
     api.settings.set_int('max-results', 6);
     api.overlay.entry.set_text('');
+
+    api.settings.set_int('max-results', 12);
+    fake.files = Array.from({length: 20}, (_, i) => ({
+        path: `/tmp/sift-scroll-${i}.txt`,
+        name: `sift-scroll-${i}.txt`,
+        kind: 'file',
+    }));
+    api.overlay.entry.set_text('scroll');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rowCount === 12, 'overflow rows render', 2000);
+
+    const visibleRows = Math.round((api.glass.rect.height - 92) / 52);
+    if (visibleRows < api.overlay.rowCount) {
+        api.overlay.handleKey('End', 0);
+        await Scripting.waitLeisure();
+        assert(api.overlay.selectedIndex === 11, 'End selects the last result');
+        assert(api.overlay.scrollView.vadjustment.value > 0,
+            'keyboard selection scrolls into view');
+    }
+
+    api.settings.set_int('max-results', 6);
+    fake.files = [];
+    api.overlay.entry.set_text('');
+    await Scripting.waitLeisure();
 
     const savedGlassMode = api.settings.get_string('glass-mode');
     const savedBlurRadius = api.settings.get_int('blur-radius');

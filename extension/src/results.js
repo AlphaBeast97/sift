@@ -73,9 +73,11 @@ export const ResultsView = GObject.registerClass(
             actor.set_child(content);
 
             actor.connect('clicked', () => this.activateAt(index));
-            actor.connect('notify::hover', () => {
-                if (actor.hover)
-                    this.select(index);
+            // Only a real pointer move may steal the selection; a row appearing
+            // under a stationary pointer while typing must not.
+            actor.connect('motion-event', () => {
+                this.select(index);
+                return Clutter.EVENT_PROPAGATE;
             });
 
             this.add_child(actor);
@@ -104,6 +106,10 @@ export const ResultsView = GObject.registerClass(
 
         iconAt(index) {
             return this._rowActors[index]?.icon ?? null;
+        }
+
+        rowActorAt(index) {
+            return this._rowActors[index]?.actor ?? null;
         }
 
         setRows(rows = []) {

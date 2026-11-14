@@ -10,6 +10,10 @@ export function run() {
     equal(search.y, 194);
     equal(search.rows, 6);
 
+    const compact = searchPanel(hd, 32, 6, true);
+    equal(compact.height, 60);
+    equal(compact.rows, 0);
+
     const small = searchPanel({x: 0, y: 0, width: 1024, height: 600}, 32, 12);
     equal(small.width, 563);
     equal(small.height, 456);

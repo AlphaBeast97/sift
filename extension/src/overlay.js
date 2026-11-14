@@ -21,7 +21,7 @@ const VIEW_ANIMATION_MS = 150;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
-const EMPTY_ROWS = 3;
+const NO_MATCH_ROWS = 3;
 const GLASS_KEYS = new Set([
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
 ]);
@@ -128,6 +128,15 @@ export const SiftOverlay = GObject.registerClass({
         this._results = new ResultsView({maxRows: this._maxRows});
         this._results.onActivate = (row, options) => this._activateRow(row, options);
 
+        this._scroll = new St.ScrollView({
+            style_class: 'sift-scroll',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.EXTERNAL,
+            x_expand: true,
+            y_expand: true,
+        });
+        this._scroll.set_child(this._results);
+
         this._empty = new St.Widget({
             style_class: 'sift-empty',
             x_expand: true,
@@ -183,6 +192,7 @@ export const SiftOverlay = GObject.registerClass({
             style_class: 'sift-footer',
             x_expand: true,
         });
+        this._footer = footer;
         this._footerLabel = new St.Label({
             style_class: 'sift-footer-hint',
             x_expand: true,
@@ -197,7 +207,7 @@ export const SiftOverlay = GObject.registerClass({
         footer.add_child(this._statusLabel);
 
         content.add_child(entryBar);
-        content.add_child(this._results);
+        content.add_child(this._scroll);
         content.add_child(this._empty);
         content.add_child(this._gridView);
         content.add_child(footer);
@@ -267,6 +277,10 @@ export const SiftOverlay = GObject.registerClass({
 
     get glass() {
         return this._glass;
+    }
+
+    get scrollView() {
+        return this._scroll;
     }
 
     get emptyVisible() {
@@ -364,6 +378,8 @@ export const SiftOverlay = GObject.registerClass({
         this._daemonCalc = null;
         this._daemonFiles = [];
         this.refreshApps();
+        this._results.select(0);
+        this._scroll.vadjustment.value = 0;
         this._scheduleQuery();
     }
 
@@ -451,16 +467,35 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _syncEmptyState() {
-        const empty = this.visible && this._view === 'search' &&
-            this._results.rowCount === 0;
-        this._empty.visible = empty;
-        this._results.visible = this._view === 'search' && !empty;
+        const search = this.visible && this._view === 'search';
+        const query = this._entry.text.trim();
+        const empty = search && query !== '' && this._results.rowCount === 0;
 
-        if (empty) {
-            this._emptyTitle.text = this._entry.text.trim()
-                ? 'No matches'
-                : 'Search apps, files, and calculations';
-        }
+        this._empty.visible = empty;
+        this._scroll.visible = search && query !== '' && !empty;
+        this._results.visible = search && query !== '' && !empty;
+        this._footer.visible = !search || query !== '';
+
+        if (empty)
+            this._emptyTitle.text = 'No matches';
+    }
+
+    _scrollSelectionIntoView() {
+        const index = this._results.selectedIndex;
+        const row = index >= 0 ? this._results.rowActorAt(index) : null;
+        if (!row)
+            return;
+
+        const adjustment = this._scroll.vadjustment;
+        if (adjustment.page_size <= 0)
+            return;
+
+        const top = row.y;
+        const bottom = top + row.height;
+        if (top < adjustment.value)
+            adjustment.value = top;
+        else if (bottom > adjustment.value + adjustment.page_size)
+            adjustment.value = bottom - adjustment.page_size;
     }
 
     setMaxRows(maxRows) {
@@ -655,22 +690,28 @@ export const SiftOverlay = GObject.registerClass({
             case 'next':
             case 'down':
                 this._results.move(1);
+                this._scrollSelectionIntoView();
                 break;
             case 'prev':
             case 'up':
                 this._results.move(-1);
+                this._scrollSelectionIntoView();
                 break;
             case 'page-next':
                 this._results.page(1);
+                this._scrollSelectionIntoView();
                 break;
             case 'page-prev':
                 this._results.page(-1);
+                this._scrollSelectionIntoView();
                 break;
             case 'first':
                 this._results.select(0);
+                this._scrollSelectionIntoView();
                 break;
             case 'last':
                 this._results.select(this._results.rowCount - 1);
+                this._scrollSelectionIntoView();
                 break;
             default:
                 this._dispatchGrid(action, ctrl);
@@ -829,11 +870,12 @@ export const SiftOverlay = GObject.registerClass({
             return;
         }
 
-        const fit = searchPanel(monitor, topBarBottom, this._maxRows);
-        this._results.setMaxRows(fit.rows);
-        const rows = Math.max(this._results.rowCount, EMPTY_ROWS);
-        const rect = searchPanel(monitor, topBarBottom, rows);
-        this._setPanelRect(rect, animate);
+        this._results.setMaxRows(this._maxRows);
+
+        const compact = this._entry.text.trim() === '';
+        const count = this._results.rowCount;
+        const rows = compact ? 0 : count > 0 ? count : NO_MATCH_ROWS;
+        this._setPanelRect(searchPanel(monitor, topBarBottom, rows, compact), animate);
     }
 
     _setPanelRect(rect, animate = false) {
