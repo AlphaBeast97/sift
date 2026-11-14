@@ -10,25 +10,28 @@ function clamp(min, value, max) {
     return Math.min(Math.max(value, min), max);
 }
 
-export function searchPanel(monitor, topBarBottom, maxRows = 6, compact = false) {
-    const width = Math.floor(clamp(560, 0.55 * monitor.width, 720));
+export function searchPanel(monitor, topBarBottom, height = 404, compact = false) {
+    const width = Math.floor(Math.min(monitor.width - 24,
+        clamp(560, 0.55 * monitor.width, 720)));
     const top = Math.round(Math.max(topBarBottom + 12, monitor.height * 0.18));
-    const fit = Math.floor(
-        (monitor.height - top - monitor.height * BOTTOM_MARGIN - CHROME_HEIGHT) /
-        ROW_HEIGHT);
-    const rows = compact ? 0 : Math.max(0, Math.min(maxRows, fit));
+    const maxHeight = monitor.height - top - monitor.height * BOTTOM_MARGIN;
+    const expanded = Math.round(Math.min(Math.max(height, CHROME_HEIGHT + ROW_HEIGHT),
+        maxHeight));
+    const rows = compact ? 0 :
+        Math.max(0, Math.floor((expanded - CHROME_HEIGHT) / ROW_HEIGHT));
 
     return {
         x: Math.round(monitor.x + (monitor.width - width) / 2),
         y: monitor.y + top,
         width,
-        height: compact ? ENTRY_HEIGHT : CHROME_HEIGHT + rows * ROW_HEIGHT,
+        height: compact ? ENTRY_HEIGHT : expanded,
         rows,
     };
 }
 
 export function gridPanel(monitor, topBarBottom) {
-    const width = Math.round(clamp(720, 0.72 * monitor.width, 1040));
+    const width = Math.round(Math.min(monitor.width - 24,
+        clamp(720, 0.72 * monitor.width, 1040)));
     const top = Math.round(Math.max(topBarBottom + 12, monitor.height * 0.12));
     const height = Math.round(Math.min(monitor.height * 0.7,
         monitor.height - top - monitor.height * BOTTOM_MARGIN));

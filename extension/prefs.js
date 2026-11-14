@@ -12,7 +12,7 @@ const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
-    'max-results', 'grid-icon-size',
+    'max-results', 'search-height', 'grid-icon-size',
 ];
 
 function valueRow(title, subtitle = '') {
@@ -168,6 +168,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             icon_name: 'edit-find-symbolic',
         });
         const resultsGroup = new Adw.PreferencesGroup({title: 'Results'});
+        addIntRow(resultsGroup, settings, 'search-height', 'Panel height (px)',
+            {lower: 144, upper: 716, step: 52});
         addIntRow(resultsGroup, settings, 'max-results', 'Maximum results',
             {lower: 4, upper: 12, step: 1});
         behavior.add(resultsGroup);

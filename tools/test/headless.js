@@ -68,8 +68,8 @@ export async function run() {
     assert(api.overlay.rowCount > 0, 'app results render');
     assert(!api.overlay.emptyVisible, 'results hide the empty state');
     assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
-    assert(api.glass.rect.height === 92 + api.overlay.rowCount * 52,
-        'typing expands the panel to its results');
+    assert(api.glass.rect.height === 404,
+        'typing expands the panel to its fixed height');
 
     if (GLib.getenv('SIFT_E2E') !== '1') {
         api.overlay.entry.set_text(target.get_name());
@@ -131,12 +131,13 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(api.overlay.maxRows === 4 && api.overlay.rowCount <= 4,
         'max-results applies live without reopening');
-    assert(api.glass.rect.height === 92 + api.overlay.rowCount * 52,
-        'panel height follows the visible result rows');
+    assert(api.glass.rect.height === 404,
+        'max-results does not change the panel height');
     api.settings.set_int('max-results', 6);
     api.overlay.entry.set_text('');
 
     api.settings.set_int('max-results', 12);
+    api.settings.set_int('search-height', 300);
     fake.files = Array.from({length: 20}, (_, i) => ({
         path: `/tmp/sift-scroll-${i}.txt`,
         name: `sift-scroll-${i}.txt`,
@@ -145,17 +146,19 @@ export async function run() {
     api.overlay.entry.set_text('scroll');
     await Scripting.waitLeisure();
     await waitFor(() => api.overlay.rowCount === 12, 'overflow rows render', 2000);
+    assert(api.glass.rect.height === 300,
+        'the panel height setting applies live');
 
     const visibleRows = Math.round((api.glass.rect.height - 92) / 52);
-    if (visibleRows < api.overlay.rowCount) {
-        api.overlay.handleKey('End', 0);
-        await Scripting.waitLeisure();
-        assert(api.overlay.selectedIndex === 11, 'End selects the last result');
-        assert(api.overlay.scrollView.vadjustment.value > 0,
-            'keyboard selection scrolls into view');
-    }
+    assert(visibleRows < api.overlay.rowCount, 'overflowing results fit in rows');
+    api.overlay.handleKey('End', 0);
+    await Scripting.waitLeisure();
+    assert(api.overlay.selectedIndex === 11, 'End selects the last result');
+    assert(api.overlay.scrollView.vadjustment.value > 0,
+        'keyboard selection scrolls into view');
 
     api.settings.set_int('max-results', 6);
+    api.settings.set_int('search-height', 404);
     fake.files = [];
     api.overlay.entry.set_text('');
     await Scripting.waitLeisure();

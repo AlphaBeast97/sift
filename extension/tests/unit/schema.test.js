@@ -17,11 +17,13 @@ export function run() {
     almost(settings.get_double('glass-tint'), 0.45);
     equal(settings.get_boolean('animations'), true);
     equal(settings.get_int('max-results'), 6);
+    equal(settings.get_int('search-height'), 404);
     equal(settings.get_int('grid-icon-size'), 96);
 
     const range = key => settings.get_range(key).recursiveUnpack()[1];
 
     equal(range('max-results').join(','), '4,12');
+    equal(range('search-height').join(','), '144,716');
     equal(range('blur-radius').join(','), '0,64');
     almost(range('glass-opacity')[0], 0.30);
     almost(range('glass-opacity')[1], 0.95);
@@ -30,5 +32,5 @@ export function run() {
     equal(range('grid-icon-size').join(','), '48,128');
 
     equal(schema.list_keys().sort().join(','),
-        'animations,blur-radius,glass-mode,glass-opacity,glass-tint,grid-icon-size,max-results');
+        'animations,blur-radius,glass-mode,glass-opacity,glass-tint,grid-icon-size,max-results,search-height');
 }

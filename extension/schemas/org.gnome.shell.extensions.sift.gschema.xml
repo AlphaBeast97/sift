@@ -45,7 +45,14 @@
       <range min="4" max="12"/>
       <default>6</default>
       <summary>Maximum results</summary>
-      <description>Number of result rows visible in the search view.</description>
+      <description>Largest number of result rows kept for the search view; extras scroll.</description>
+    </key>
+
+    <key name="search-height" type="i">
+      <range min="144" max="716"/>
+      <default>404</default>
+      <summary>Search panel height</summary>
+      <description>Height in logical pixels (it scales with the display) of the expanded search panel; clamped to fit the monitor.</description>
     </key>
 
     <key name="grid-icon-size" type="i">

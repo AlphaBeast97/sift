@@ -71,8 +71,9 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes glass mode (Auto/Liquid/Frosted/Off), opacity, blur radius,
-tint, animations, maximum results, app-grid icon size, and an index rebuild
-button. Changes apply live. Settings are ordinary GSettings under
+tint, animations, panel height, maximum results, app-grid icon size, and an
+index rebuild button. The panel height is fixed while typing; extra results
+scroll. Changes apply live. Settings are ordinary GSettings under
 `org.gnome.shell.extensions.sift` and can be scripted with `gsettings`.
 
 ## File index

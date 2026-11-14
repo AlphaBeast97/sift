@@ -21,7 +21,6 @@ const VIEW_ANIMATION_MS = 150;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
-const NO_MATCH_ROWS = 3;
 const GLASS_KEYS = new Set([
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
 ]);
@@ -46,6 +45,7 @@ export const SiftOverlay = GObject.registerClass({
         this._view = 'search';
         this._monitorIndex = 0;
         this._maxRows = settings.get_int('max-results');
+        this._searchHeight = settings.get_int('search-height');
         this._grab = null;
         this._destroyed = false;
         this._animating = false;
@@ -245,6 +245,11 @@ export const SiftOverlay = GObject.registerClass({
         });
         this._gridSizeId = settings.connect('changed::grid-icon-size', () => {
             this._grid?.setIconSize(settings.get_int('grid-icon-size'));
+        });
+        this._searchHeightId = settings.connect('changed::search-height', () => {
+            this._searchHeight = settings.get_int('search-height');
+            if (this.visible && this._view === 'search')
+                this._applyGeometry();
         });
         this._glassSettingsId = settings.connect('changed', (_settings, key) => {
             if (GLASS_KEYS.has(key))
@@ -516,6 +521,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this._monitorIndex = global.display.get_current_monitor();
         this._maxRows = this._settings.get_int('max-results');
+        this._searchHeight = this._settings.get_int('search-height');
         this._setView(view);
 
         const grab = Main.pushModal(this, {actionMode: Shell.ActionMode.OVERVIEW});
@@ -654,6 +660,10 @@ export const SiftOverlay = GObject.registerClass({
         if (this._gridSizeId) {
             this._settings.disconnect(this._gridSizeId);
             this._gridSizeId = 0;
+        }
+        if (this._searchHeightId) {
+            this._settings.disconnect(this._searchHeightId);
+            this._searchHeightId = 0;
         }
         if (this._glassSettingsId) {
             this._settings.disconnect(this._glassSettingsId);
@@ -873,9 +883,8 @@ export const SiftOverlay = GObject.registerClass({
         this._results.setMaxRows(this._maxRows);
 
         const compact = this._entry.text.trim() === '';
-        const count = this._results.rowCount;
-        const rows = compact ? 0 : count > 0 ? count : NO_MATCH_ROWS;
-        this._setPanelRect(searchPanel(monitor, topBarBottom, rows, compact), animate);
+        this._setPanelRect(
+            searchPanel(monitor, topBarBottom, this._searchHeight, compact), animate);
     }
 
     _setPanelRect(rect, animate = false) {
