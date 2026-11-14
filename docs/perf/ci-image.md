@@ -10,6 +10,11 @@ by digest in `shell-smoke.yml`.
 - Snapshot: <https://archive.archlinux.org/repos/2026/11/01/>
 - `gnome-shell` 1:51.1-1, `gjs` 2:1.90.1-1, `mesa` 1:26.2.6-1,
   `rust` 1:1.99.1-1, `nodejs` 26.13.0-1, `npm` 12.2.1-1.
+- Installed packages: `dbus`, `git`, `gnome-shell`, `gsettings-desktop-schemas`,
+  `mesa`, `npm`, `python`, `rust`, `ttf-dejavu`. `rust` supplies gcc and clippy;
+  `npm` supplies nodejs; `gnome-shell` supplies gjs and glib2. `gnome-terminal`
+  and Xvfb are not installed: the smoke test uses a tiny test `.desktop` entry
+  and the headless backend.
 - The snapshot dates from the GNOME 51 era; the earlier 2026-10-06 snapshot
   still had GNOME Shell 50.5 and cannot run the extension.
 
@@ -20,10 +25,13 @@ make ci-image
 make test-shell-container
 ```
 
-- Local image: `sift-gnome51:local`, ID `pending`, size `pending`.
-- Result: pending.
-- Rendering: pending (llvmpipe surfaceless preferred; `xvfb-run` is the
-  documented fallback).
+- Local image: `sift-gnome51:local`, ID `9a69f977752e`, size 4.02GB, built
+  2026-11-14 with the original package set.
+- Result: build succeeded locally in 2435s, almost entirely package downloads.
+  The lean Dockerfile is validated by the manual `CI image` workflow on GitHub
+  instead of another local build.
+- Rendering: pending the GH `Shell smoke` run (llvmpipe surfaceless; Xvfb is
+  not installed).
 
 ## Triggers
 
