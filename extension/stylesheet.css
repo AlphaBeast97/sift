@@ -1,15 +1,22 @@
 /* Sift overlay. */
 
 .sift-panel {
-    background-color: rgba(28, 30, 36, 0.72);
+    background-color: transparent;
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 18px;
     box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
 }
 
-.sift-glass {
-    background-color: rgba(255, 255, 255, 0.03);
-    border-radius: 18px;
+.sift-panel.sift-glass-liquid {
+    border-color: transparent;
+}
+
+.sift-panel.sift-glass-frosted {
+    background-color: rgba(28, 30, 36, 0.55);
+}
+
+.sift-panel.sift-glass-off {
+    background-color: rgba(28, 30, 36, 0.92);
 }
 
 .sift-entry-bar {

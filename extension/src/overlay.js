@@ -64,7 +64,7 @@ export const SiftOverlay = GObject.registerClass({
         this._panel.set_pivot_point(0.5, 0.5);
         this.add_child(this._panel);
 
-        this._glass = new GlassPanel();
+        this._glass = new GlassPanel({settings: this._settings});
         this._glass.attach(this._panel);
 
         const content = new St.BoxLayout({
@@ -400,7 +400,9 @@ export const SiftOverlay = GObject.registerClass({
         this._grab = grab;
         this._syncFullscreen();
         this.show();
+        this._glass?.applySettings();
         this._animateOpen();
+        this._glass?.open();
         this._entry.clutter_text.grab_key_focus();
         this._daemon?.ensureFresh();
         this._syncFooter();
@@ -429,6 +431,7 @@ export const SiftOverlay = GObject.registerClass({
         this.remove_all_transitions();
         this._panel.remove_all_transitions();
         this._animating = false;
+        this._glass?.close();
         this.visible = false;
         this._entry.text = '';
         this._results.setRows([]);
