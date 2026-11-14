@@ -17,10 +17,12 @@ assert schema.getroot().find("./schema[@id='org.gnome.shell.extensions.sift']") 
 zip_path = root / 'dist' / f"{meta['uuid']}.shell-extension.zip"
 with zipfile.ZipFile(zip_path) as z:
     names = set(z.namelist())
+    prefs = z.read('prefs.js').decode()
 
 required = {
     'metadata.json',
     'extension.js',
+    'prefs.js',
     'stylesheet.css',
     'src/overlay.js',
     'src/overview.js',
@@ -37,4 +39,7 @@ required = {
 }
 missing = required - names
 assert not missing, f'missing from zip: {sorted(missing)}'
+
+assert "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js" in prefs, \
+    'prefs.js imports the GNOME 51 preferences module'
 print('ok pack')
