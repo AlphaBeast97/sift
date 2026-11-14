@@ -1,5 +1,6 @@
 UUID := sift@alphabeast97.github.io
 SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
+PREFIX ?= $(HOME)/.local
 
 .PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension
 
@@ -46,3 +47,18 @@ check-pack: build
 	python3 tools/test/check_pack.py
 
 test: test-gjs test-schema test-rust lint
+
+.PHONY: release install prefs uninstall
+
+release: build
+	install -m 0755 daemon/target/release/siftd dist/siftd
+	cd dist && sha256sum siftd $(UUID).shell-extension.zip > SHA256SUMS
+
+install: release
+	packaging/install.sh --prefix "$(PREFIX)"
+
+prefs:
+	gnome-extensions prefs $(UUID)
+
+uninstall:
+	packaging/install.sh --uninstall --prefix "$(PREFIX)" $(if $(filter 1,$(PURGE)),--purge)
