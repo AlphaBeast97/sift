@@ -143,10 +143,19 @@ export default class SiftPreferences extends ExtensionPreferences {
             label: 'Reset',
             valign: Gtk.Align.CENTER,
         });
+        let resetToast = null;
         resetButton.connect('clicked', () => {
             for (const key of SETTINGS_KEYS)
                 settings.reset(key);
-            window.add_toast(new Adw.Toast({title: 'Settings reset'}));
+
+            if (resetToast)
+                return;
+
+            resetToast = new Adw.Toast({title: 'Settings reset'});
+            resetToast.connect('dismissed', () => {
+                resetToast = null;
+            });
+            window.add_toast(resetToast);
         });
         resetRow.add_suffix(resetButton);
         resetGroup.add(resetRow);
