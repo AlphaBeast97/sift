@@ -44,6 +44,12 @@ tag.
 
 ## GHCR
 
-Not published yet. After the first `CI image` run, record the pushed digest here
-and use it in `shell-smoke.yml`; bootstrap the other workflows by running
-`CI image` once so the `:gnome51` tag exists.
+- Published as `ghcr.io/alphabeast97/sift-gnome51:gnome51`; `Shell smoke` pulls
+  the pushed digest built in the same run.
+- First GitHub build: 4m15s in `Shell smoke` run 43548590019 (2026-11-14), down
+  from 2435s locally. The digest is not recorded because the workflow token has
+  no `read:packages` scope.
+- First smoke attempt failed before the shell started: `dbus-daemon` could not
+  look up the container uid in `/etc/passwd`. The smoke job and
+  `make test-shell-container` now mount the host `/etc/passwd` and `/etc/group`
+  read-only so any host uid resolves.

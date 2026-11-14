@@ -37,6 +37,8 @@ ci-image:
 test-shell-container:
 	docker run --rm \
 		--user "$$(id -u):$$(id -g)" \
+		-v /etc/passwd:/etc/passwd:ro \
+		-v /etc/group:/etc/group:ro \
 		-e HOME=/tmp \
 		-e XDG_RUNTIME_DIR=/tmp/sift-runtime \
 		-v "$(CURDIR):/src" -w /src \
