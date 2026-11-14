@@ -60,3 +60,5 @@ tag.
 - `Shell smoke` passes on GitHub in run 43605275298 (2026-11-14): cached image
   job 26s, smoke 3m26s including the Rust build, extension pack, and
   `sift shell smoke ok`.
+- `CI` passes on GitHub in run 43605698050: extension job 4m23s (npm ci, lint,
+  unit tests, pack), Rust job 2m21s (fmt, clippy, tests).
