@@ -1,7 +1,7 @@
 # Pinned GNOME 51 CI image
 
 `ci-image.yml` builds `tools/ci/gnome51/Dockerfile`; no job uses a stock rolling
-tag. The image is `ghcr.io/<owner>/sift-gnome51:gnome51` in GHCR and is consumed
+tag. The image is `ghcr.io/alphabeast97/sift-gnome51:gnome51` in GHCR and is consumed
 by digest in `shell-smoke.yml`.
 
 ## Pin
@@ -11,10 +11,10 @@ by digest in `shell-smoke.yml`.
 - `gnome-shell` 1:51.1-1, `gjs` 2:1.90.1-1, `mesa` 1:26.2.6-1,
   `rust` 1:1.99.1-1, `nodejs` 26.13.0-1, `npm` 12.2.1-1.
 - Installed packages: `dbus`, `git`, `gnome-shell`, `gsettings-desktop-schemas`,
-  `mesa`, `npm`, `python`, `rust`, `ttf-dejavu`. `rust` supplies gcc and clippy;
-  `npm` supplies nodejs; `gnome-shell` supplies gjs and glib2. `gnome-terminal`
-  and Xvfb are not installed: the smoke test uses a tiny test `.desktop` entry
-  and the headless backend.
+  `make`, `mesa`, `npm`, `python`, `rust`, `ttf-dejavu`. `rust` supplies gcc and
+  clippy; `npm` supplies nodejs; `gnome-shell` supplies gjs and glib2.
+  `gnome-terminal` and Xvfb are not installed: the smoke test uses a tiny test
+  `.desktop` entry and the headless backend.
 - The snapshot dates from the GNOME 51 era; the earlier 2026-10-06 snapshot
   still had GNOME Shell 50.5 and cannot run the extension.
 

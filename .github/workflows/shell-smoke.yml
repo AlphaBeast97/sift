@@ -34,5 +34,5 @@ jobs:
             -e HOME=/tmp \
             -e XDG_RUNTIME_DIR=/tmp/sift-runtime \
             -v "$PWD:/src" -w /src \
-            ghcr.io/${{ github.repository_owner }}/sift-gnome51@${{ needs.image.outputs.digest }} \
+            ghcr.io/alphabeast97/sift-gnome51@${{ needs.image.outputs.digest }} \
             sh -c 'mkdir -p /tmp/sift-runtime && chmod 700 /tmp/sift-runtime && make test-shell'

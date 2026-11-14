@@ -17,6 +17,7 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
         git \
         gnome-shell \
         gsettings-desktop-schemas \
+        make \
         mesa \
         npm \
         python \

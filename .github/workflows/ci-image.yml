@@ -31,7 +31,7 @@ jobs:
         with:
           context: tools/ci/gnome51
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/sift-gnome51:gnome51
+          tags: ghcr.io/alphabeast97/sift-gnome51:gnome51
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |
