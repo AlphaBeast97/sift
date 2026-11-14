@@ -19,8 +19,21 @@ function valueRow(title, subtitle = '') {
     return new Adw.ActionRow({title, subtitle});
 }
 
+function resetButton(settings, key) {
+    const button = new Gtk.Button({
+        icon_name: 'edit-undo-symbolic',
+        tooltip_text: 'Reset to default',
+        valign: Gtk.Align.CENTER,
+        css_classes: ['flat'],
+    });
+    button.sensitive = settings.get_user_value(key) !== null;
+    button.connect('clicked', () => settings.reset(key));
+    return button;
+}
+
 function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
     const row = valueRow(title);
+    const reset = resetButton(settings, key);
     const adjustment = new Gtk.Adjustment({
         lower,
         upper,
@@ -38,6 +51,7 @@ function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
 
     const sync = () => {
         row.subtitle = settings.get_double(key).toFixed(2);
+        reset.sensitive = settings.get_user_value(key) !== null;
     };
 
     settings.bind(key, adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
@@ -45,11 +59,13 @@ function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
     sync();
 
     row.add_suffix(scale);
+    row.add_suffix(reset);
     group.add(row);
 }
 
 function addIntRow(group, settings, key, title, {lower, upper, step}) {
     const row = valueRow(title);
+    const reset = resetButton(settings, key);
     const adjustment = new Gtk.Adjustment({
         lower,
         upper,
@@ -67,6 +83,7 @@ function addIntRow(group, settings, key, title, {lower, upper, step}) {
 
     const sync = () => {
         row.subtitle = String(settings.get_int(key));
+        reset.sensitive = settings.get_user_value(key) !== null;
     };
 
     adjustment.value = settings.get_int(key);
@@ -80,6 +97,7 @@ function addIntRow(group, settings, key, title, {lower, upper, step}) {
     sync();
 
     row.add_suffix(scale);
+    row.add_suffix(reset);
     group.add(row);
 }
 
