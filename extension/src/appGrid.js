@@ -71,7 +71,7 @@ export const AppGrid = GObject.registerClass(
             this.add_child(this._indicators);
 
             this._grid.connect('pages-changed', () => this._syncPages());
-            this._scroll.connect('notify::allocation', () => this._layout());
+            this._grid.connect('notify::allocation', () => this._layout());
         }
 
         get itemCount() {
@@ -97,8 +97,15 @@ export const AppGrid = GObject.registerClass(
         }
 
         setIconSize(size) {
+            if (size === this._iconSize)
+                return;
+
             this._iconSize = size;
             this._grid.layout_manager.fixed_icon_size = size;
+            for (const tile of this._tiles) {
+                tile.icon.setIconSize(size);
+                tile.queue_relayout();
+            }
             this._grid.queue_relayout();
             this._layout();
         }
@@ -216,9 +223,12 @@ export const AppGrid = GObject.registerClass(
                 tile.popupMenu = () => {};
                 tile.accessible_name = record.name;
                 this._grid.appendItem(tile);
+                tile.icon.setIconSize(this._iconSize);
+                tile.queue_relayout();
                 this._tiles.push(tile);
             }
 
+            this._layout();
             this._syncPages();
             this._applySelection();
 
@@ -237,21 +247,57 @@ export const AppGrid = GObject.registerClass(
         }
 
         _layout() {
-            const width = this._scroll.width;
-            const height = this._scroll.height;
+            const manager = this._grid.layout_manager;
+            const width = manager.pageWidth;
+            const height = manager.pageHeight;
             if (width <= 0 || height <= 0)
                 return;
 
-            const layout = gridLayout(width, height, this._iconSize,
-                this.itemCount);
+            const cell = Math.max(this._cellSize(), this._iconSize);
+            const layout = gridLayout(width, height, cell,
+                this.itemCount, {
+                    columnSpacing: manager.columnSpacing,
+                    rowSpacing: manager.rowSpacing,
+                    padding: manager.pagePadding,
+                });
             if (layout.columns === this._columns && layout.rows === this._rows)
                 return;
 
             this._columns = layout.columns;
             this._rows = layout.rows;
             this._grid.setGridModes([{rows: layout.rows, columns: layout.columns}]);
-            this._grid.layout_manager.columns_per_page = layout.columns;
-            this._grid.layout_manager.rows_per_page = layout.rows;
+            manager.columns_per_page = layout.columns;
+            manager.rows_per_page = layout.rows;
+            this._repage();
+        }
+
+        // The icon grid sizes cells from the whole tile (icon plus label), not
+        // from the icon alone, so capacity has to measure the tiles.
+        _cellSize() {
+            let cell = 0;
+            for (const tile of this._tiles) {
+                cell = Math.max(cell,
+                    tile.get_preferred_width(-1)[0],
+                    tile.get_preferred_height(-1)[0]);
+            }
+            return cell > 0 ? cell : this._iconSize;
+        }
+
+        // Changing the page capacity leaves existing pages at the old size,
+        // which makes overflowing icons draw over the next page.
+        _repage() {
+            if (this._tiles.length === 0)
+                return;
+
+            for (const tile of this._tiles)
+                this._grid.removeItem(tile);
+            for (const tile of this._tiles) {
+                this._grid.appendItem(tile);
+                // Appending makes the layout manager reapply its cached icon
+                // size, which may predate a live size change.
+                tile.icon.setIconSize(this._iconSize);
+                tile.queue_relayout();
+            }
         }
 
         _applySelection() {

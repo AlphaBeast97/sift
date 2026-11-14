@@ -2,18 +2,24 @@
 
 const PAGE_PADDING = 24;
 const SPACING = 12;
-const INDICATOR_HEIGHT = 28;
 
 function clamp(min, value, max) {
     return Math.min(Math.max(value, min), max);
 }
 
-export function gridLayout(width, height, iconSize, itemCount) {
-    const columns = clamp(4, Math.floor(
-        (width - 2 * PAGE_PADDING + SPACING) / (iconSize + SPACING)), 10);
-    const rows = clamp(2, Math.floor(
-        (height - 2 * PAGE_PADDING - INDICATOR_HEIGHT + SPACING) /
-            (iconSize + SPACING)), 6);
+export function gridLayout(width, height, cell, itemCount, {
+    columnSpacing = SPACING,
+    rowSpacing = SPACING,
+    padding = null,
+} = {}) {
+    const left = padding?.left ?? PAGE_PADDING;
+    const right = padding?.right ?? PAGE_PADDING;
+    const top = padding?.top ?? PAGE_PADDING;
+    const bottom = padding?.bottom ?? PAGE_PADDING;
+    const columns = clamp(1, Math.floor(
+        (width - left - right + columnSpacing) / (cell + columnSpacing)), 10);
+    const rows = clamp(1, Math.floor(
+        (height - top - bottom + rowSpacing) / (cell + rowSpacing)), 6);
     const pageSize = columns * rows;
 
     return {

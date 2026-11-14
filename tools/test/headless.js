@@ -25,6 +25,61 @@ async function waitFor(predicate, message, timeout = 5000) {
     throw new Error(message);
 }
 
+// Pages are laid out horizontally; an icon that outgrows its page or cell
+// overlaps the next page or the next icon.
+function gridFits(grid) {
+    const manager = grid.layout_manager;
+    for (let page = 0; page < grid.nPages; page++) {
+        const items = grid.getItemsAtPage(page).filter(item => item.visible);
+        for (let i = 0; i < items.length; i++) {
+            const a = items[i].allocation;
+            if (a.x1 - page * manager.pageWidth < -1 ||
+                a.x2 - page * manager.pageWidth > manager.pageWidth + 1 ||
+                a.y1 < -1 || a.y2 > manager.pageHeight + 1)
+                return false;
+
+            for (let j = i + 1; j < items.length; j++) {
+                const b = items[j].allocation;
+                if (a.x1 < b.x2 && b.x1 < a.x2 &&
+                    a.y1 < b.y2 && b.y1 < a.y2)
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+async function waitForGrid(grid, message) {
+    try {
+        await waitFor(() => gridFits(grid), message, 2000);
+    } catch (error) {
+        const manager = grid.layout_manager;
+        print(`${message}: page=${manager.pageWidth}x${manager.pageHeight} ` +
+            `cols=${manager.columns_per_page} rows=${manager.rows_per_page} ` +
+            `pages=${grid.nPages} cell=${manager._getChildrenMaxSize()}`);
+        for (let page = 0; page < grid.nPages; page++) {
+            const items = grid.getItemsAtPage(page).filter(i => i.visible);
+            let x2 = -Infinity;
+            let y2 = -Infinity;
+            for (const item of items) {
+                x2 = Math.max(x2, item.allocation.x2 - page * manager.pageWidth);
+                y2 = Math.max(y2, item.allocation.y2);
+            }
+            print(` page ${page}: ${items.length} maxX=${x2} maxY=${y2}`);
+        }
+        const tile = grid.getItemsAtPage(0).find(i => i.visible);
+        if (tile) {
+            print(` tile iconSize=${tile.icon.iconSize} ` +
+                `tile=${tile.get_preferred_width(-1)[0]}x` +
+                `${tile.get_preferred_height(-1)[0]} ` +
+                `icon=${tile.icon.get_preferred_width(-1)[0]}x` +
+                `${tile.icon.get_preferred_height(-1)[0]} ` +
+                `appGrid=${grid.get_parent().width}x${grid.get_parent().height}`);
+        }
+        throw error;
+    }
+}
+
 export async function run() {
     await waitFor(() => Extension.lookupByUUID(UUID) !== null,
         'extension instance exists');
@@ -204,6 +259,9 @@ export async function run() {
     assert(api.glass.rect.width > searchRect.width, 'glass rect follows the grid');
     assert(api.appGrid.iconSize === 96, 'default icon size');
     await waitFor(() => api.appGrid.itemCount > 0, 'grid apps load', 2000);
+    await waitFor(() => !api.appGrid._chunkId, 'grid build settles', 2000);
+    await Scripting.waitLeisure();
+    await waitForGrid(api.appGrid._grid, 'grid icons fit their pages');
 
     api.overlay.handleKey('t', 0);
     api.overlay.entry.set_text('t');
@@ -216,7 +274,10 @@ export async function run() {
     api.settings.set_int('grid-icon-size', 64);
     await Scripting.waitLeisure();
     assert(api.appGrid.iconSize === 64, 'icon size applies live');
+    await waitForGrid(api.appGrid._grid, 'grid icons fit after shrinking');
     api.settings.set_int('grid-icon-size', 96);
+    await Scripting.waitLeisure();
+    await waitForGrid(api.appGrid._grid, 'grid icons fit after growing');
 
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');

@@ -4,20 +4,34 @@ import {gridLayout, indexToCell, cellToIndex, moveSelection, pageSelection} from
 export function run() {
     const wide = gridLayout(1000, 600, 96, 100);
     equal(wide.columns, 8);
-    equal(wide.rows, 4);
-    equal(wide.pageSize, 32);
-    equal(wide.pages, 4);
+    equal(wide.rows, 5);
+    equal(wide.pageSize, 40);
+    equal(wide.pages, 3);
 
     const small = gridLayout(400, 400, 96, 100);
-    equal(small.columns, 4);
+    equal(small.columns, 3);
     equal(small.rows, 3);
-    equal(small.pages, 9);
+    equal(small.pages, 12);
 
     const dense = gridLayout(4000, 4000, 48, 100);
     equal(dense.columns, 10);
     equal(dense.rows, 6);
     equal(dense.pageSize, 60);
     equal(dense.pages, 2);
+
+    // Shell's icon grid pads 18/24 and sizes cells from the whole tile.
+    const shell = gridLayout(904, 373, 145, 24, {
+        columnSpacing: 12,
+        rowSpacing: 12,
+        padding: {left: 18, right: 18, top: 24, bottom: 24},
+    });
+    equal(shell.columns, 5);
+    equal(shell.rows, 2);
+    equal(shell.pages, 3);
+
+    const tight = gridLayout(100, 100, 200, 1);
+    equal(tight.columns, 1);
+    equal(tight.rows, 1);
 
     equal(indexToCell(24, 6, 4).page, 1);
     equal(indexToCell(24, 6, 4).cell, 0);
