@@ -10,6 +10,10 @@ const MODE_LABELS = ['Auto', 'Liquid', 'Frosted', 'Off'];
 const BUS_NAME = 'io.github.alphabeast97.Sift';
 const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
+const SETTINGS_KEYS = [
+    'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
+    'max-results', 'grid-icon-size',
+];
 
 function valueRow(title, subtitle = '') {
     return new Adw.ActionRow({title, subtitle});
@@ -131,6 +135,23 @@ export default class SiftPreferences extends ExtensionPreferences {
             {lower: 0, upper: 1, step: 0.05});
 
         appearance.add(appearanceGroup);
+
+        const resetGroup = new Adw.PreferencesGroup();
+        const resetRow = valueRow('Reset all settings',
+            'Restore every Sift setting to its default.');
+        const resetButton = new Gtk.Button({
+            label: 'Reset',
+            valign: Gtk.Align.CENTER,
+        });
+        resetButton.connect('clicked', () => {
+            for (const key of SETTINGS_KEYS)
+                settings.reset(key);
+            window.add_toast(new Adw.Toast({title: 'Settings reset'}));
+        });
+        resetRow.add_suffix(resetButton);
+        resetGroup.add(resetRow);
+        appearance.add(resetGroup);
+
         window.add(appearance);
 
         const behavior = new Adw.PreferencesPage({
