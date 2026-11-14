@@ -25,6 +25,15 @@ make test-shell-container
 - Rendering: pending (llvmpipe surfaceless preferred; `xvfb-run` is the
   documented fallback).
 
+## Triggers
+
+Every workflow is manual and owner-only. `CI` and `Shell smoke` run from
+`workflow_dispatch`; `CI` also runs on a PR only when the repository owner adds
+the `ci` label. `CI image` is dispatched by hand or called by `Shell smoke`.
+Every job checks `github.actor == github.repository_owner`; there is no push,
+schedule, or automatic PR trigger. `Release` runs when the owner pushes a `v*`
+tag.
+
 ## GHCR
 
 Not published yet. After the first `CI image` run, record the pushed digest here

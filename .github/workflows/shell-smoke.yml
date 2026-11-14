@@ -1,11 +1,8 @@
 name: Shell smoke
 
+# Manual only. The called image workflow re-checks the actor.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-  schedule:
-    - cron: '0 3 * * *'
 
 permissions:
   contents: read
@@ -13,6 +10,7 @@ permissions:
 
 jobs:
   image:
+    if: github.actor == github.repository_owner
     uses: ./.github/workflows/ci-image.yml
     permissions:
       contents: read
@@ -20,6 +18,7 @@ jobs:
 
   smoke:
     needs: image
+    if: github.actor == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

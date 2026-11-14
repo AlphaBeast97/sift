@@ -136,6 +136,11 @@ make check-pack         # metadata/schema/zip sanity check
 `make ci-image` and `make test-shell-container` build and run the pinned GNOME 51
 container (Docker required).
 
+GitHub Actions are manual-only and owner-only: nothing runs on pushes, schedules,
+or unlabeled pull requests. Dispatch `CI`, `CI image`, or `Shell smoke` from the
+Actions tab, or add the `ci` label to a PR to run `CI` there. `Release` runs only
+when the owner pushes a `v*` tag.
+
 ## Troubleshooting
 
 - **No file results, footer says the index is degraded.** Check whether the

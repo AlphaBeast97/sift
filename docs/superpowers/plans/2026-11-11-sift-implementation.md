@@ -457,8 +457,9 @@ add the `xvfb-run` path from design §18.2 and record which path the image uses.
 - [ ] **Step 3: Write the workflows but do not push**
 
 - `ci.yml`: Rust fmt/clippy/test, GJS lint/unit/schema, extension pack sanity, D-Bus integration. Every job runs inside the same pinned `sift-gnome51` image; do not assume `ubuntu-latest` has GNOME 51 typelibs. Run `npm ci` before `make test`; pack sanity is `tools/test/check_pack.py` (UUID, shell 51, schema id, required zip entries), exposed as `make check-pack`.
-- `ci-image.yml`: build the Dockerfile and push to `ghcr.io/<owner>/sift-gnome51` with a digest, on `workflow_dispatch`, `main`, and `workflow_call`. The reusable call lets `shell-smoke.yml` build by digest.
-- `shell-smoke.yml`: calls the image workflow, then `needs` its digest, logs in to GHCR, and runs `make test-shell` inside the container; main, nightly, and manual only.
+- `ci-image.yml`: build the Dockerfile and push to `ghcr.io/<owner>/sift-gnome51` with a digest, on `workflow_dispatch` and `workflow_call` only. The reusable call lets `shell-smoke.yml` build by digest.
+- `shell-smoke.yml`: calls the image workflow, then `needs` its digest, logs in to GHCR, and runs `make test-shell` inside the container; manual dispatch only.
+- All workflows are manual and owner-only: no push, schedule, or automatic PR trigger; every job checks `github.actor == github.repository_owner`. `ci.yml` also runs on a PR when the owner adds the `ci` label.
 - `release.yml`: on tag push, build `dist/siftd`, the extension zip, and `dist/SHA256SUMS` in the pinned image, then attach all three to the GitHub release with `softprops/action-gh-release`.
 Do not add a remote or push. Record the local image ID and the exact package snapshot URL in `docs/perf/ci-image.md`.
 
