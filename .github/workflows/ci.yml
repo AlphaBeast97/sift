@@ -1,0 +1,45 @@
+name: CI
+
+# Bootstrap once with the "CI image" workflow so the ghcr tag exists.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/sift-gnome51:gnome51
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install JS dependencies
+        run: npm ci
+      - name: Lint and unit tests
+        run: make test
+      - name: Pack sanity
+        run: make check-pack
+
+  rust:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/sift-gnome51:gnome51
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Format
+        run: cargo fmt --manifest-path daemon/Cargo.toml --check
+      - name: Clippy
+        run: cargo clippy --manifest-path daemon/Cargo.toml --all-targets -- -D warnings
+      - name: Tests
+        run: dbus-run-session -- cargo test --manifest-path daemon/Cargo.toml

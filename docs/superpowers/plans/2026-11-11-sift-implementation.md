@@ -410,15 +410,21 @@ git commit -m "test: add headless shell smoke harness"
 - Create: `tools/ci/gnome51/Dockerfile`
 - Create: `.github/workflows/ci.yml`, `.github/workflows/ci-image.yml`, `.github/workflows/shell-smoke.yml`, `.github/workflows/release.yml`
 - Create: `docs/perf/ci-image.md`
+- Create: `tools/test/check_pack.py`
 - Modify: `Makefile`
 
 **Interfaces:**
-- Produces: `make ci-image` (local docker build) and `make test-shell-container` (run the harness in the image).
+- Produces: `make ci-image` (local docker build), `make test-shell-container` (run the harness in the image), and `make check-pack` (metadata and zip sanity).
 - Produces: image reference and digest recorded in `docs/perf/ci-image.md` for later GHCR publishing.
 
 - [ ] **Step 1: Write the Dockerfile**
 
-Pin an `archive.archlinux.org` snapshot from the GNOME 51 era (2026-10-06 is the known-good host snapshot) and a matching dated `archlinux:base-*` tag. Install: `gnome-shell`, `gjs`, `mesa`, `dbus`, `glib2`, `gsettings-desktop-schemas`, `gnome-terminal`, `python`, `ttf-dejavu`, `git`, `base-devel`, `rustup` or `rust`, plus `xorg-server-xvfb` as the documented fallback. Set `ENV GSETTINGS_BACKEND=keyfile`.
+Pin an `archive.archlinux.org` snapshot with GNOME Shell 51.1 (2026-11-01 is
+verified: gnome-shell 51.1, gjs 1.90.1, Mesa 26.2.6, Rust 1.99.1) and the
+matching `archlinux:base-20261101.0.620205` image. Install: `gnome-shell`, `gjs`,
+`mesa`, `dbus`, `glib2`, `gsettings-desktop-schemas`, `gnome-terminal`, `nodejs`,
+`npm`, `python`, `ttf-dejavu`, `git`, `base-devel`, `rust`, plus
+`xorg-server-xvfb` as the documented fallback. Set `ENV GSETTINGS_BACKEND=keyfile`.
 
 - [ ] **Step 2: Build and run locally**
 
@@ -433,24 +439,33 @@ Add the Makefile wrappers:
 ci-image:
 	docker build -t sift-gnome51:local tools/ci/gnome51
 
-test-shell-container: build
-	docker run --rm -v "$(CURDIR):/src" -w /src sift-gnome51:local make test-shell
+test-shell-container:
+	docker run --rm \
+		--user "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e XDG_RUNTIME_DIR=/tmp/sift-runtime \
+		-v "$(CURDIR):/src" -w /src \
+		sift-gnome51:local \
+		sh -c 'mkdir -p /tmp/sift-runtime && chmod 700 /tmp/sift-runtime && make test-shell'
 ```
 
-Expected: the smoke test passes on llvmpipe. If EGL fails, add the `xvfb-run` path from design §18.2 and record which path the image uses.
+`test-shell-container` builds inside the image as the host uid, so it needs no
+GNOME tooling on the host and leaves no root-owned `dist/` (important for a
+plain GitHub runner). Expected: the smoke test passes on llvmpipe. If EGL fails,
+add the `xvfb-run` path from design §18.2 and record which path the image uses.
 
 - [ ] **Step 3: Write the workflows but do not push**
 
-- `ci.yml`: Rust fmt/clippy/test, GJS lint/unit/schema, extension pack sanity, D-Bus integration. Every job runs inside the same pinned `sift-gnome51` image; do not assume `ubuntu-latest` has GNOME 51 typelibs.
-- `ci-image.yml`: build the Dockerfile and push to `ghcr.io/<owner>/sift-gnome51` with a digest, on `workflow_dispatch` and `main`.
-- `shell-smoke.yml`: `needs` the image digest, builds artifacts, runs `make test-shell` inside the container.
+- `ci.yml`: Rust fmt/clippy/test, GJS lint/unit/schema, extension pack sanity, D-Bus integration. Every job runs inside the same pinned `sift-gnome51` image; do not assume `ubuntu-latest` has GNOME 51 typelibs. Run `npm ci` before `make test`; pack sanity is `tools/test/check_pack.py` (UUID, shell 51, schema id, required zip entries), exposed as `make check-pack`.
+- `ci-image.yml`: build the Dockerfile and push to `ghcr.io/<owner>/sift-gnome51` with a digest, on `workflow_dispatch`, `main`, and `workflow_call`. The reusable call lets `shell-smoke.yml` build by digest.
+- `shell-smoke.yml`: calls the image workflow, then `needs` its digest, logs in to GHCR, and runs `make test-shell` inside the container; main, nightly, and manual only.
 - `release.yml`: on tag push, build `dist/siftd`, the extension zip, and `dist/SHA256SUMS` in the pinned image, then attach all three to the GitHub release with `softprops/action-gh-release`.
 Do not add a remote or push. Record the local image ID and the exact package snapshot URL in `docs/perf/ci-image.md`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tools/ci .github docs/perf/ci-image.md Makefile
+git add tools/ci tools/test/check_pack.py .github docs/perf/ci-image.md Makefile
 git commit -m "ci: add pinned gnome 51 test image and workflows"
 ```
 

@@ -1,7 +1,7 @@
 UUID := sift@alphabeast97.github.io
 SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
 
-.PHONY: test test-gjs test-rust test-schema test-shell lint build daemon extension
+.PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension
 
 test-gjs:
 	gjs -m extension/tests/unit/all.js
@@ -29,5 +29,20 @@ extension:
 
 test-shell: build
 	tools/test/run-shell-test.sh
+
+ci-image:
+	docker build -t sift-gnome51:local tools/ci/gnome51
+
+test-shell-container:
+	docker run --rm \
+		--user "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e XDG_RUNTIME_DIR=/tmp/sift-runtime \
+		-v "$(CURDIR):/src" -w /src \
+		sift-gnome51:local \
+		sh -c 'mkdir -p /tmp/sift-runtime && chmod 700 /tmp/sift-runtime && make test-shell'
+
+check-pack: build
+	python3 tools/test/check_pack.py
 
 test: test-gjs test-schema test-rust lint
