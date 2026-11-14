@@ -76,16 +76,23 @@ daemon_running() {
 }
 
 stop_daemon() {
-    daemon_running || return 0
+    if daemon_running; then
+        gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+            --method "$BUS_NAME.Quit" >/dev/null 2>&1 || true
 
-    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-        --method "$BUS_NAME.Quit" >/dev/null 2>&1 || true
+        for _ in $(seq 1 20); do
+            daemon_running || break
+            sleep 0.1
+        done
+        if daemon_running; then
+            printf 'sift: the running daemon did not quit; stopping it\n' >&2
+        fi
+    fi
 
-    for _ in $(seq 1 20); do
-        daemon_running || return 0
-        sleep 0.1
-    done
-    printf 'sift: the running daemon did not quit; log out to replace it\n' >&2
+    # Daemons orphaned by an earlier session bus can never own the name
+    # again, but keep their index resident; sweep them so upgrades do not
+    # accumulate one process per install.
+    pkill -x siftd 2>/dev/null || true
 }
 
 install_binary() {

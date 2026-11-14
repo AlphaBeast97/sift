@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 mod cache;
 mod calc;
@@ -53,6 +53,7 @@ async fn main() {
     let status = StatusModel::new(manager::root_strings(&config));
     let config = Arc::new(RwLock::new(config));
     let (commands, commands_rx) = mpsc::unbounded_channel();
+    let shutdown = commands.clone();
     let service = SiftService::new(
         Arc::clone(&index),
         Arc::clone(&status),
@@ -115,7 +116,7 @@ async fn main() {
         }
     });
 
-    let manager = manager::spawn_manager(
+    let mut manager = manager::spawn_manager(
         options.config,
         config,
         options.cache,
@@ -124,8 +125,20 @@ async fn main() {
         commands_rx,
         options.scan_delay,
     );
-    if let Err(error) = manager.await {
-        eprintln!("siftd: manager stopped unexpectedly: {error}");
+
+    tokio::select! {
+        result = &mut manager => {
+            if let Err(error) = result {
+                eprintln!("siftd: manager stopped unexpectedly: {error}");
+            }
+        }
+        () = connection.closed() => {
+            // A daemon whose session bus is gone can never serve a client
+            // again. Exit instead of lingering across logout or test buses.
+            let (ack, _done) = oneshot::channel();
+            let _ = shutdown.send(dbus::Command::Quit(ack));
+            let _ = manager.await;
+        }
     }
 
     signal_task.abort();

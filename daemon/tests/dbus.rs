@@ -32,9 +32,12 @@ fn spawn_daemon(config: &Path, cache: &Path, extra: &[&str]) -> Daemon {
 }
 
 async fn wait_for_proxy() -> Proxy<'static> {
-    let connection = Connection::session().await.unwrap();
+    wait_for_proxy_on(&Connection::session().await.unwrap()).await
+}
+
+async fn wait_for_proxy_on(connection: &Connection) -> Proxy<'static> {
     // CacheProperties::No: the test polls Status while it changes.
-    let proxy = zbus::proxy::Builder::<Proxy<'static>>::new(&connection)
+    let proxy = zbus::proxy::Builder::<Proxy<'static>>::new(connection)
         .destination(BUS_NAME)
         .path(OBJECT_PATH)
         .interface(INTERFACE)
@@ -157,5 +160,49 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
     assert!(
         wait_for_exit(&mut child.0, Duration::from_secs(2)).await,
         "Quit exits"
+    );
+}
+
+#[tokio::test]
+async fn daemon_exits_when_its_session_bus_closes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = tmp.path().join("config.toml");
+    std::fs::write(&config, "roots = []\n").unwrap();
+    let cache = tmp.path().join("cache.bin");
+
+    let output = Command::new("dbus-daemon")
+        .args(["--session", "--fork", "--print-address=1", "--print-pid=1"])
+        .output()
+        .expect("start dbus-daemon");
+    assert!(output.status.success(), "dbus-daemon failed");
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let mut lines = stdout.lines();
+    let address = lines.next().expect("bus address").trim().to_owned();
+    let bus_pid = lines.next().expect("bus pid").trim().to_owned();
+
+    let mut daemon = Daemon(
+        Command::new(env!("CARGO_BIN_EXE_siftd"))
+            .arg("--config")
+            .arg(&config)
+            .arg("--cache")
+            .arg(&cache)
+            .env("DBUS_SESSION_BUS_ADDRESS", &address)
+            .stdin(Stdio::null())
+            .spawn()
+            .expect("spawn siftd"),
+    );
+
+    let connection = zbus::connection::Builder::address(address.as_str())
+        .build()
+        .await
+        .unwrap();
+    let _proxy = wait_for_proxy_on(&connection).await;
+
+    // Tear down only this private bus; the shared test bus stays up.
+    let _ = Command::new("kill").arg(&bus_pid).status();
+    assert!(
+        wait_for_exit(&mut daemon.0, Duration::from_secs(3)).await,
+        "daemon exits when its session bus closes"
     );
 }
