@@ -7,7 +7,8 @@ import Shell from 'gi://Shell';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 
-const PATCHED = ['show', 'hide', 'toggle', 'focusSearch', 'showApps', 'shouldToggleByCornerOrButton'];
+const PATCHED = ['show', 'hide', 'toggle', 'focusSearch', 'showApps',
+    'shouldToggleByCornerOrButton', 'runStartupAnimation'];
 const ACTIVATION_GUARD_MS = 500;
 
 export class OverviewTakeover {
@@ -67,6 +68,10 @@ export class OverviewTakeover {
         };
         Main.overview.shouldToggleByCornerOrButton = () =>
             !this._overlay.animating && Date.now() - this._lastOpen >= ACTIVATION_GUARD_MS;
+
+        // GNOME shows its own overview during login. Sift replaces that
+        // overview, so let the desktop appear directly instead of flashing it.
+        Main.overview.runStartupAnimation = async () => {};
 
         this._keySettings = new Gio.Settings({schema_id: 'org.gnome.shell.keybindings'});
         if (this._keySettings.get_strv('toggle-overview').length > 0) {

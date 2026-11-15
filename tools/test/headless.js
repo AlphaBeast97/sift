@@ -204,6 +204,9 @@ export async function run() {
     api.overlay.entry.set_text('scroll');
     await Scripting.waitLeisure();
     await waitFor(() => api.overlay.rowCount === 12, 'overflow rows render', 2000);
+    await waitFor(() => api.overlay.scrollView.vadjustment.upper >
+        api.overlay.scrollView.vadjustment.page_size,
+    'overflow content is scrollable', 2000);
     assert(api.glass.rect.height === 300,
         'the panel height setting applies live');
 
@@ -328,6 +331,8 @@ export async function run() {
     assert(api.takeover.installed === false, 'takeover uninstalled');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'show'), 'show restored');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'toggle'), 'toggle restored');
+    assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'runStartupAnimation'),
+        'startup animation restored');
     assert(Main.overview._swipeTracker.enabled, 'swipe tracker restored');
 
     Main.overview.toggle();
