@@ -202,7 +202,13 @@ export const AppGrid = GObject.registerClass(
             if (this._mapId)
                 return;
 
-            this._mapId = this.connect('map', () => {
+            // GNOME 51 dropped Clutter's map signal; the mapped property is
+            // the only way to wait for the grid to become visible.
+            this._mapId = this.connect('notify::mapped', () => {
+                if (!this.mapped)
+                    return;
+
+                this.disconnect(this._mapId);
                 this._mapId = 0;
                 if (this._needsBuild)
                     this._build();

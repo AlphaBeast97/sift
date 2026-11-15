@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
@@ -17,6 +18,7 @@ export class OverviewTakeover {
         this._swipeEnabled = false;
         this._keySettings = null;
         this._keybindingInstalled = false;
+        this._appsKeybindingInstalled = false;
         this._installed = false;
     }
 
@@ -39,16 +41,8 @@ export class OverviewTakeover {
             };
         }
 
-        const openSearch = () => {
-            this._closeNative();
-            this._lastOpen = Date.now();
-            this._overlay.open('search');
-        };
-        const openGrid = () => {
-            this._closeNative();
-            this._lastOpen = Date.now();
-            this._overlay.showApps();
-        };
+        const openSearch = () => this._showSearch();
+        const openGrid = () => this._showApps();
 
         Main.overview.show = (state = OverviewControls.ControlsState.WINDOW_PICKER) => {
             if (state === OverviewControls.ControlsState.APP_GRID)
@@ -68,9 +62,8 @@ export class OverviewTakeover {
                 openSearch();
         };
         Main.overview.focusSearch = () => {
-            this._closeNative();
             this._lastOpen = Date.now();
-            this._overlay.focusSearch();
+            this._closeNative(() => this._overlay.focusSearch());
         };
         Main.overview.shouldToggleByCornerOrButton = () =>
             !this._overlay.animating && Date.now() - this._lastOpen >= ACTIVATION_GUARD_MS;
@@ -81,8 +74,17 @@ export class OverviewTakeover {
             Main.wm.addKeybinding('toggle-overview', this._keySettings,
                 Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
                 Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-                () => this._overlay.toggle());
+                () => this.toggle());
             this._keybindingInstalled = true;
+        }
+
+        if (this._keySettings.get_strv('toggle-application-view').length > 0) {
+            Main.wm.removeKeybinding('toggle-application-view');
+            Main.wm.addKeybinding('toggle-application-view', this._keySettings,
+                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+                () => this.toggleApps());
+            this._appsKeybindingInstalled = true;
         }
 
         if (Main.overview.visible)
@@ -116,16 +118,71 @@ export class OverviewTakeover {
                 () => Main.overview.toggle());
             this._keybindingInstalled = false;
         }
+
+        if (this._appsKeybindingInstalled) {
+            Main.wm.removeKeybinding('toggle-application-view');
+            Main.wm.addKeybinding('toggle-application-view', this._keySettings,
+                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+                () => {
+                    if (Main.overview.visible)
+                        Main.overview.dash.showAppsButton.checked =
+                            !Main.overview.dash.showAppsButton.checked;
+                    else
+                        Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+                });
+            this._appsKeybindingInstalled = false;
+        }
         this._keySettings = null;
 
         Main.overview._swipeTracker.enabled = this._swipeEnabled;
         this._installed = false;
     }
 
-    _closeNative() {
-        if (!Main.overview.visible)
-            return;
+    toggle() {
+        if (this._overlay.visible)
+            this._overlay.close();
+        else
+            this._showSearch();
+    }
 
+    toggleApps() {
+        if (this._overlay.visible && this._overlay.view === 'grid')
+            this._overlay.focusSearch();
+        else
+            this._showApps();
+    }
+
+    _showSearch() {
+        this._lastOpen = Date.now();
+        this._closeNative(() => this._overlay.open('search'));
+    }
+
+    _showApps() {
+        this._lastOpen = Date.now();
+        this._closeNative(() => this._overlay.showApps());
+    }
+
+    // The native overview keeps its modal grab until its hide animation ends,
+    // so opening Sift straight away would fail to grab and stay hidden.
+    _closeNative(callback = null) {
+        if (!Main.overview.visible) {
+            callback?.();
+            return;
+        }
+
+        if (!callback) {
+            this._saved.hide.value.call(Main.overview);
+            return;
+        }
+
+        const id = Main.overview.connect('hidden', () => {
+            Main.overview.disconnect(id);
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                callback();
+                return GLib.SOURCE_REMOVE;
+            });
+        });
         this._saved.hide.value.call(Main.overview);
     }
 }

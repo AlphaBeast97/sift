@@ -163,6 +163,9 @@ export async function run() {
 
     const fake = {files: [], calc: {expression: '1+1', result: '2'}};
     api.daemon.query = () => Promise.resolve(fake);
+    // Force a text change: the earlier block may have left this exact text in
+    // the entry, and setting the same text emits no text-changed signal.
+    api.overlay.entry.set_text('');
     api.overlay.entry.set_text(target.get_name());
     await Scripting.waitLeisure();
     await waitFor(() => api.overlay.rows.some(row => row.kind === 'calc'),
@@ -252,7 +255,7 @@ export async function run() {
     await Scripting.waitLeisure();
 
     api.overlay.entry.set_text('fire');
-    api.overlay.showApps();
+    api.takeover.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'grid view is active');
     assert(api.overlay.entry.text === '', 'entering grid clears query');
@@ -269,8 +272,9 @@ export async function run() {
     assert(api.overlay.view === 'search' && api.overlay.entry.text === 't',
         'typing returns to search');
 
-    api.overlay.showApps();
+    api.takeover.toggleApps();
     await Scripting.waitLeisure();
+    assert(api.overlay.view === 'grid', 'toggle opens the grid from search');
     api.settings.set_int('grid-icon-size', 64);
     await Scripting.waitLeisure();
     assert(api.appGrid.iconSize === 64, 'icon size applies live');
@@ -282,6 +286,13 @@ export async function run() {
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
     assert(api.glass.cloneCount === 0, 'clones removed on close');
+
+    api.takeover.toggleApps();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible && api.overlay.view === 'grid',
+        'Super+A opens the grid from closed');
+    api.overlay.close();
+    await Scripting.waitLeisure();
 
     api.overlay.open();
     await Scripting.waitLeisure();
@@ -295,6 +306,17 @@ export async function run() {
     Object.getPrototypeOf(Main.overview).show.call(Main.overview);
     await Scripting.waitLeisure();
     assert(Main.overview.visible, 'native overview shown behind the takeover');
+
+    api.takeover.toggleApps();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'Super+A opens the grid over the native overview', 2000);
+    await waitFor(() => !Main.overview.visible,
+        'native overview closes under the grid', 2000);
+    api.overlay.close();
+    await Scripting.waitLeisure();
+
+    Object.getPrototypeOf(Main.overview).show.call(Main.overview);
+    await Scripting.waitLeisure();
     Main.overview.hide();
     await Scripting.waitLeisure();
     assert(!Main.overview.visible, 'hide closes the native overview too');
