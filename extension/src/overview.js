@@ -20,6 +20,7 @@ export class OverviewTakeover {
         this._keySettings = null;
         this._keybindingInstalled = false;
         this._appsKeybindingInstalled = false;
+        this._startupShowingId = 0;
         this._installed = false;
     }
 
@@ -73,6 +74,19 @@ export class OverviewTakeover {
         // overview, so let the desktop appear directly instead of flashing it.
         Main.overview.runStartupAnimation = async () => {};
 
+        // The shell starts the animation before extensions are enabled, so
+        // also dismiss the overview as soon as it appears.
+        if (Main.layoutManager._startingUp) {
+            const id = Main.overview.connect('showing', () => {
+                Main.overview.disconnect(id);
+                if (this._startupShowingId === id)
+                    this._startupShowingId = 0;
+                if (Main.layoutManager._startingUp)
+                    this._dismissNative();
+            });
+            this._startupShowingId = id;
+        }
+
         this._keySettings = new Gio.Settings({schema_id: 'org.gnome.shell.keybindings'});
         if (this._keySettings.get_strv('toggle-overview').length > 0) {
             Main.wm.removeKeybinding('toggle-overview');
@@ -93,7 +107,7 @@ export class OverviewTakeover {
         }
 
         if (Main.overview.visible)
-            this._closeNative();
+            this._dismissNative();
 
         this._swipeEnabled = Main.overview._swipeTracker.enabled;
         Main.overview._swipeTracker.enabled = false;
@@ -105,6 +119,11 @@ export class OverviewTakeover {
             return;
 
         this._overlay.close();
+
+        if (this._startupShowingId) {
+            Main.overview.disconnect(this._startupShowingId);
+            this._startupShowingId = 0;
+        }
 
         for (const name of PATCHED) {
             const saved = this._saved[name];
@@ -166,6 +185,13 @@ export class OverviewTakeover {
     _showApps() {
         this._lastOpen = Date.now();
         this._closeNative(() => this._overlay.showApps());
+    }
+
+    // Hiding the group as well makes the startup overview vanish instantly
+    // instead of animating out after it has already been visible.
+    _dismissNative() {
+        this._saved.hide.value.call(Main.overview);
+        Main.layoutManager.hideOverview();
     }
 
     // The native overview keeps its modal grab until its hide animation ends,
