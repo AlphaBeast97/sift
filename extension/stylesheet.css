@@ -100,6 +100,18 @@
     spacing: 0;
 }
 
+/* Labels must not change the grid geometry. The label adds its height plus
+   the icon box spacing to the tile, so take the same amount back out of the
+   tile padding; the cell stays the size it has without labels. */
+.sift-app-grid.sift-labels .overview-tile {
+    padding: 2px;
+}
+
+.sift-app-grid.sift-labels .overview-tile
+    .overview-icon.overview-icon-with-label > StBoxLayout {
+    spacing: 1px;
+}
+
 .sift-app-grid-scroll {
     clip_to_allocation: true;
 }

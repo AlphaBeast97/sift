@@ -281,12 +281,24 @@ export async function run() {
 
     api.settings.set_boolean('grid-labels', false);
     await Scripting.waitLeisure();
+    await waitForGrid(api.appGrid._grid, 'grid fits without labels');
+    const manager = api.appGrid._grid.layout_manager;
+    const offColumns = api.appGrid._columns;
+    const offRows = api.appGrid._rows;
+    const offCell = manager._getChildrenMaxSize();
+    const offIcon = api.appGrid.iconSize;
     assert(api.appGrid._tiles.every(tile => !tile.icon.label.visible),
         'labels hide live');
-    await waitForGrid(api.appGrid._grid, 'grid fits without labels');
     api.settings.set_boolean('grid-labels', true);
     await Scripting.waitLeisure();
     await waitForGrid(api.appGrid._grid, 'grid fits with labels');
+    assert(api.appGrid._columns === offColumns &&
+        api.appGrid._rows === offRows,
+    'labels do not change the grid capacity');
+    assert(manager._getChildrenMaxSize() === offCell,
+        'labels do not enlarge the grid cell');
+    assert(api.appGrid.iconSize === offIcon,
+        'labels do not change the icon size');
 
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
@@ -303,6 +315,8 @@ export async function run() {
         'grid settles after a closed label change', 2000);
     assert(api.appGrid._tiles.every(tile => !tile.icon.label.visible),
         'first open after a closed label change hides labels');
+    assert(api.appGrid._columns === offColumns && api.appGrid._rows === offRows,
+        'first open without labels keeps the cell capacity');
     await waitForGrid(api.appGrid._grid,
         'first open after a closed label change fits');
     api.overlay.close();

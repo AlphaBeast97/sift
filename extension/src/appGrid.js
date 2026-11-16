@@ -29,6 +29,7 @@ export const AppGrid = GObject.registerClass(
             this._onActivate = onActivate;
             this._iconSize = iconSize;
             this._showLabels = showLabels;
+            this._syncLabelStyle();
             this._records = [];
             this._tiles = [];
             this._selected = 0;
@@ -106,13 +107,22 @@ export const AppGrid = GObject.registerClass(
                 return;
 
             this._showLabels = show;
+            this._syncLabelStyle();
             for (const tile of this._tiles) {
                 tile.icon.label.visible = show;
                 tile.queue_relayout();
             }
             this._grid.queue_relayout();
-            this._layout();
             this._scheduleLayout();
+        }
+
+        // The tile padding shrinks by exactly what the label adds, so the
+        // style has to switch together with the label visibility.
+        _syncLabelStyle() {
+            if (this._showLabels)
+                this.add_style_class_name('sift-labels');
+            else
+                this.remove_style_class_name('sift-labels');
         }
 
         invalidate() {
