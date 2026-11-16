@@ -12,7 +12,12 @@ const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
-    'max-results', 'search-height', 'grid-icon-size',
+    'max-results', 'search-height', 'grid-size', 'grid-labels',
+];
+const GRID_SIZES = ['auto', '3x8', '4x6', '6x4', '8x3'];
+const GRID_LABELS = [
+    'Automatic', '3 columns × 8 rows', '4 columns × 6 rows',
+    '6 columns × 4 rows', '8 columns × 3 rows',
 ];
 
 function valueRow(title, subtitle = '') {
@@ -193,8 +198,33 @@ export default class SiftPreferences extends ExtensionPreferences {
         behavior.add(resultsGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});
-        addIntRow(gridGroup, settings, 'grid-icon-size', 'Icon size',
-            {lower: 48, upper: 128, step: 1});
+        const sizeRow = new Adw.ComboRow({
+            title: 'Grid size',
+            subtitle: 'The panel stays the same size; icons shrink or grow to fit.',
+            model: new Gtk.StringList({strings: GRID_LABELS}),
+        });
+        sizeRow.selected = Math.max(0,
+            GRID_SIZES.indexOf(settings.get_string('grid-size')));
+        sizeRow.connect('notify::selected', () => {
+            const size = GRID_SIZES[sizeRow.selected];
+            if (settings.get_string('grid-size') !== size)
+                settings.set_string('grid-size', size);
+        });
+        settings.connect('changed::grid-size', () => {
+            const selected = Math.max(0,
+                GRID_SIZES.indexOf(settings.get_string('grid-size')));
+            if (sizeRow.selected !== selected)
+                sizeRow.selected = selected;
+        });
+        gridGroup.add(sizeRow);
+
+        const labelsRow = new Adw.SwitchRow({
+            title: 'Show app labels',
+            subtitle: 'Show app names under the icons.',
+        });
+        settings.bind('grid-labels', labelsRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        gridGroup.add(labelsRow);
         behavior.add(gridGroup);
 
         const indexGroup = new Adw.PreferencesGroup({title: 'File indexing'});

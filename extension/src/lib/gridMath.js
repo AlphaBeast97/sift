@@ -30,6 +30,41 @@ export function gridLayout(width, height, cell, itemCount, {
     };
 }
 
+// A chosen grid size is a target; on a small panel it is reduced so the
+// smallest supported tile still fits instead of overlapping.
+export function presetLayout(width, height, columns, rows, minCell, {
+    columnSpacing = SPACING,
+    rowSpacing = SPACING,
+    padding = null,
+} = {}) {
+    const left = padding?.left ?? PAGE_PADDING;
+    const right = padding?.right ?? PAGE_PADDING;
+    const top = padding?.top ?? PAGE_PADDING;
+    const bottom = padding?.bottom ?? PAGE_PADDING;
+
+    return {
+        columns: clamp(1, Math.floor(
+            (width - left - right + columnSpacing) /
+            (minCell + columnSpacing)), columns),
+        rows: clamp(1, Math.floor(
+            (height - top - bottom + rowSpacing) /
+            (minCell + rowSpacing)), rows),
+    };
+}
+
+export function parseGridSize(value) {
+    const match = /^(\d+)x(\d+)$/.exec(value ?? '');
+    if (!match)
+        return null;
+
+    const columns = Number(match[1]);
+    const rows = Number(match[2]);
+    if (columns < 1 || rows < 1)
+        return null;
+
+    return {columns, rows};
+}
+
 export function indexToCell(index, columns, rows) {
     const pageSize = columns * rows;
     return {

@@ -181,7 +181,8 @@ export const SiftOverlay = GObject.registerClass({
         });
         this._grid = new AppGrid({
             apps,
-            iconSize: settings.get_int('grid-icon-size'),
+            gridSize: settings.get_string('grid-size'),
+            showLabels: settings.get_boolean('grid-labels'),
             settings,
             onActivate: (record, options) => this._activateRow(appRow(record), options),
         });
@@ -243,8 +244,11 @@ export const SiftOverlay = GObject.registerClass({
                 this.refreshApps();
             }
         });
-        this._gridSizeId = settings.connect('changed::grid-icon-size', () => {
-            this._grid?.setIconSize(settings.get_int('grid-icon-size'));
+        this._gridSizeId = settings.connect('changed::grid-size', () => {
+            this._grid?.setGridSize(settings.get_string('grid-size'));
+        });
+        this._gridLabelsId = settings.connect('changed::grid-labels', () => {
+            this._grid?.setShowLabels(settings.get_boolean('grid-labels'));
         });
         this._searchHeightId = settings.connect('changed::search-height', () => {
             this._searchHeight = settings.get_int('search-height');
@@ -660,6 +664,10 @@ export const SiftOverlay = GObject.registerClass({
         if (this._gridSizeId) {
             this._settings.disconnect(this._gridSizeId);
             this._gridSizeId = 0;
+        }
+        if (this._gridLabelsId) {
+            this._settings.disconnect(this._gridLabelsId);
+            this._gridLabelsId = 0;
         }
         if (this._searchHeightId) {
             this._settings.disconnect(this._searchHeightId);
