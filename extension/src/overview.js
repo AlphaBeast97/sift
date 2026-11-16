@@ -4,15 +4,18 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {ControlsState} from 'resource:///org/gnome/shell/ui/overviewControls.js';
 
-const PATCHED = ['show', 'showApps', 'toggle', 'shouldToggleByCornerOrButton',
-    'runStartupAnimation', 'hide'];
+const PATCHED = ['show', 'showApps', 'toggle', 'focusSearch',
+    'shouldToggleByCornerOrButton', 'runStartupAnimation', 'hide'];
 const LAYOUT_PATCHED = ['showOverview'];
+const SEARCH_KEY = 'sift-search-shortcut';
+const APPS_KEY = 'sift-apps-shortcut';
 const KEY_FLAGS = Meta.KeyBindingFlags.IGNORE_AUTOREPEAT;
 const KEY_MODES = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
 
-// Sift's shortcuts always work; the switch only decides whether GNOME's own
-// overview (and its triggers) stays available.
+// With GNOME's overview disabled, an unset shortcut keeps the Super defaults;
+// with it enabled, the schema defaults (Ctrl+Space / Alt+A) are bound.
 export class OverviewBlocker {
     constructor({overlay, settings}) {
         this._overlay = overlay;
@@ -21,6 +24,8 @@ export class OverviewBlocker {
         this._savedLayout = {};
         this._swipeEnabled = false;
         this._startupShowingId = 0;
+        this._overlayKeyId = 0;
+        this._bound = new Set();
         this._settingsIds = [];
         this._installed = false;
     }
@@ -33,13 +38,10 @@ export class OverviewBlocker {
         if (this._settingsIds.length > 0)
             return;
 
-        this._settingsIds.push(this._settings.connect('changed::disable-overview',
-            () => this._sync()));
-
-        Main.wm.addKeybinding('sift-search-shortcut', this._settings,
-            KEY_FLAGS, KEY_MODES, () => this.toggle());
-        Main.wm.addKeybinding('sift-apps-shortcut', this._settings,
-            KEY_FLAGS, KEY_MODES, () => this.toggleApps());
+        for (const key of ['disable-overview', SEARCH_KEY, APPS_KEY]) {
+            this._settingsIds.push(this._settings.connect(`changed::${key}`,
+                () => this._sync()));
+        }
 
         this._sync();
     }
@@ -49,8 +51,10 @@ export class OverviewBlocker {
             this._settings.disconnect(id);
         this._settingsIds = [];
 
-        Main.wm.removeKeybinding('sift-search-shortcut');
-        Main.wm.removeKeybinding('sift-apps-shortcut');
+        for (const key of [SEARCH_KEY, APPS_KEY]) {
+            if (this._bound.delete(key))
+                Main.wm.removeKeybinding(key);
+        }
 
         this._unblock();
     }
@@ -70,10 +74,41 @@ export class OverviewBlocker {
     }
 
     _sync() {
-        if (this._settings.get_boolean('disable-overview'))
+        const blocked = this._settings.get_boolean('disable-overview');
+        if (blocked)
             this._block();
         else
             this._unblock();
+
+        for (const [key, handler] of [
+            [SEARCH_KEY, () => this.toggle()],
+            [APPS_KEY, () => this.toggleApps()],
+        ]) {
+            // A disabled overview takes over the Super defaults; a recorded
+            // shortcut replaces its default and is always bound.
+            const bind = !blocked || !this._isDefault(key);
+            if (bind && !this._bound.has(key)) {
+                Main.wm.addKeybinding(key, this._settings,
+                    KEY_FLAGS, KEY_MODES, handler);
+                this._bound.add(key);
+            } else if (!bind && this._bound.delete(key)) {
+                Main.wm.removeKeybinding(key);
+            }
+        }
+
+        const overlayKey = blocked && this._isDefault(SEARCH_KEY);
+        if (overlayKey && !this._overlayKeyId) {
+            this._overlayKeyId = global.display.connect('overlay-key',
+                () => this.toggle());
+        } else if (!overlayKey && this._overlayKeyId) {
+            global.display.disconnect(this._overlayKeyId);
+            this._overlayKeyId = 0;
+        }
+    }
+
+    _isDefault(key) {
+        const value = this._settings.get_user_value(key);
+        return value === null || value.get_strv().length === 0;
     }
 
     _block() {
@@ -93,9 +128,17 @@ export class OverviewBlocker {
             };
         }
 
-        Main.overview.show = () => {};
+        // Super alone goes through Mutter's overlay-key signal and GNOME's
+        // handler calls toggle(); the no-op keeps Super+Tab, Activities and
+        // the shell D-Bus from opening anything, while _sync listens for the
+        // overlay key separately. Super+A arrives as show(APP_GRID).
+        Main.overview.show = state => {
+            if (state === ControlsState.APP_GRID && this._isDefault(APPS_KEY))
+                this._closeNative(() => this._overlay.showApps());
+        };
         Main.overview.showApps = () => {};
         Main.overview.toggle = () => {};
+        Main.overview.focusSearch = () => {};
         Main.overview.shouldToggleByCornerOrButton = () => false;
         Main.layoutManager.showOverview = () => {};
 
@@ -130,6 +173,11 @@ export class OverviewBlocker {
         if (this._startupShowingId) {
             Main.overview.disconnect(this._startupShowingId);
             this._startupShowingId = 0;
+        }
+
+        if (this._overlayKeyId) {
+            global.display.disconnect(this._overlayKeyId);
+            this._overlayKeyId = 0;
         }
 
         for (const name of PATCHED) {

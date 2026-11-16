@@ -88,9 +88,9 @@ function shortcutBindings(settings, key) {
     const bindings = gnomeBindings();
     const otherKey = key === 'sift-search-shortcut'
         ? 'sift-apps-shortcut' : 'sift-search-shortcut';
-    const other = settings.get_strv(otherKey);
-    if (other.length > 0)
-        bindings.push({action: 'Sift\'s other shortcut', accels: other});
+    const other = shortcutAccel(settings, otherKey);
+    if (other)
+        bindings.push({action: 'Sift\'s other shortcut', accels: [other]});
     return bindings;
 }
 
@@ -99,8 +99,22 @@ function acceleratorLabel(accel) {
     return ok ? Gtk.accelerator_get_label(keyval, mods) : accel;
 }
 
+// Keep in sync with extension/src/overview.js.
+const OVERVIEW_DEFAULTS = {
+    'sift-search-shortcut': '<Super>',
+    'sift-apps-shortcut': '<Super>a',
+};
+
+function shortcutAccel(settings, key) {
+    const value = settings.get_user_value(key);
+    const unset = value === null || value.get_strv().length === 0;
+    if (unset && settings.get_boolean('disable-overview'))
+        return OVERVIEW_DEFAULTS[key];
+    return settings.get_strv(key)[0] ?? '';
+}
+
 function shortcutText(settings, key) {
-    return acceleratorLabel(settings.get_strv(key)[0] ?? '') || 'Not set';
+    return acceleratorLabel(shortcutAccel(settings, key)) || 'Not set';
 }
 
 function recordShortcut(window, settings, key, title) {
@@ -183,6 +197,7 @@ function addShortcutRow(group, window, settings, key, title, subtitle) {
         reset.sensitive = settings.get_user_value(key) !== null;
     };
     settings.connect(`changed::${key}`, sync);
+    settings.connect('changed::disable-overview', sync);
     sync();
     button.connect('clicked', () => recordShortcut(window, settings, key, title));
 
@@ -364,11 +379,11 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const shortcutGroup = new Adw.PreferencesGroup({
             title: 'Shortcuts',
-            description: 'Sift opens with these shortcuts. Sift never changes GNOME\'s shortcuts.',
+            description: 'With the GNOME overview disabled, the defaults are Super and Super+A; with it enabled, Ctrl+Space and Alt+A. Sift never changes GNOME\'s shortcuts.',
         });
         const overviewRow = new Adw.SwitchRow({
             title: 'Disable the GNOME overview',
-            subtitle: 'Super, Super+A, Activities and the hot corner do nothing, and login goes straight to the desktop. Turn off to keep the GNOME overview.',
+            subtitle: 'Super and Super+A open Sift instead; Activities, the hot corner, swipe and the login overview do nothing. Turn off to keep the GNOME overview.',
         });
         settings.bind('disable-overview', overviewRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);

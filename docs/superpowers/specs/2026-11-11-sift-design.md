@@ -10,18 +10,21 @@ users have settings and caches.
 
 ## 1. Intent
 
-Build a macOS-Spotlight-style search for GNOME Shell 51. One key — Super — opens a
-centered search panel over the current desktop. Typing finds installed applications
-and files, and evaluates arithmetic/unit expressions. An app grid view browses every
-installed application, and a preferences window exposes the glass, result, and grid
-settings. The panel has a liquid-glass backdrop that looks like macOS/Isle glass, with
-a simpler frosted blur as fallback. It must feel instant: open in one or two frames, no
-input lag, 60 fps while open, and zero idle cost when closed.
+Build a macOS-Spotlight-style search for GNOME Shell 51. By default one key — Super —
+opens a centered search panel over the current desktop. Typing finds installed
+applications and files, and evaluates arithmetic/unit expressions. An app grid view
+browses every installed application, and a preferences window exposes the glass,
+result, grid, and shortcut settings. The panel has a liquid-glass backdrop that looks
+like macOS/Isle glass, with a simpler frosted blur as fallback. It must feel instant:
+open in one or two frames, no input lag, 60 fps while open, and zero idle cost when
+closed.
 
-This replaces the **entire** GNOME Overview. Super, Activities, the hot corner, and
-any shell caller of `Main.overview.show/hide/toggle` open Sift instead. There is no
-workspace picker and no window picker. Sift has two views — the search panel and an app
-grid — plus its own preferences window.
+The default configuration disables the **GNOME Overview**: Super and Super+A open
+Sift's search and app grid, while Activities, the hot corner, the touchpad gesture,
+Super+Tab and the login overview do nothing. There is no workspace picker and no
+window picker. The preference can instead keep GNOME's Overview; Sift then opens with
+Ctrl+Space and Alt+A. Sift has two views — the search panel and an app grid — plus its
+own preferences window.
 
 The Rust part exists because indexing the home directory and fuzzy matching 250k paths
 inside the GNOME Shell process would risk the frame budget. The visible UI, focus,
@@ -31,7 +34,8 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 
 ## 2. Goals
 
-- Super/Activities/hot corner open the same centered search overlay.
+- Super opens the centered search overlay; Super+A opens the app grid. Every other
+  GNOME overview trigger is disabled.
 - Application search is instant and uses GNOME's own `Shell.AppSystem` and activation
   paths so workspaces, startup notification, and focus behave correctly.
 - An app grid over the same app snapshot, opened with Super+A or the empty-state
@@ -156,7 +160,7 @@ is the only supported shape (see `docs/research/phase-0-findings.md`).
 
 ```
 GNOME Shell process (GJS)
-  Overview takeover → SiftOverlay → ResultsModel → glass + St widgets
+  Overview blocker → SiftOverlay → ResultsModel → glass + St widgets
                        │              ├── Apps: Shell.AppSystem (sync)
                        │              └── Files/calc: D-Bus proxy (async)
                        └── AppGrid → IconGrid.IconGrid + AppDisplay.AppIcon
@@ -242,13 +246,15 @@ change is reversible.
 
 ### 8.2 The patch set
 
-`disable-overview` (default true) blocks every GNOME overview trigger; Sift's own pair
-is always registered and is the only way to open Sift.
+`disable-overview` (default true) blocks every GNOME overview trigger except the two
+Super shortcuts it hands to Sift.
 
-1. Save and shadow `show`, `showApps`, `toggle`, and
+1. Save and shadow `show`, `showApps`, `toggle`, `focusSearch`, and
    `shouldToggleByCornerOrButton` on `Main.overview` with no-op/false wrappers, and
    `runStartupAnimation` with an async no-op so login skips the overview. `hide` is
-   saved too so the startup overview can be dismissed.
+   saved too so the startup overview can be dismissed. `show(APP_GRID)` is the one
+   wrapper with a job: when the app-grid shortcut is still its default, it opens
+   Sift's grid. Otherwise it does nothing.
 2. Save and shadow `Main.layoutManager.showOverview` with a no-op, so the swipe
    gesture and any other direct caller cannot reveal the overview group.
 3. Set `Main.overview._swipeTracker.enabled = false` (a public GObject property) and
@@ -257,13 +263,21 @@ is always registered and is the only way to open Sift.
    original `hide` plus `Main.layoutManager.hideOverview()`. During login, also
    dismiss it on the `showing` signal in case the shell started the animation before
    extensions were enabled.
-5. Add `sift-search-shortcut` and `sift-apps-shortcut` with
+5. Listen to `global.display`'s `overlay-key` signal (the bare Super press) only while
+   the overview is blocked and the search shortcut is unset; the listener toggles
+   Sift search. GNOME's own handler calls the shadowed `Main.overview.toggle()`, so
+   Super+Tab, Activities and the shell D-Bus stay inert.
+6. Bind `sift-search-shortcut` and `sift-apps-shortcut` with
    `Main.wm.addKeybinding` (our settings schema, `IGNORE_AUTOREPEAT`,
-   `NORMAL | OVERVIEW`). Their handlers close a visible native overview first, then
-   open Sift. They exist in both switch states.
-6. On `disable-overview = false` or on extension disable, restore every saved method
+   `NORMAL | OVERVIEW`) whenever the overview is enabled or that shortcut has a user
+   value. A recorded shortcut therefore replaces its Super default; resetting it
+   returns the default to Sift. Their handlers close a visible native overview first,
+   then open Sift.
+7. On `disable-overview = false` or on extension disable, restore every saved method
    (or delete our shadow if another extension had not patched it), restore the swipe
-   tracker, and remove the two keybindings.
+   tracker, disconnect the overlay-key listener, and remove the keybindings. With the
+   overview enabled, the schema defaults (`<Control>space`, `<Alt>a`) are bound
+   instead.
 
 ### 8.3 Deliberate non-patches
 
@@ -284,15 +298,20 @@ Revisit only if real use shows a problem.
   while the panel is open (and `popModal()` re-enables it), so the glass renders over
   fullscreen windows.
 - **Second shortcut press while open:** the Sift handler closes the panel from either
-  view.
+  view. The bare-Super listener does the same.
+- **Custom shortcut:** recording a value for a shortcut replaces its Super default.
+  Super/Super+A then do nothing while the overview is disabled, and the recorded key
+  is bound instead.
 - **GNOME overview enabled:** Super, Super+A, Activities, hot corner, swipe and login
-  behave normally; Sift's pair still opens Sift and closes a visible overview first.
+  behave normally; Sift binds Ctrl+Space and Alt+A (or the recorded values) and closes
+  a visible overview first.
 - **App list changes while the grid is open:** `installed-changed` marks the grid dirty;
   the visible grid is left alone and rebuilt on the next open.
 - **App activation from the grid:** `AppIcon.activate()` calls `Main.overview.hide()`;
   with the block lifted that hides the GNOME overview; Sift closes itself separately.
-- **Sticky Keys enabled:** Mutter's `overlay-key` handler returns early; the block
-  still covers Activities, hot corner, Super+A and the swipe gesture.
+- **Sticky Keys enabled:** Mutter's `overlay-key` handler returns early, but Sift's
+  listener still opens search on the overlay key; the block still covers Activities,
+  the hot corner, Super+A and the swipe gesture.
 - **Session lock / user switch:** the extension is `["user"]`-only, so the shell runs
   `disable()` on lock and `enable()` on unlock, restoring the overview either way.
 - **Extension disabled while open:** `disable()` pops the modal and destroys the actor,
@@ -685,25 +704,28 @@ the "Rebuild index" button; it never touches shell actors.
 | `max-results` | int | 4–12; 6 | Maximum rows in the search view. |
 | `search-height` | int | 144–716; 404 | Expanded search-panel height in logical pixels; clamped to the monitor. |
 | `grid-labels` | bool | true | Show app names under grid icons; the cell geometry is unchanged. |
-| `disable-overview` | bool | true | Blocks GNOME's overview: Super, Super+A, Activities, the hot corner, swipe and the login overview do nothing. Off keeps GNOME's overview. Sift's pair below always works. |
-| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search; bound whether the GNOME overview is enabled or disabled. |
-| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid; bound whether the GNOME overview is enabled or disabled. |
+| `disable-overview` | bool | true | Hands Super and Super+A to Sift and silences every other GNOME overview trigger: Activities, the hot corner, swipe, Super+Tab and the login overview do nothing. Off keeps GNOME's overview and binds Ctrl+Space / Alt+A. |
+| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search. While the overview is disabled and this has no user value, Super is the trigger instead; a recorded value replaces it. |
+| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid. While the overview is disabled and this has no user value, Super+A is the trigger instead; a recorded value replaces it. |
 
 - **Groups:** Appearance (mode combo, opacity, blur radius, tint, animations), Behavior
-  (search height, max results, app-grid labels, overview takeover, both shortcuts), and
+  (search height, max results, app-grid labels, overview disable, both shortcuts), and
   File indexing (note + "Rebuild index" button). Switches use `Adw.SwitchRow`; numbers
   use `Adw.ActionRow` + `Gtk.Scale` (200 px wide, value shown, step 1 for integers, 0.05
   for doubles); the mode uses `Adw.ComboRow`; the rebuild action uses
   `Adw.ActionRow` + a `Gtk.Button` suffix. Shortcut rows show a `Gtk.ShortcutLabel` and
-  open a key-capture dialog; a new shortcut is rejected if GNOME, a custom media key, or
-  Sift's other shortcut already uses it. Every slider, switch and shortcut row has a
-  per-row reset button.
+  open a key-capture dialog; an unset row shows Super / Super+A while the overview is
+  disabled and Ctrl+Space / Alt+A otherwise. A new shortcut is rejected if GNOME, a
+  custom media key, or Sift's other shortcut already uses it. Every slider, switch and
+  shortcut row has a per-row reset button; resetting a shortcut returns its mode
+  default.
 - **Live apply:** the extension connects `changed::<key>` for every key. Glass keys
   update uniforms or rebuild the effect in place; `max-results` re-renders the current
   results; `grid-labels` relabels the cached grid without relayout; shortcut changes
-  rebind the Sift pair immediately; `disable-overview` blocks or restores every GNOME
-  overview trigger immediately. No shell restart and no reopen is required. Changes made
-  while Sift is closed apply on the next open.
+  rebind immediately, disconnect or reconnect the overlay-key listener, and update the
+  shortcut rows; `disable-overview` takes over or restores every GNOME overview trigger
+  and the Super defaults immediately. No shell restart and no reopen is required.
+  Changes made while Sift is closed apply on the next open.
 - **File indexing:** a note row explains that indexing runs in `siftd`, is configured in
   `~/.config/sift/config.toml`, and is disabled with `roots = []`. "Rebuild index" calls
   `Reindex`, which re-reads `config.toml` and rebuilds in the background; a toast reports
@@ -925,11 +947,14 @@ Shared presentation:
   tools/test/headless.js`.
 - The automation script asserts:
   - the extension enables without exceptions;
-  - `Main.overview.toggle()` opens the overlay, and again closes it;
-  - `Main.overview.show()` / `hide()` / `showApps()` / `focusSearch()` route to it;
+  - with the overview disabled by default, `Main.overview.toggle()`, `show()`,
+    `focusSearch()`, `showApps()` and `Main.layoutManager.showOverview()` do nothing,
+    including Super+Tab and the Activities path;
+  - emitting `overlay-key` opens and closes Sift search (the Super default), and
+    `show(ControlsState.APP_GRID)` opens the Sift grid (the Super+A default);
+  - enabling the GNOME overview restores its methods and binds Ctrl+Space / Alt+A;
+  - recording a shortcut unbinds its Super default, and reset returns it;
   - querying "term" yields Terminal in the results (app path);
-  - `Main.overview.show(ControlsState.APP_GRID)` and `showApps()` open the grid view;
-    the grid contains installed apps, and Super+A's stock path reaches it;
   - entering the grid clears a non-empty query; typing in the grid switches to search
     and the character lands in the entry;
   - Escape closes from either view; query clears on close;
@@ -951,7 +976,7 @@ Shared presentation:
 - Real session on GNOME 51.1 / Intel i915: warm open, typing, 60 fps frame meter,
   light/dark, 100%/200% scaling, two monitors, fullscreen app, BMS on/off, disable/enable,
   logout/login.
-- App grid: Super+A, `showApps`, empty-state button, paging with dots and keys, 100+ app
+- App grid: Super+A, empty-state button, paging with dots and keys, 100+ app
   case, typing switches to search, icon size changes live, no drag/folders.
 - Preferences: `gnome-extensions prefs sift@alphabeast97.github.io`; change every toggle
   and slider, verify the live effect, close/reopen persistence,
@@ -1054,7 +1079,7 @@ v1 does **not** download anything, so there is no network trust path in the inst
 Each milestone ends with a working, testable state and conventional commits. Tests listed
 are added in that milestone, not retrofitted.
 
-### M0 — Glass and takeover spike (throwaway, 1–2 days)
+### M0 — Glass and overview spike (throwaway, 1–2 days)
 
 - Minimal extension: centered panel, super key opens/closes it, one window backdrop
   clone + `Shell.BlurEffect` + rounded shader.
@@ -1131,11 +1156,12 @@ are added in that milestone, not retrofitted.
 
 ## 21. Feasibility risks (ranked)
 
-1. **Overview takeover is private API and can change in any shell update.** Mitigation:
+1. **Overview blocking is private API and can change in any shell update.** Mitigation:
    GNOME 51 only, narrow wrappers, feature checks, headless regression tests, documented
    hook list, exact restore. This is the main reason for a 51-only v1.
-2. **Super routing edge cases** (`overlay-key` vs `toggle-overview`, sticky keys, second
-   press, touchpad gesture). Mitigation: M0/M1 tests for each entry point; disable the
+2. **Super routing edge cases** (`overlay-key`, `toggle-overview`, sticky keys, second
+   press, touchpad gesture, custom shortcuts). Mitigation: M0/M1 tests for each entry
+   point; disable the
    swipe tracker; keep native `visible` false and do not emit native signals.
 3. **Glass performance/quality varies by GPU and window type.** The grid rect is ~2–3×
    the search area, so it is measured separately. Mitigation: bounded frame, surface
@@ -1172,7 +1198,7 @@ widget widths are cosmetic and may move. No product behavior is left open.
 
 ## 23. Approval checklist
 
-- [ ] Scope: search + app grid + prefs; Activities and hot corner route to Sift; no
+- [ ] Scope: search + app grid + prefs; Super and Super+A open Sift by default; no
       window/workspace picker.
 - [ ] App grid: Super+A, `showApps`, entry and empty-state buttons; `IconGrid`/`AppIcon`
       reuse; paged, keyboard-navigable, lazily built; no folders or drag.

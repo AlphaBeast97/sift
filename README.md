@@ -3,12 +3,14 @@
 Spotlight-style search for GNOME Shell 51: applications, files, a calculator, an
 app grid, and liquid glass.
 
-Sift disables the GNOME Overview by default: Super, Super+A, Activities, the hot
-corner and the login overview do nothing, and Sift opens with **Ctrl+Space**;
-**Alt+A** opens its app grid. Turn off "Disable the GNOME overview" in the
-preferences to keep GNOME's overview; Sift's shortcuts keep working. The UI and
-glass run in GJS. File indexing, fuzzy matching, and calculations run in a small
-Rust daemon (`siftd`) so the shell process stays responsive.
+Sift disables the GNOME Overview by default: **Super** opens Sift search and
+**Super+A** opens its app grid, while Activities, the hot corner, swipe and the
+login overview do nothing. Turn off "Disable the GNOME overview" in the
+preferences to keep GNOME's overview: Super and Super+A go back to GNOME, and
+Sift opens with **Ctrl+Space** and **Alt+A**. A recorded shortcut replaces its
+default. The UI and glass run in GJS. File indexing, fuzzy matching, and
+calculations run in a small Rust daemon (`siftd`) so the shell process stays
+responsive.
 
 ## Requirements
 
@@ -49,12 +51,14 @@ gnome-extensions enable sift@alphabeast97.github.io
 
 ## Use
 
-- **Ctrl+Space**: open or close Sift search.
-- **Alt+A**, the grid button in the search bar, or the empty-state button: open
-  the app grid.
-- Both shortcuts work whether the GNOME overview is disabled or enabled. With it
-  disabled (default), Super, Super+A, Activities and the hot corner do nothing,
-  and login goes straight to the desktop.
+- **Super**: open or close Sift search, and **Super+A**: open the app grid. The
+  grid button in the search bar and the empty-state button open it too.
+- With the GNOME overview disabled (default), Activities, the hot corner, swipe,
+  **Super+Tab** and the login overview do nothing, and login goes straight to
+  the desktop.
+- With the GNOME overview enabled, Super and Super+A work as usual; Sift opens
+  with **Ctrl+Space** and **Alt+A** instead.
+- Record different shortcuts in the preferences; each one replaces its default.
 - Type to search applications. Two or more characters also search file names,
   directories, and evaluate arithmetic and unit expressions.
 - **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.

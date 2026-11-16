@@ -64,19 +64,19 @@
     <key name="disable-overview" type="b">
       <default>true</default>
       <summary>Disable the GNOME overview</summary>
-      <description>When on, Super, Super+A, Activities, the hot corner and the login overview do not open GNOME's overview. Sift still opens with its own shortcuts. When off, GNOME's overview works normally.</description>
+      <description>When on, Super and Super+A open Sift and every other GNOME overview trigger (Activities, the hot corner, swipe and the login overview) does nothing. When off, GNOME's overview works normally.</description>
     </key>
 
     <key name="sift-search-shortcut" type="as">
       <default>['&lt;Control&gt;space']</default>
       <summary>Sift search shortcut</summary>
-      <description>Keyboard shortcut that opens Sift search. Sift never changes GNOME's own shortcuts.</description>
+      <description>Keyboard shortcut that opens Sift search. When unset with the GNOME overview disabled, Super is the default; a recorded shortcut replaces it. Sift never changes GNOME's own shortcuts.</description>
     </key>
 
     <key name="sift-apps-shortcut" type="as">
       <default>['&lt;Alt&gt;a']</default>
       <summary>Sift app grid shortcut</summary>
-      <description>Keyboard shortcut that opens Sift's app grid. Sift never changes GNOME's own shortcuts.</description>
+      <description>Keyboard shortcut that opens Sift's app grid. When unset with the GNOME overview disabled, Super+A is the default; a recorded shortcut replaces it. Sift never changes GNOME's own shortcuts.</description>
     </key>
   </schema>
 </schemalist>
