@@ -34,7 +34,8 @@ export const AppGrid = GObject.registerClass(
             this._preset = parseGridSize(gridSize);
             this._showLabels = showLabels;
             this._presetKey = '';
-            this._extra = 0;
+            this._minCell = MIN_ICON;
+            this._minCellKey = '';
             this._records = [];
             this._tiles = [];
             this._selected = 0;
@@ -307,8 +308,6 @@ export const AppGrid = GObject.registerClass(
 
             this._layoutId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 this._layoutId = 0;
-                if (this._preset)
-                    this._updateExtra();
                 this._layout();
                 return GLib.SOURCE_REMOVE;
             });
@@ -325,10 +324,11 @@ export const AppGrid = GObject.registerClass(
                 return;
 
             let columns, rows;
+            let minCell = MIN_ICON;
             if (this._preset) {
+                minCell = this._minCellFor(width, height);
                 const layout = presetLayout(width, height,
-                    this._preset.columns, this._preset.rows,
-                    MIN_ICON + Math.ceil(this._extra), {
+                    this._preset.columns, this._preset.rows, minCell, {
                         columnSpacing: manager.columnSpacing,
                         rowSpacing: manager.rowSpacing,
                         padding: manager.pagePadding,
@@ -359,7 +359,7 @@ export const AppGrid = GObject.registerClass(
             // A fixed grid gets its icon size from the cell, never from a
             // pixel slider, so capacity and spacing are known before drawing.
             if (this._preset && this._tiles.length > 0) {
-                const key = `${width}x${height}:${columns}x${rows}:${this._extra}`;
+                const key = `${width}x${height}:${columns}x${rows}:${minCell}`;
                 if (key !== this._presetKey) {
                     this._presetKey = key;
                     this._applyPresetIconSize();
@@ -384,19 +384,27 @@ export const AppGrid = GObject.registerClass(
             this._grid.queue_relayout();
         }
 
-        // Space a tile uses beyond the icon itself (label and padding). Labels
-        // do not shrink with the icon, so this bounds a preset's minimum cell.
-        _updateExtra() {
-            let extra = 0;
-            for (const tile of this._tiles) {
-                if (tile.icon.iconSize !== this._iconSize)
-                    continue;
-                extra = Math.max(extra,
-                    tile.get_preferred_width(-1)[0] - this._iconSize,
-                    tile.get_preferred_height(-1)[0] - this._iconSize);
-            }
-            if (extra > 0)
-                this._extra = extra;
+        // The smallest cell the grid can draw is a 16 px icon plus the label
+        // and padding, which do not shrink. Measuring that keeps a preset from
+        // asking for more rows than actually fit.
+        _minCellFor(width, height) {
+            const key = `${width}x${height}:${this._showLabels}:` +
+                St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            if (key === this._minCellKey)
+                return this._minCell;
+
+            const tile = this._tiles[0];
+            if (!tile)
+                return MIN_ICON;
+
+            const size = tile.icon.iconSize;
+            tile.icon.setIconSize(MIN_ICON);
+            this._minCell = Math.max(MIN_ICON,
+                tile.get_preferred_width(-1)[0],
+                tile.get_preferred_height(-1)[0]);
+            tile.icon.setIconSize(size);
+            this._minCellKey = key;
+            return this._minCell;
         }
 
         // The icon grid sizes cells from the whole tile (icon plus label), not

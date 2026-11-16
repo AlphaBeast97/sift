@@ -279,12 +279,25 @@ export async function run() {
     api.takeover.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'toggle opens the grid from search');
-    api.settings.set_string('grid-size', '8x3');
-    await waitFor(() => api.appGrid.gridSize === '8x3' &&
-        api.appGrid._columns === 8 && api.appGrid._rows === 3,
-    '8x3 capacity applies live', 2000);
+    const presetIcons = [];
+    for (const [size, columns, rows] of [
+        ['4x3', 4, 3], ['6x4', 6, 4], ['8x4', 8, 4], ['10x4', 10, 4],
+    ]) {
+        api.settings.set_string('grid-size', size);
+        await waitFor(() => api.appGrid.gridSize === size &&
+            api.appGrid._columns === columns && api.appGrid._rows === rows,
+        `${size} capacity applies live`, 2000);
+        presetIcons.push(api.appGrid.iconSize);
+        const manager = api.appGrid._grid.layout_manager;
+        print(`${size}: icon=${api.appGrid.iconSize} ` +
+            `cols=${manager.columns_per_page} rows=${manager.rows_per_page} ` +
+            `page=${manager.pageWidth}x${manager.pageHeight} ` +
+            `cell=${manager._getChildrenMaxSize()}`);
+        await waitForGrid(api.appGrid._grid, `${size} icons fit`);
+    }
+    assert(presetIcons.at(-1) < presetIcons[0],
+        'a denser preset shrinks the icons');
     assert(api.appGrid.iconSize < 96, 'a denser grid shrinks the icons');
-    await waitForGrid(api.appGrid._grid, '8x3 icons fit');
     api.settings.set_string('grid-size', 'auto');
     await Scripting.waitLeisure();
     await waitForGrid(api.appGrid._grid, 'automatic grid fits again');
@@ -305,14 +318,14 @@ export async function run() {
 
     // A grid change while closed must be right on the next open, not only
     // after closing and opening again.
-    api.settings.set_string('grid-size', '8x3');
+    api.settings.set_string('grid-size', '8x4');
     await Scripting.waitLeisure();
     api.takeover.toggleApps();
     await waitFor(() => api.appGrid.itemCount > 0,
         'grid opens after a closed grid change', 2000);
     await waitFor(() => !api.appGrid._chunkId,
         'grid settles after a closed grid change', 2000);
-    await waitFor(() => api.appGrid._columns === 8 && api.appGrid._rows === 3,
+    await waitFor(() => api.appGrid._columns === 8 && api.appGrid._rows === 4,
         'first open after a closed grid change has the chosen capacity', 2000);
     await waitForGrid(api.appGrid._grid,
         'first open after a closed grid change fits');

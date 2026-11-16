@@ -30,7 +30,7 @@ export function run() {
     almost(range('glass-opacity')[1], 0.95);
     almost(range('glass-tint')[0], 0.0);
     almost(range('glass-tint')[1], 1.0);
-    equal(range('grid-size').join(','), 'auto,3x8,4x6,6x4,8x3');
+    equal(range('grid-size').join(','), 'auto,4x3,6x4,8x4,10x4');
 
     equal(schema.list_keys().sort().join(','),
         'animations,blur-radius,glass-mode,glass-opacity,glass-tint,grid-labels,grid-size,max-results,search-height');

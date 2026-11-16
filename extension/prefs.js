@@ -14,10 +14,10 @@ const SETTINGS_KEYS = [
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
     'max-results', 'search-height', 'grid-size', 'grid-labels',
 ];
-const GRID_SIZES = ['auto', '3x8', '4x6', '6x4', '8x3'];
+const GRID_SIZES = ['auto', '4x3', '6x4', '8x4', '10x4'];
 const GRID_LABELS = [
-    'Automatic', '3 columns × 8 rows', '4 columns × 6 rows',
-    '6 columns × 4 rows', '8 columns × 3 rows',
+    'Automatic', '4 columns × 3 rows', '6 columns × 4 rows',
+    '8 columns × 4 rows', '10 columns × 4 rows',
 ];
 
 function valueRow(title, subtitle = '') {
@@ -203,8 +203,10 @@ export default class SiftPreferences extends ExtensionPreferences {
             subtitle: 'The panel stays the same size; icons shrink or grow to fit.',
             model: new Gtk.StringList({strings: GRID_LABELS}),
         });
-        sizeRow.selected = Math.max(0,
-            GRID_SIZES.indexOf(settings.get_string('grid-size')));
+        // Older releases stored presets that no longer exist, e.g. 8x3.
+        if (!GRID_SIZES.includes(settings.get_string('grid-size')))
+            settings.set_string('grid-size', 'auto');
+        sizeRow.selected = GRID_SIZES.indexOf(settings.get_string('grid-size'));
         sizeRow.connect('notify::selected', () => {
             const size = GRID_SIZES[sizeRow.selected];
             if (settings.get_string('grid-size') !== size)

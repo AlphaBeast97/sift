@@ -58,10 +58,10 @@
     <key name="grid-size" type="s">
       <choices>
         <choice value="auto"/>
-        <choice value="3x8"/>
-        <choice value="4x6"/>
+        <choice value="4x3"/>
         <choice value="6x4"/>
-        <choice value="8x3"/>
+        <choice value="8x4"/>
+        <choice value="10x4"/>
       </choices>
       <default>'auto'</default>
       <summary>App grid size</summary>
