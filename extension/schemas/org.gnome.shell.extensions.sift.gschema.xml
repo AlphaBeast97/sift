@@ -60,5 +60,23 @@
       <summary>Show app labels</summary>
       <description>Whether app names appear under icons in the app grid.</description>
     </key>
+
+    <key name="overview-takeover" type="b">
+      <default>true</default>
+      <summary>Replace the GNOME overview</summary>
+      <description>When on, Super, Activities, the hot corner and Super+A open Sift. When off, GNOME's overview stays and Sift opens with its own shortcuts.</description>
+    </key>
+
+    <key name="sift-search-shortcut" type="as">
+      <default>['&lt;Control&gt;space']</default>
+      <summary>Sift search shortcut</summary>
+      <description>Keyboard shortcut that opens Sift search. Sift never changes GNOME's own shortcuts.</description>
+    </key>
+
+    <key name="sift-apps-shortcut" type="as">
+      <default>['&lt;Alt&gt;a']</default>
+      <summary>Sift app grid shortcut</summary>
+      <description>Keyboard shortcut that opens Sift's app grid. Sift never changes GNOME's own shortcuts.</description>
+    </key>
   </schema>
 </schemalist>

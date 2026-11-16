@@ -358,6 +358,46 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(!Main.overview.visible, 'hide closes the native overview too');
 
+    // Sift's own shortcuts must keep working when the stock overview stays.
+    api.settings.set_boolean('overview-takeover', false);
+    await Scripting.waitLeisure();
+    assert(api.takeover.installed === false,
+        'overview takeover can be turned off');
+    assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'show'),
+        'overview show restored when the takeover is off');
+    assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'toggle'),
+        'overview toggle restored when the takeover is off');
+    assert(Main.overview._swipeTracker.enabled,
+        'overview swipe restored when the takeover is off');
+
+    Main.overview.show();
+    await waitFor(() => Main.overview.visible,
+        'stock overview opens with the takeover off', 2000);
+    api.takeover.toggle();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'Sift search shortcut opens over the stock overview', 2000);
+    await waitFor(() => !Main.overview.visible,
+        'Sift search shortcut closes the stock overview', 2000);
+    api.overlay.close();
+    await Scripting.waitLeisure();
+
+    api.takeover.toggleApps();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'Sift app-grid shortcut works with the takeover off', 2000);
+    api.overlay.close();
+    await Scripting.waitLeisure();
+
+    api.settings.set_boolean('overview-takeover', true);
+    await Scripting.waitLeisure();
+    assert(api.takeover.installed, 'overview takeover can be turned back on');
+    Main.overview.toggle();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible && api.overlay.view === 'search',
+        'Super opens Sift again after the takeover is back');
+    Main.overview.toggle();
+    await Scripting.waitLeisure();
+    assert(!api.overlay.visible, 'second Super toggle closes Sift');
+
     Main.extensionManager.disableExtension(UUID);
     await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.INACTIVE,
         'extension is inactive on disable');

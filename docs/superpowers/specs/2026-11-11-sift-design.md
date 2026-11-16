@@ -713,18 +713,27 @@ the "Rebuild index" button; it never touches shell actors.
 | `glass-tint` | double | 0.0–1.0; 0.45 | Dark tint strength for legibility. |
 | `animations` | bool | true | Open/close and view transitions; also off when `org.gnome.desktop.interface.enable-animations` is false. |
 | `max-results` | int | 4–12; 6 | Maximum rows in the search view. |
-| `grid-icon-size` | int | 48–128; 96 | App-grid icon size; columns/rows follow. |
+| `search-height` | int | 144–716; 404 | Expanded search-panel height in logical pixels; clamped to the monitor. |
+| `grid-labels` | bool | true | Show app names under grid icons; the cell geometry is unchanged. |
+| `overview-takeover` | bool | true | Replace GNOME's overview with Sift; off keeps GNOME's overview and Sift's own shortcuts. |
+| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search; Sift never rewrites GNOME bindings. |
+| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid. |
 
-- **Groups:** Appearance (mode combo, opacity, blur radius, tint, animations), Results
-  (max results), App grid (icon size), and File indexing (note + "Rebuild index"
-  button). Switches use `Adw.SwitchRow`; numbers use `Adw.ActionRow` + `Gtk.Scale`
-  (200 px wide, value shown, step 1 for integers, 0.05 for doubles); the mode uses
-  `Adw.ComboRow`; the rebuild action uses `Adw.ActionRow` + a `Gtk.Button` suffix.
+- **Groups:** Appearance (mode combo, opacity, blur radius, tint, animations), Behavior
+  (search height, max results, app-grid labels, overview takeover, both shortcuts), and
+  File indexing (note + "Rebuild index" button). Switches use `Adw.SwitchRow`; numbers
+  use `Adw.ActionRow` + `Gtk.Scale` (200 px wide, value shown, step 1 for integers, 0.05
+  for doubles); the mode uses `Adw.ComboRow`; the rebuild action uses
+  `Adw.ActionRow` + a `Gtk.Button` suffix. Shortcut rows show a `Gtk.ShortcutLabel` and
+  open a key-capture dialog; a new shortcut is rejected if GNOME, a custom media key, or
+  Sift's other shortcut already uses it. Every slider, switch and shortcut row has a
+  per-row reset button.
 - **Live apply:** the extension connects `changed::<key>` for every key. Glass keys
   update uniforms or rebuild the effect in place; `max-results` re-renders the current
-  results; `grid-icon-size` updates `fixed-icon-size` and relayouts the cached grid.
-  No shell restart and no reopen is required. Changes made while Sift is closed apply on
-  the next open.
+  results; `grid-labels` relabels the cached grid without relayout; shortcut changes are
+  picked up by the shell's keybinding watcher; `overview-takeover` installs or restores
+  the overview wrappers immediately. No shell restart and no reopen is required. Changes
+  made while Sift is closed apply on the next open.
 - **File indexing:** a note row explains that indexing runs in `siftd`, is configured in
   `~/.config/sift/config.toml`, and is disabled with `roots = []`. "Rebuild index" calls
   `Reindex`, which re-reads `config.toml` and rebuilds in the background; a toast reports

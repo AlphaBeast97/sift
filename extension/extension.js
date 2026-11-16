@@ -21,7 +21,10 @@ export default class SiftExtension extends Extension {
             daemon: this._daemon,
         });
         this._daemon.enable();
-        this._takeover = new OverviewTakeover({overlay: this._overlay});
+        this._takeover = new OverviewTakeover({
+            overlay: this._overlay,
+            settings: this._settings,
+        });
         this._takeover.install();
     }
 

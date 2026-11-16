@@ -19,6 +19,9 @@ export function run() {
     equal(settings.get_int('max-results'), 6);
     equal(settings.get_int('search-height'), 404);
     equal(settings.get_boolean('grid-labels'), true);
+    equal(settings.get_boolean('overview-takeover'), true);
+    equal(settings.get_strv('sift-search-shortcut').join(','), '<Control>space');
+    equal(settings.get_strv('sift-apps-shortcut').join(','), '<Alt>a');
 
     const range = key => settings.get_range(key).recursiveUnpack()[1];
 
@@ -31,5 +34,5 @@ export function run() {
     almost(range('glass-tint')[1], 1.0);
 
     equal(schema.list_keys().sort().join(','),
-        'animations,blur-radius,glass-mode,glass-opacity,glass-tint,grid-labels,max-results,search-height');
+        'animations,blur-radius,glass-mode,glass-opacity,glass-tint,grid-labels,max-results,overview-takeover,search-height,sift-apps-shortcut,sift-search-shortcut');
 }

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Adw from 'gi://Adw';
+import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
-import Gtk from 'gi://Gtk';
+import Gtk from 'gi://Gtk?version=4.0';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+
+import {findShortcutConflict, shortcutFromKey} from './src/lib/shortcuts.js';
 
 const GLASS_MODES = ['auto', 'liquid', 'frosted', 'off'];
 const MODE_LABELS = ['Auto', 'Liquid', 'Frosted', 'Off'];
@@ -12,7 +15,14 @@ const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
-    'max-results', 'search-height', 'grid-labels',
+    'max-results', 'search-height', 'grid-labels', 'overview-takeover',
+    'sift-search-shortcut', 'sift-apps-shortcut',
+];
+const GNOME_BINDING_SCHEMAS = [
+    'org.gnome.shell.keybindings',
+    'org.gnome.desktop.wm.keybindings',
+    'org.gnome.mutter.keybindings',
+    'org.gnome.settings-daemon.plugins.media-keys',
 ];
 
 function valueRow(title, subtitle = '') {
@@ -29,6 +39,146 @@ function resetButton(settings, key) {
     button.sensitive = settings.get_user_value(key) !== null;
     button.connect('clicked', () => settings.reset(key));
     return button;
+}
+
+function gnomeBindings() {
+    const bindings = [];
+
+    for (const schemaId of GNOME_BINDING_SCHEMAS) {
+        const schema = Gio.SettingsSchemaSource.get_default()?.lookup(schemaId, true);
+        if (!schema)
+            continue;
+
+        const gnome = new Gio.Settings({settings_schema: schema});
+        for (const key of gnome.list_keys()) {
+            const type = gnome.get_value(key).get_type_string();
+            const accels = type === 'as'
+                ? gnome.get_strv(key)
+                : type === 's' ? [gnome.get_string(key)] : [];
+            if (accels.length > 0) {
+                bindings.push({
+                    action: `GNOME's ${key.replaceAll('-', ' ')}`,
+                    accels,
+                });
+            }
+        }
+    }
+
+    const media = new Gio.Settings({
+        schema_id: 'org.gnome.settings-daemon.plugins.media-keys',
+    });
+    for (const path of media.get_strv('custom-keybindings')) {
+        const custom = new Gio.Settings({
+            schema_id: 'org.gnome.settings-daemon.plugins.media-keys.custom-keybinding',
+            path,
+        });
+        const accel = custom.get_string('binding');
+        if (accel) {
+            bindings.push({
+                action: custom.get_string('name') || 'a custom shortcut',
+                accels: [accel],
+            });
+        }
+    }
+
+    return bindings;
+}
+
+function shortcutBindings(settings, key) {
+    const bindings = gnomeBindings();
+    const otherKey = key === 'sift-search-shortcut'
+        ? 'sift-apps-shortcut' : 'sift-search-shortcut';
+    const other = settings.get_strv(otherKey);
+    if (other.length > 0)
+        bindings.push({action: 'Sift\'s other shortcut', accels: other});
+    return bindings;
+}
+
+function recordShortcut(window, settings, key, title) {
+    const dialog = new Gtk.Dialog({
+        transient_for: window,
+        modal: true,
+        title: `Set ${title}`,
+        use_header_bar: true,
+    });
+    dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
+
+    const content = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        margin_top: 24,
+        margin_bottom: 24,
+        margin_start: 24,
+        margin_end: 24,
+    });
+    const prompt = new Gtk.Label({
+        label: 'Press the new shortcut.',
+        wrap: true,
+    });
+    const error = new Gtk.Label({
+        wrap: true,
+        css_classes: ['error'],
+    });
+    content.append(prompt);
+    content.append(error);
+    content.can_focus = true;
+    dialog.get_content_area().append(content);
+    const bindings = shortcutBindings(settings, key);
+
+    const controller = new Gtk.EventControllerKey();
+    content.add_controller(controller);
+    controller.connect('key-pressed', (_controller, keyval, _keycode, state) => {
+        if (keyval === Gdk.KEY_Escape) {
+            dialog.close();
+            return Gdk.EVENT_STOP;
+        }
+
+        const accel = shortcutFromKey(keyval, state);
+        if (!accel) {
+            error.label = 'Hold Ctrl, Alt, Shift or Super and press another key.';
+            return Gdk.EVENT_STOP;
+        }
+
+        const conflict = findShortcutConflict(accel, bindings);
+        if (conflict) {
+            error.label = `Already used by ${conflict}.`;
+            return Gdk.EVENT_STOP;
+        }
+
+        settings.set_strv(key, [accel]);
+        dialog.close();
+        return Gdk.EVENT_STOP;
+    });
+
+    dialog.present();
+    content.grab_focus();
+}
+
+function addShortcutRow(group, window, settings, key, title, subtitle) {
+    const row = valueRow(title, subtitle);
+    const label = new Gtk.ShortcutLabel({
+        accelerator: settings.get_strv(key)[0] ?? '',
+        disabled_text: 'Not set',
+        valign: Gtk.Align.CENTER,
+    });
+    const button = new Gtk.Button({
+        child: label,
+        valign: Gtk.Align.CENTER,
+        css_classes: ['flat'],
+        tooltip_text: 'Change shortcut',
+    });
+    const reset = resetButton(settings, key);
+
+    const sync = () => {
+        label.accelerator = settings.get_strv(key)[0] ?? '';
+        reset.sensitive = settings.get_user_value(key) !== null;
+    };
+    settings.connect(`changed::${key}`, sync);
+    button.connect('clicked', () => recordShortcut(window, settings, key, title));
+
+    row.add_suffix(button);
+    row.add_suffix(reset);
+    group.add(row);
 }
 
 function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
@@ -201,6 +351,23 @@ export default class SiftPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         gridGroup.add(labelsRow);
         behavior.add(gridGroup);
+
+        const shortcutGroup = new Adw.PreferencesGroup({
+            title: 'Shortcuts',
+            description: 'Sift never changes the GNOME shortcuts.',
+        });
+        const takeoverRow = new Adw.SwitchRow({
+            title: 'Replace the GNOME overview',
+            subtitle: 'Super, Activities, the hot corner and Super+A open Sift. Turn off to keep the GNOME overview; the shortcuts below still open Sift.',
+        });
+        settings.bind('overview-takeover', takeoverRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        shortcutGroup.add(takeoverRow);
+        addShortcutRow(shortcutGroup, window, settings, 'sift-search-shortcut',
+            'Search', 'Opens the Sift search panel.');
+        addShortcutRow(shortcutGroup, window, settings, 'sift-apps-shortcut',
+            'App grid', 'Opens the Sift app grid.');
+        behavior.add(shortcutGroup);
 
         const indexGroup = new Adw.PreferencesGroup({title: 'File indexing'});
         const indexRow = valueRow('Search home folder',
