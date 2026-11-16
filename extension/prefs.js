@@ -118,38 +118,87 @@ function shortcutText(settings, key) {
 }
 
 function recordShortcut(window, settings, key, title) {
-    const dialog = new Gtk.Dialog({
-        transient_for: window,
-        modal: true,
-        title: `Set ${title}`,
-        use_header_bar: true,
+    const dialog = new Adw.Dialog({
+        title: `Set ${title.toLowerCase()} shortcut`,
+        content_width: 400,
+        follows_content_size: true,
     });
-    const cancel = dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
+
+    const header = new Adw.HeaderBar();
+    const cancel = new Gtk.Button({label: 'Cancel'});
     cancel.connect('clicked', () => dialog.close());
+    header.pack_start(cancel);
 
     const content = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-        margin_top: 24,
+        spacing: 6,
+        margin_top: 4,
         margin_bottom: 24,
-        margin_start: 24,
-        margin_end: 24,
+        margin_start: 28,
+        margin_end: 28,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
     });
-    const prompt = new Gtk.Label({
-        label: 'Press the new shortcut.',
+
+    content.append(new Gtk.Image({
+        icon_name: 'input-keyboard-symbolic',
+        pixel_size: 32,
+        css_classes: ['card'],
+        width_request: 64,
+        height_request: 64,
+        halign: Gtk.Align.CENTER,
+        margin_bottom: 10,
+    }));
+    content.append(new Gtk.Label({
+        label: 'Press the new shortcut',
+        css_classes: ['title-3'],
+    }));
+    content.append(new Gtk.Label({
+        label: 'Hold Ctrl, Alt, Shift or Super, then press another key.',
         wrap: true,
-    });
+        justify: Gtk.Justification.CENTER,
+        css_classes: ['dim-label'],
+        max_width_chars: 34,
+        margin_bottom: 12,
+    }));
+
     const error = new Gtk.Label({
         wrap: true,
+        justify: Gtk.Justification.CENTER,
         css_classes: ['error'],
+        visible: false,
     });
-    content.append(prompt);
     content.append(error);
-    dialog.get_content_area().append(content);
-    const bindings = shortcutBindings(settings, key);
 
-    // Capture on the window: focus starts on the Cancel button, so a
-    // controller on the content box never sees the key presses.
+    const current = new Gtk.Box({
+        spacing: 8,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+    });
+    current.append(new Gtk.Label({
+        label: shortcutText(settings, key),
+        css_classes: ['keycap'],
+    }));
+    current.append(new Gtk.Label({
+        label: 'Current shortcut',
+        css_classes: ['dim-label'],
+        valign: Gtk.Align.CENTER,
+    }));
+    content.append(current);
+
+    const toolbar = new Adw.ToolbarView();
+    toolbar.add_top_bar(header);
+    toolbar.set_content(content);
+    dialog.set_child(toolbar);
+
+    const bindings = shortcutBindings(settings, key);
+    const showError = message => {
+        error.label = message;
+        error.visible = true;
+    };
+
+    // Capture on the dialog itself: keys pressed while the Cancel button or
+    // the dialog has focus must reach the recorder.
     const controller = new Gtk.EventControllerKey();
     controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
     dialog.add_controller(controller);
@@ -161,13 +210,13 @@ function recordShortcut(window, settings, key, title) {
 
         const accel = shortcutFromKey(keyval, state);
         if (!accel) {
-            error.label = 'Hold Ctrl, Alt, Shift or Super and press another key.';
+            showError('Hold Ctrl, Alt, Shift or Super and press another key.');
             return Gdk.EVENT_STOP;
         }
 
         const conflict = findShortcutConflict(accel, bindings);
         if (conflict) {
-            error.label = `Already used by ${conflict}.`;
+            showError(`Already used by ${conflict}.`);
             return Gdk.EVENT_STOP;
         }
 
@@ -176,7 +225,7 @@ function recordShortcut(window, settings, key, title) {
         return Gdk.EVENT_STOP;
     });
 
-    dialog.present();
+    dialog.present(window);
 }
 
 function addShortcutRow(group, window, settings, key, title, subtitle) {
