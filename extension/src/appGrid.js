@@ -36,6 +36,8 @@ export const AppGrid = GObject.registerClass(
             this._buildIndex = 0;
             this._chunkId = 0;
             this._mapId = 0;
+            this._layoutId = 0;
+            this._destroyed = false;
 
             const padding = new Clutter.Margin({
                 left: 24,
@@ -71,7 +73,7 @@ export const AppGrid = GObject.registerClass(
             this.add_child(this._indicators);
 
             this._grid.connect('pages-changed', () => this._syncPages());
-            this._grid.connect('notify::allocation', () => this._layout());
+            this._grid.connect('notify::allocation', () => this._scheduleLayout());
         }
 
         get itemCount() {
@@ -108,6 +110,7 @@ export const AppGrid = GObject.registerClass(
             }
             this._grid.queue_relayout();
             this._layout();
+            this._scheduleLayout();
         }
 
         invalidate() {
@@ -169,7 +172,12 @@ export const AppGrid = GObject.registerClass(
         }
 
         destroy() {
+            this._destroyed = true;
             this._cancelChunks();
+            if (this._layoutId) {
+                GLib.source_remove(this._layoutId);
+                this._layoutId = 0;
+            }
             this._tiles = [];
             super.destroy();
         }
@@ -231,6 +239,7 @@ export const AppGrid = GObject.registerClass(
                 this._grid.appendItem(tile);
                 tile.icon.setIconSize(this._iconSize);
                 tile.queue_relayout();
+                tile.connect('notify::allocation', () => this._scheduleLayout());
                 this._tiles.push(tile);
             }
 
@@ -252,7 +261,24 @@ export const AppGrid = GObject.registerClass(
             }
         }
 
+        // Tiles report their icon size only after they have been allocated.
+        // Rechecking capacity on the next idle keeps the first open after an
+        // icon-size change from using a stale, too-large column count.
+        _scheduleLayout() {
+            if (this._destroyed || this._layoutId)
+                return;
+
+            this._layoutId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                this._layoutId = 0;
+                this._layout();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
         _layout() {
+            if (this._destroyed)
+                return;
+
             const manager = this._grid.layout_manager;
             const width = manager.pageWidth;
             const height = manager.pageHeight;

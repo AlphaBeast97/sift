@@ -290,6 +290,23 @@ export async function run() {
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
     assert(api.glass.cloneCount === 0, 'clones removed on close');
 
+    // A size change while the grid is closed must be right on the next open,
+    // not only after closing and opening again.
+    api.settings.set_int('grid-icon-size', 128);
+    await Scripting.waitLeisure();
+    api.takeover.toggleApps();
+    await waitFor(() => api.appGrid.itemCount > 0,
+        'grid opens after a closed size change', 2000);
+    await waitFor(() => !api.appGrid._chunkId,
+        'grid settles after a closed size change', 2000);
+    await Scripting.waitLeisure();
+    await waitForGrid(api.appGrid._grid,
+        'first open after a closed size change fits');
+    api.overlay.close();
+    await Scripting.waitLeisure();
+    api.settings.set_int('grid-icon-size', 96);
+    await Scripting.waitLeisure();
+
     api.takeover.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.visible && api.overlay.view === 'grid',
