@@ -55,19 +55,6 @@
       <description>Height in logical pixels (it scales with the display) of the expanded search panel; clamped to fit the monitor.</description>
     </key>
 
-    <key name="grid-size" type="s">
-      <choices>
-        <choice value="auto"/>
-        <choice value="4x3"/>
-        <choice value="6x4"/>
-        <choice value="8x4"/>
-        <choice value="10x4"/>
-      </choices>
-      <default>'auto'</default>
-      <summary>App grid size</summary>
-      <description>Columns by rows for the app grid; auto picks the count from the icon size that fits.</description>
-    </key>
-
     <key name="grid-labels" type="b">
       <default>true</default>
       <summary>Show app labels</summary>

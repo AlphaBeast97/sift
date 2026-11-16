@@ -12,12 +12,7 @@ const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
-    'max-results', 'search-height', 'grid-size', 'grid-labels',
-];
-const GRID_SIZES = ['auto', '4x3', '6x4', '8x4', '10x4'];
-const GRID_LABELS = [
-    'Automatic', '4 columns × 3 rows', '6 columns × 4 rows',
-    '8 columns × 4 rows', '10 columns × 4 rows',
+    'max-results', 'search-height', 'grid-labels',
 ];
 
 function valueRow(title, subtitle = '') {
@@ -198,28 +193,6 @@ export default class SiftPreferences extends ExtensionPreferences {
         behavior.add(resultsGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});
-        const sizeRow = new Adw.ComboRow({
-            title: 'Grid size',
-            subtitle: 'The panel stays the same size; icons shrink or grow to fit.',
-            model: new Gtk.StringList({strings: GRID_LABELS}),
-        });
-        // Older releases stored presets that no longer exist, e.g. 8x3.
-        if (!GRID_SIZES.includes(settings.get_string('grid-size')))
-            settings.set_string('grid-size', 'auto');
-        sizeRow.selected = GRID_SIZES.indexOf(settings.get_string('grid-size'));
-        sizeRow.connect('notify::selected', () => {
-            const size = GRID_SIZES[sizeRow.selected];
-            if (settings.get_string('grid-size') !== size)
-                settings.set_string('grid-size', size);
-        });
-        settings.connect('changed::grid-size', () => {
-            const selected = Math.max(0,
-                GRID_SIZES.indexOf(settings.get_string('grid-size')));
-            if (sizeRow.selected !== selected)
-                sizeRow.selected = selected;
-        });
-        gridGroup.add(sizeRow);
-
         const labelsRow = new Adw.SwitchRow({
             title: 'Show app labels',
             subtitle: 'Show app names under the icons.',

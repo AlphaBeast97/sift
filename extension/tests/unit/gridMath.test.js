@@ -1,8 +1,5 @@
 import {equal} from './assert.js';
-import {
-    gridLayout, presetLayout, parseGridSize,
-    indexToCell, cellToIndex, moveSelection, pageSelection,
-} from '../../src/lib/gridMath.js';
+import {gridLayout, indexToCell, cellToIndex, moveSelection, pageSelection} from '../../src/lib/gridMath.js';
 
 export function run() {
     const wide = gridLayout(1000, 600, 96, 100);
@@ -35,38 +32,6 @@ export function run() {
     const tight = gridLayout(100, 100, 200, 1);
     equal(tight.columns, 1);
     equal(tight.rows, 1);
-
-    // A preset is honoured when its smallest tiles fit and reduced when not.
-    const roomy = presetLayout(1040, 726, 8, 3, 65, {
-        columnSpacing: 12,
-        rowSpacing: 12,
-        padding: {left: 24, right: 24, top: 24, bottom: 24},
-    });
-    equal(roomy.columns, 8);
-    equal(roomy.rows, 3);
-
-    const short = presetLayout(904, 374, 3, 8, 65, {
-        columnSpacing: 12,
-        rowSpacing: 12,
-        padding: {left: 24, right: 24, top: 24, bottom: 24},
-    });
-    equal(short.columns, 3);
-    equal(short.rows, 4);
-
-    const narrow = presetLayout(904, 374, 8, 3, 65, {
-        columnSpacing: 12,
-        rowSpacing: 12,
-        padding: {left: 24, right: 24, top: 24, bottom: 24},
-    });
-    equal(narrow.columns, 8);
-    equal(narrow.rows, 3);
-
-    const parsed = parseGridSize('8x3');
-    equal(parsed.columns, 8);
-    equal(parsed.rows, 3);
-    equal(parseGridSize('auto'), null);
-    equal(parseGridSize('0x3'), null);
-    equal(parseGridSize('8X3'), null);
 
     equal(indexToCell(24, 6, 4).page, 1);
     equal(indexToCell(24, 6, 4).cell, 0);

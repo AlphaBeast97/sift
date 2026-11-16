@@ -46,9 +46,9 @@
 
   After logging in, the stock overview appears for a moment before the desktop. Sift should go straight to the desktop.
 
-- [ ] **Add selectable standard app-grid sizes**
+- [ ] **Add selectable standard app-grid sizes** (deferred from the first release)
 
-  Preferences should offer standard grid sizes to choose from.
+  Preferences should offer standard grid sizes. Fixed-panel presets looked poor; revisit together with a panel that sizes itself around the chosen grid.
 
 - [ ] **Make Sift's shortcuts configurable and make the overview takeover optional**
 

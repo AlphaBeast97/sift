@@ -8,16 +8,15 @@ import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as IconGrid from 'resource:///org/gnome/shell/ui/iconGrid.js';
 import * as PageIndicators from 'resource:///org/gnome/shell/ui/pageIndicators.js';
 
-import {gridLayout, parseGridSize, presetLayout, moveSelection, pageSelection} from './lib/gridMath.js';
+import {gridLayout, moveSelection, pageSelection} from './lib/gridMath.js';
 
 const CHUNK_SIZE = 30;
-const MIN_ICON = 16;
 const SPACING = 8;
 
 export const AppGrid = GObject.registerClass(
     class AppGrid extends St.BoxLayout {
-        _init({apps = null, iconSize = 96, gridSize = 'auto', showLabels = true,
-            settings = null, onActivate = null} = {}) {
+        _init({apps = null, iconSize = 96, showLabels = true, settings = null,
+            onActivate = null} = {}) {
             super._init({
                 orientation: Clutter.Orientation.VERTICAL,
                 style_class: 'sift-app-grid',
@@ -28,14 +27,8 @@ export const AppGrid = GObject.registerClass(
             this._apps = apps;
             this._settings = settings;
             this._onActivate = onActivate;
-            this._autoIconSize = iconSize;
             this._iconSize = iconSize;
-            this._gridSize = gridSize;
-            this._preset = parseGridSize(gridSize);
             this._showLabels = showLabels;
-            this._presetKey = '';
-            this._minCell = MIN_ICON;
-            this._minCellKey = '';
             this._records = [];
             this._tiles = [];
             this._selected = 0;
@@ -98,10 +91,6 @@ export const AppGrid = GObject.registerClass(
             return this._iconSize;
         }
 
-        get gridSize() {
-            return this._gridSize;
-        }
-
         setApps(records = []) {
             this._records = records;
             this._selected = Math.min(this._selected,
@@ -110,30 +99,6 @@ export const AppGrid = GObject.registerClass(
 
             if (this.mapped)
                 this._build();
-        }
-
-        setGridSize(value) {
-            if (value === this._gridSize)
-                return;
-
-            this._gridSize = value;
-            this._preset = parseGridSize(value);
-            this._presetKey = '';
-
-            if (!this._preset) {
-                this._grid.layout_manager.fixed_icon_size = this._autoIconSize;
-                if (this._iconSize !== this._autoIconSize) {
-                    this._iconSize = this._autoIconSize;
-                    for (const tile of this._tiles) {
-                        tile.icon.setIconSize(this._iconSize);
-                        tile.queue_relayout();
-                    }
-                }
-            }
-
-            this._grid.queue_relayout();
-            this._layout();
-            this._scheduleLayout();
         }
 
         setShowLabels(show) {
@@ -300,8 +265,8 @@ export const AppGrid = GObject.registerClass(
         }
 
         // Tiles report their icon size only after they have been allocated.
-        // Rechecking on the next idle keeps the first open after a layout
-        // change from using a stale, too-large column count.
+        // Rechecking capacity on the next idle keeps the first open after an
+        // icon-size change from using a stale, too-large column count.
         _scheduleLayout() {
             if (this._destroyed || this._layoutId)
                 return;
@@ -323,88 +288,22 @@ export const AppGrid = GObject.registerClass(
             if (width <= 0 || height <= 0)
                 return;
 
-            let columns, rows;
-            let minCell = MIN_ICON;
-            if (this._preset) {
-                minCell = this._minCellFor(width, height);
-                const layout = presetLayout(width, height,
-                    this._preset.columns, this._preset.rows, minCell, {
-                        columnSpacing: manager.columnSpacing,
-                        rowSpacing: manager.rowSpacing,
-                        padding: manager.pagePadding,
-                    });
-                columns = layout.columns;
-                rows = layout.rows;
-            } else {
-                const cell = Math.max(this._cellSize(), this._iconSize);
-                const layout = gridLayout(width, height, cell,
-                    this.itemCount, {
-                        columnSpacing: manager.columnSpacing,
-                        rowSpacing: manager.rowSpacing,
-                        padding: manager.pagePadding,
-                    });
-                columns = layout.columns;
-                rows = layout.rows;
-            }
-
-            if (columns !== this._columns || rows !== this._rows) {
-                this._columns = columns;
-                this._rows = rows;
-                this._grid.setGridModes([{rows, columns}]);
-                manager.columns_per_page = columns;
-                manager.rows_per_page = rows;
-                this._repage();
-            }
-
-            // A fixed grid gets its icon size from the cell, never from a
-            // pixel slider, so capacity and spacing are known before drawing.
-            if (this._preset && this._tiles.length > 0) {
-                const key = `${width}x${height}:${columns}x${rows}:${minCell}`;
-                if (key !== this._presetKey) {
-                    this._presetKey = key;
-                    this._applyPresetIconSize();
-                }
-            }
-        }
-
-        // IconGridLayout already picks the largest standard icon size whose
-        // tile fits the page, so reuse that instead of a pixel setting.
-        _applyPresetIconSize() {
-            const manager = this._grid.layout_manager;
-            manager.fixed_icon_size = -1;
-            const size = manager._findBestIconSize();
-            if (size === this._iconSize)
+            const cell = Math.max(this._cellSize(), this._iconSize);
+            const layout = gridLayout(width, height, cell,
+                this.itemCount, {
+                    columnSpacing: manager.columnSpacing,
+                    rowSpacing: manager.rowSpacing,
+                    padding: manager.pagePadding,
+                });
+            if (layout.columns === this._columns && layout.rows === this._rows)
                 return;
 
-            this._iconSize = size;
-            for (const tile of this._tiles) {
-                tile.icon.setIconSize(size);
-                tile.queue_relayout();
-            }
-            this._grid.queue_relayout();
-        }
-
-        // The smallest cell the grid can draw is a 16 px icon plus the label
-        // and padding, which do not shrink. Measuring that keeps a preset from
-        // asking for more rows than actually fit.
-        _minCellFor(width, height) {
-            const key = `${width}x${height}:${this._showLabels}:` +
-                St.ThemeContext.get_for_stage(global.stage).scale_factor;
-            if (key === this._minCellKey)
-                return this._minCell;
-
-            const tile = this._tiles[0];
-            if (!tile)
-                return MIN_ICON;
-
-            const size = tile.icon.iconSize;
-            tile.icon.setIconSize(MIN_ICON);
-            this._minCell = Math.max(MIN_ICON,
-                tile.get_preferred_width(-1)[0],
-                tile.get_preferred_height(-1)[0]);
-            tile.icon.setIconSize(size);
-            this._minCellKey = key;
-            return this._minCell;
+            this._columns = layout.columns;
+            this._rows = layout.rows;
+            this._grid.setGridModes([{rows: layout.rows, columns: layout.columns}]);
+            manager.columns_per_page = layout.columns;
+            manager.rows_per_page = layout.rows;
+            this._repage();
         }
 
         // The icon grid sizes cells from the whole tile (icon plus label), not

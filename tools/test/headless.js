@@ -264,7 +264,6 @@ export async function run() {
     assert(api.overlay.entry.text === '', 'entering grid clears query');
     assert(api.glass.rect.width > searchRect.width, 'glass rect follows the grid');
     assert(api.appGrid.iconSize === 96, 'default icon size');
-    assert(api.appGrid.gridSize === 'auto', 'automatic grid size by default');
     await waitFor(() => api.appGrid.itemCount > 0, 'grid apps load', 2000);
     await waitFor(() => !api.appGrid._chunkId, 'grid build settles', 2000);
     await Scripting.waitLeisure();
@@ -279,29 +278,6 @@ export async function run() {
     api.takeover.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'toggle opens the grid from search');
-    const presetIcons = [];
-    for (const [size, columns, rows] of [
-        ['4x3', 4, 3], ['6x4', 6, 4], ['8x4', 8, 4], ['10x4', 10, 4],
-    ]) {
-        api.settings.set_string('grid-size', size);
-        await waitFor(() => api.appGrid.gridSize === size &&
-            api.appGrid._columns === columns && api.appGrid._rows === rows,
-        `${size} capacity applies live`, 2000);
-        presetIcons.push(api.appGrid.iconSize);
-        const manager = api.appGrid._grid.layout_manager;
-        print(`${size}: icon=${api.appGrid.iconSize} ` +
-            `cols=${manager.columns_per_page} rows=${manager.rows_per_page} ` +
-            `page=${manager.pageWidth}x${manager.pageHeight} ` +
-            `cell=${manager._getChildrenMaxSize()}`);
-        await waitForGrid(api.appGrid._grid, `${size} icons fit`);
-    }
-    assert(presetIcons.at(-1) < presetIcons[0],
-        'a denser preset shrinks the icons');
-    assert(api.appGrid.iconSize < 96, 'a denser grid shrinks the icons');
-    api.settings.set_string('grid-size', 'auto');
-    await Scripting.waitLeisure();
-    await waitForGrid(api.appGrid._grid, 'automatic grid fits again');
-    assert(api.appGrid.iconSize === 96, 'automatic restores the icon size');
 
     api.settings.set_boolean('grid-labels', false);
     await Scripting.waitLeisure();
@@ -316,22 +292,22 @@ export async function run() {
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
     assert(api.glass.cloneCount === 0, 'clones removed on close');
 
-    // A grid change while closed must be right on the next open, not only
+    // A layout change while closed must be right on the next open, not only
     // after closing and opening again.
-    api.settings.set_string('grid-size', '8x4');
+    api.settings.set_boolean('grid-labels', false);
     await Scripting.waitLeisure();
     api.takeover.toggleApps();
     await waitFor(() => api.appGrid.itemCount > 0,
-        'grid opens after a closed grid change', 2000);
+        'grid opens after a closed label change', 2000);
     await waitFor(() => !api.appGrid._chunkId,
-        'grid settles after a closed grid change', 2000);
-    await waitFor(() => api.appGrid._columns === 8 && api.appGrid._rows === 4,
-        'first open after a closed grid change has the chosen capacity', 2000);
+        'grid settles after a closed label change', 2000);
+    assert(api.appGrid._tiles.every(tile => !tile.icon.label.visible),
+        'first open after a closed label change hides labels');
     await waitForGrid(api.appGrid._grid,
-        'first open after a closed grid change fits');
+        'first open after a closed label change fits');
     api.overlay.close();
     await Scripting.waitLeisure();
-    api.settings.set_string('grid-size', 'auto');
+    api.settings.set_boolean('grid-labels', true);
     await Scripting.waitLeisure();
 
     api.takeover.toggleApps();
