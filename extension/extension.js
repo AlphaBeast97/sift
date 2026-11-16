@@ -3,7 +3,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Apps} from './src/apps.js';
 import {Daemon} from './src/daemon.js';
-import {OverviewTakeover} from './src/overview.js';
+import {OverviewBlocker} from './src/overview.js';
 import {SiftOverlay} from './src/overlay.js';
 
 export default class SiftExtension extends Extension {
@@ -21,16 +21,16 @@ export default class SiftExtension extends Extension {
             daemon: this._daemon,
         });
         this._daemon.enable();
-        this._takeover = new OverviewTakeover({
+        this._blocker = new OverviewBlocker({
             overlay: this._overlay,
             settings: this._settings,
         });
-        this._takeover.install();
+        this._blocker.install();
     }
 
     disable() {
-        this._takeover?.destroy();
-        this._takeover = null;
+        this._blocker?.destroy();
+        this._blocker = null;
         this._overlay?.destroy();
         this._overlay = null;
         this._daemon?.disable();
@@ -45,7 +45,7 @@ export default class SiftExtension extends Extension {
             extension: this,
             settings: this._settings,
             overlay: this._overlay,
-            takeover: this._takeover,
+            blocker: this._blocker,
             apps: this._apps,
             appGrid: this._overlay?.appGrid ?? null,
             glass: this._overlay?.glass ?? null,

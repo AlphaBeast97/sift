@@ -90,26 +90,42 @@ export async function run() {
     await Scripting.waitLeisure();
 
     let api = ext.getTestAPI();
-    Main.overview.toggle();
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible, 'Super/overview toggle opens Sift');
-    Main.overview.toggle();
-    await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'second toggle closes Sift');
 
+    // The GNOME overview is disabled by default; none of its triggers work.
+    assert(api.settings.get_boolean('disable-overview'),
+        'the GNOME overview is disabled by default');
+    assert(Main.overview.shouldToggleByCornerOrButton() === false,
+        'the hot corner is disabled');
+    Main.overview.toggle();
     Main.overview.show();
+    Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+    Main.overview.focusSearch();
+    Main.layoutManager.showOverview();
     await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'search', 'show() opens search');
+    assert(!Main.overview.visible, 'GNOME overview shortcuts do nothing');
+    assert(!Main.layoutManager.overviewGroup.visible,
+        'the overview group cannot be shown directly');
+    assert(!api.overlay.visible, 'GNOME overview shortcuts do not open Sift');
+    assert(Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'the Sift search shortcut is bound');
+    assert(Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'the Sift app-grid shortcut is bound');
+
+    api.blocker.toggle();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible && api.overlay.view === 'search',
+        'the Sift search shortcut opens search');
     assert(!api.overlay.emptyVisible, 'the empty query shows only the search bar');
     assert(api.glass.rect.height === 60,
         'the empty query uses the compact bar height');
     assert(api.overlay.entry.accessible_name === 'Search', 'entry is named Search');
 
-    Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+    api.blocker.toggleApps();
     await Scripting.waitLeisure();
-    assert(api.overlay.view === 'grid', 'show(APP_GRID) opens grid');
+    assert(api.overlay.view === 'grid',
+        'the Sift app-grid shortcut opens the grid');
 
-    Main.overview.focusSearch();
+    api.overlay.focusSearch();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'search' && api.overlay.entry.clutter_text.has_key_focus(),
         'focusSearch focuses the entry text');
@@ -258,7 +274,7 @@ export async function run() {
     await Scripting.waitLeisure();
 
     api.overlay.entry.set_text('fire');
-    api.takeover.toggleApps();
+    api.blocker.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'grid view is active');
     assert(api.overlay.entry.text === '', 'entering grid clears query');
@@ -275,7 +291,7 @@ export async function run() {
     assert(api.overlay.view === 'search' && api.overlay.entry.text === 't',
         'typing returns to search');
 
-    api.takeover.toggleApps();
+    api.blocker.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'toggle opens the grid from search');
 
@@ -308,7 +324,7 @@ export async function run() {
     // after closing and opening again.
     api.settings.set_boolean('grid-labels', false);
     await Scripting.waitLeisure();
-    api.takeover.toggleApps();
+    api.blocker.toggleApps();
     await waitFor(() => api.appGrid.itemCount > 0,
         'grid opens after a closed label change', 2000);
     await waitFor(() => !api.appGrid._chunkId,
@@ -324,137 +340,136 @@ export async function run() {
     api.settings.set_boolean('grid-labels', true);
     await Scripting.waitLeisure();
 
-    api.takeover.toggleApps();
+    api.blocker.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.visible && api.overlay.view === 'grid',
-        'Super+A opens the grid from closed');
+        'the Sift app-grid shortcut opens the grid from closed');
     api.overlay.close();
     await Scripting.waitLeisure();
 
-    api.overlay.open();
-    await Scripting.waitLeisure();
-
-    Main.overview.hide();
-    await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'hide() closes');
-
-    // A restored session (or another extension) can show the native overview
-    // behind the takeover; hide must still dismiss it.
-    Object.getPrototypeOf(Main.overview).show.call(Main.overview);
-    await Scripting.waitLeisure();
-    assert(Main.overview.visible, 'native overview shown behind the takeover');
-
-    api.takeover.toggleApps();
-    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
-        'Super+A opens the grid over the native overview', 2000);
-    await waitFor(() => !Main.overview.visible,
-        'native overview closes under the grid', 2000);
     api.overlay.close();
     await Scripting.waitLeisure();
 
-    Object.getPrototypeOf(Main.overview).show.call(Main.overview);
+    // Nothing else opens the overview while it is disabled.
+    assert(Main.overview.shouldToggleByCornerOrButton() === false,
+        'the hot corner stays disabled');
+    Main.overview.toggle();
+    Main.overview.show();
+    Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+    Main.layoutManager.showOverview();
     await Scripting.waitLeisure();
-    Main.overview.hide();
-    await Scripting.waitLeisure();
-    assert(!Main.overview.visible, 'hide closes the native overview too');
+    assert(!Main.overview.visible, 'overview triggers do nothing while disabled');
+    assert(!Main.layoutManager.overviewGroup.visible,
+        'the overview group stays hidden while disabled');
+    assert(!api.overlay.visible, 'overview triggers do not open Sift');
 
-    // Sift's own shortcuts must keep working when the stock overview stays.
-    api.settings.set_boolean('overview-takeover', false);
+    // Enabling the GNOME overview restores all of its triggers; Sift's pair
+    // keeps working and closes the overview when it opens.
+    api.settings.set_boolean('disable-overview', false);
     await Scripting.waitLeisure();
-    assert(api.takeover.installed === false,
-        'overview takeover can be turned off');
+    assert(api.blocker.installed === false,
+        'the GNOME overview can be enabled');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'show'),
-        'overview show restored when the takeover is off');
+        'overview show restored when enabled');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'toggle'),
-        'overview toggle restored when the takeover is off');
+        'overview toggle restored when enabled');
+    assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'runStartupAnimation'),
+        'startup animation restored when enabled');
+    assert(!Object.prototype.hasOwnProperty.call(Main.layoutManager, 'showOverview'),
+        'layout showOverview restored when enabled');
     assert(Main.overview._swipeTracker.enabled,
-        'overview swipe restored when the takeover is off');
+        'overview swipe restored when enabled');
+    assert(Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'the Sift search shortcut stays bound with the overview on');
+    assert(Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'the Sift app-grid shortcut stays bound with the overview on');
+
+    Main.overview.toggle();
+    await waitFor(() => Main.overview.visible,
+        'Super opens the GNOME overview when enabled', 2000);
+    api.blocker.toggle();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'the Sift search shortcut opens over the GNOME overview', 2000);
+    await waitFor(() => !Main.overview.visible,
+        'the Sift search shortcut closes the GNOME overview', 2000);
+    api.overlay.close();
+    await Scripting.waitLeisure();
 
     Main.overview.show();
     await waitFor(() => Main.overview.visible,
-        'stock overview opens with the takeover off', 2000);
-    api.takeover.toggle();
-    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
-        'Sift search shortcut opens over the stock overview', 2000);
-    await waitFor(() => !Main.overview.visible,
-        'Sift search shortcut closes the stock overview', 2000);
-    api.overlay.close();
-    await Scripting.waitLeisure();
-
-    api.takeover.toggleApps();
+        'the GNOME overview reopens for the app-grid check', 2000);
+    api.blocker.toggleApps();
     await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
-        'Sift app-grid shortcut works with the takeover off', 2000);
+        'the Sift app-grid shortcut opens over the GNOME overview', 2000);
+    await waitFor(() => !Main.overview.visible,
+        'the Sift app-grid shortcut closes the GNOME overview', 2000);
     api.overlay.close();
     await Scripting.waitLeisure();
 
-    api.settings.set_boolean('overview-takeover', true);
+    // Disabling again suppresses everything, leaving only Sift's shortcuts.
+    api.settings.set_boolean('disable-overview', true);
     await Scripting.waitLeisure();
-    assert(api.takeover.installed, 'overview takeover can be turned back on');
+    assert(api.blocker.installed, 'the GNOME overview can be disabled again');
     Main.overview.toggle();
+    Main.overview.show();
     await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'search',
-        'Super opens Sift again after the takeover is back');
-    Main.overview.toggle();
+    assert(!Main.overview.visible,
+        'the GNOME overview stays closed after disabling again');
+    assert(!api.overlay.visible, 'GNOME overview triggers do not open Sift');
+    api.blocker.toggle();
     await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'second Super toggle closes Sift');
+    assert(api.overlay.visible, 'the Sift shortcut still opens Sift');
+    api.blocker.toggle();
+    await Scripting.waitLeisure();
+    assert(!api.overlay.visible, 'the Sift shortcut closes Sift');
 
-    // With the takeover on, the Sift pair must not be a second way in.
-    assert(!Main.wm._allowedKeybindings['sift-search-shortcut'],
-        'the Sift search shortcut stays unbound while takeover owns Super');
-    assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
-        'the Sift app-grid shortcut stays unbound while takeover owns Super+A');
-
-    // A recorded search shortcut replaces Super instead of adding a second one.
+    // A custom accelerator replaces the default and stays bound.
     api.settings.set_strv('sift-search-shortcut', ['<Control>k']);
     await Scripting.waitLeisure();
     assert(Main.wm._allowedKeybindings['sift-search-shortcut'],
         'a custom search shortcut is bound');
-    Main.overview.toggle();
-    await waitFor(() => Main.overview.visible,
-        'Super falls back to GNOME with a custom search shortcut', 2000);
-    assert(!api.overlay.visible, 'Super no longer opens Sift once customized');
-    Main.overview.hide();
+    api.blocker.toggle();
     await Scripting.waitLeisure();
-    api.takeover.toggle();
-    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
-        'the custom search shortcut still opens Sift', 2000);
-    api.overlay.close();
+    assert(api.overlay.visible, 'Sift opens after customizing the search shortcut');
+    api.blocker.toggle();
     await Scripting.waitLeisure();
-
     api.settings.reset('sift-search-shortcut');
     await Scripting.waitLeisure();
-    assert(!Main.wm._allowedKeybindings['sift-search-shortcut'],
-        'resetting the search shortcut releases the Sift binding');
-    Main.overview.toggle();
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible, 'Super opens Sift again after reset');
-    Main.overview.toggle();
-    await Scripting.waitLeisure();
+    assert(Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'the search shortcut stays bound after reset');
+    assert(api.settings.get_strv('sift-search-shortcut')[0] === '<Control>space',
+        'the search shortcut default is restored');
 
-    // The same applies to the app grid: custom opens Sift, Super+A is GNOME's.
     api.settings.set_strv('sift-apps-shortcut', ['<Control>j']);
     await Scripting.waitLeisure();
     assert(Main.wm._allowedKeybindings['sift-apps-shortcut'],
         'a custom app-grid shortcut is bound');
-    api.takeover.toggleApps();
-    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
-        'the custom app-grid shortcut opens Sift', 2000);
+    api.blocker.toggleApps();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible && api.overlay.view === 'grid',
+        'Sift opens the grid after customizing the app-grid shortcut');
     api.overlay.close();
     await Scripting.waitLeisure();
     api.settings.reset('sift-apps-shortcut');
     await Scripting.waitLeisure();
-    assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
-        'resetting the app-grid shortcut releases the Sift binding');
+    assert(api.settings.get_strv('sift-apps-shortcut')[0] === '<Alt>a',
+        'the app-grid shortcut default is restored');
 
     Main.extensionManager.disableExtension(UUID);
     await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.INACTIVE,
         'extension is inactive on disable');
     assert(Main.modalCount === 0, 'modal grab released');
-    assert(api.takeover.installed === false, 'takeover uninstalled');
+    assert(api.blocker.installed === false, 'overview blocker uninstalled');
+    assert(!Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'the search shortcut is unbound on disable');
+    assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'the app-grid shortcut is unbound on disable');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'show'), 'show restored');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'toggle'), 'toggle restored');
     assert(!Object.prototype.hasOwnProperty.call(Main.overview, 'runStartupAnimation'),
         'startup animation restored');
+    assert(!Object.prototype.hasOwnProperty.call(Main.layoutManager, 'showOverview'),
+        'layout showOverview restored');
     assert(Main.overview._swipeTracker.enabled, 'swipe tracker restored');
 
     Main.overview.toggle();
@@ -471,7 +486,11 @@ export async function run() {
         'extension re-enables after the restore check');
     await waitFor(() => !Main.overview.visible, 'enable closes a pre-existing overview');
     api = Extension.lookupByUUID(UUID).getTestAPI();
-    assert(api.takeover.installed, 'takeover reinstalled');
+    assert(api.blocker.installed, 'overview blocker reinstalled');
+    assert(Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'the search shortcut is bound again on enable');
+    assert(Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'the app-grid shortcut is bound again on enable');
 
     print('sift shell smoke ok');
 }

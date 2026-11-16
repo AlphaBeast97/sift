@@ -217,7 +217,7 @@ siftd (Rust, one process)
 - Daemon exits if it cannot own its bus name (a second instance), on `Quit` after
   flushing the cache, and on session bus disconnect.
 
-## 8. Taking over the Overview
+## 8. Disabling the Overview
 
 This is the highest-risk area. The implementation is deliberately narrow and every
 change is reversible.
@@ -226,109 +226,79 @@ change is reversible.
 
 - **Super alone** is Mutter's `overlay-key` (default `'Super'`). `OverviewControls`
   connects to `global.display`'s `overlay-key` signal and calls
-  `Main.overview.toggle()` dynamically. The `toggle-overview` GSettings binding exists
-  but defaults to `[]`; it only matters if the user has assigned it.
+  `Main.overview.toggle()` dynamically. `toggle-overview` (default `<Super>Tab`) also
+  calls `Main.overview.toggle()`.
 - **Activities button, hot corner, and shell D-Bus** call
   `Main.overview.toggle()` / `show()` / `hide()` dynamically. Wrapping the instance
   methods catches them without patching each caller.
 - **`toggle-application-view`** (Super+A or user binding) calls
-  `Main.overview.show(ControlsState.APP_GRID)` dynamically, so it opens Sift's app grid.
-- **Touchpad overview gesture** uses `Main.overview._swipeTracker`, which directly
-  drives the native overview and bypasses public methods. It must be disabled.
+  `Main.overview.show(ControlsState.APP_GRID)` dynamically.
+- **Touchpad overview gesture** uses `Main.overview._swipeTracker`, which drives
+  `Main.layoutManager.showOverview()` directly and bypasses the public methods.
+- **Login** calls `Main.overview.runStartupAnimation()`, which also calls
+  `Main.layoutManager.showOverview()`.
 - **`Main.overview` is an ESM live binding** and cannot be replaced. Only instance
   methods can be shadowed.
 
 ### 8.2 The patch set
 
-On enable:
+`disable-overview` (default true) blocks every GNOME overview trigger; Sift's own pair
+is always registered and is the only way to open Sift.
 
-1. For each name in `show`, `hide`, `toggle`, `focusSearch`, `showApps`, and
-   `shouldToggleByCornerOrButton`, record whether it is an **own** property of the
-   `Main.overview` instance and save the current value. This matters because another
-   extension may already have patched one of them; restoring must put back that exact
-   value, or delete our shadow if there was none.
-2. Shadow them on the `Main.overview` instance with wrappers:
-   - `show(state = WINDOW_PICKER)` → open Sift in search view, except when
-     `state === OverviewControls.ControlsState.APP_GRID`, which opens the app grid.
-   - `showApps()` → open Sift in app-grid view.
-   - `hide()` → close Sift.
-   - `toggle()` → toggle Sift (closing from either view).
-   - `focusSearch()` → open Sift in search view and focus the entry.
-   - `shouldToggleByCornerOrButton()` → mirror the stock semantics (no toggle while our
-     open/close animation runs, and no toggle within 0.5 s of our last open) so the
-     hot-corner-then-Activities double trigger stays guarded without touching native
-     private state.
-   `OverviewControls.ControlsState` is exported by `js/ui/overviewControls.js`.
-3. Remove and re-add `toggle-overview` **only if** it has a non-empty binding; bind it
-   to our toggle with the same `org.gnome.shell.keybindings` schema, flags
-   `IGNORE_AUTOREPEAT`, and modes `NORMAL | OVERVIEW`. On disable, remove ours and
-   re-add a dynamic `() => Main.overview.toggle()` handler (after the wrappers are
-   restored, this resolves to the stock method).
-   No new keybinding is added for Super+A: `OverviewControls._toggleAppsPage()` calls
-   `Main.overview.show(ControlsState.APP_GRID)` whenever `Main.overview.visible` is
-   false, which is always true under the takeover, so the stock `<Super>a` binding
-   reaches our wrapper. `toggle-application-view` is left untouched.
-4. The native Overview may already be visible when Sift enables (a restored
-   session). Close it through the saved original `hide` at the end of install.
-   Every wrapper that opens Sift closes the native Overview the same way first,
-   and `hide()` closes Sift and then the native Overview if it is still visible.
-   A wrapper that only closes Sift makes Escape a no-op and traps the user in the
-   stock Overview; the M0 spike reproduced this.
-5. Set `Main.overview._swipeTracker.enabled = false` (a public GObject property) and
-   restore its previous value on disable. Do not destroy the tracker.
-6. Track open/closed state ourselves; do not rely on `Main.overview.visible`.
-7. On disable: close and destroy the overlay and grid, pop the modal grab, restore each
-   saved value or delete the shadow (per step 1), re-add the original binding if removed,
-   restore the swipe tracker, and verify no signal handlers remain.
+1. Save and shadow `show`, `showApps`, `toggle`, and
+   `shouldToggleByCornerOrButton` on `Main.overview` with no-op/false wrappers, and
+   `runStartupAnimation` with an async no-op so login skips the overview. `hide` is
+   saved too so the startup overview can be dismissed.
+2. Save and shadow `Main.layoutManager.showOverview` with a no-op, so the swipe
+   gesture and any other direct caller cannot reveal the overview group.
+3. Set `Main.overview._swipeTracker.enabled = false` (a public GObject property) and
+   restore its previous value when the block is lifted.
+4. If the overview is somehow visible at enable, dismiss it through the saved
+   original `hide` plus `Main.layoutManager.hideOverview()`. During login, also
+   dismiss it on the `showing` signal in case the shell started the animation before
+   extensions were enabled.
+5. Add `sift-search-shortcut` and `sift-apps-shortcut` with
+   `Main.wm.addKeybinding` (our settings schema, `IGNORE_AUTOREPEAT`,
+   `NORMAL | OVERVIEW`). Their handlers close a visible native overview first, then
+   open Sift. They exist in both switch states.
+6. On `disable-overview = false` or on extension disable, restore every saved method
+   (or delete our shadow if another extension had not patched it), restore the swipe
+   tracker, and remove the two keybindings.
 
 ### 8.3 Deliberate non-patches
 
 - Do **not** replace `Main.overview` (impossible) and do **not** emit its
-  `showing`/`hiding`/`shown`/`hidden` signals. Those signals drive the workspace
-  animation, native search focus, dash, app grid, and shell D-Bus; emitting them
-  without the native overview being shown would put modules into inconsistent states.
-- Do **not** shadow the `visible` getter. Native modules keep seeing `false`.
+  `showing`/`hiding`/`shown`/`hidden` signals.
+- Do **not** shadow the `visible` getter. Native modules keep seeing `false` while the
+  overview is blocked.
 - Do **not** hide `Main.layoutManager.overviewGroup` permanently; it is already hidden
-  when the native overview is not shown. BMS's overview component therefore stays
-  invisible.
+  when the overview is not shown. BMS's overview component therefore stays invisible.
 
 **Known cosmetic differences** accepted in v1: the Activities button does not get its
-"checked" pseudo-class, window-open animations are not suppressed, and shell D-Bus
-`OverviewActive` reports false. None affect Sift's behavior. Revisit only if the
-override tests show a real problem.
+"checked" pseudo-class while blocked, and shell D-Bus `OverviewActive` reports false.
+Revisit only if real use shows a problem.
 
 ### 8.4 Edge cases
 
 - **Fullscreen:** `Main.pushModal()` calls `global.compositor.disable_unredirect()`
   while the panel is open (and `popModal()` re-enables it), so the glass renders over
-  fullscreen windows. The hot corner intentionally stays inert over fullscreen windows
-  (stock behavior); Super still works.
-- **Second Super while open:** the `overlay-key` handler calls our `toggle()`, which
-  closes from either view.
-- **Super+A while open:** the stock binding calls `show(APP_GRID)` again and keeps the
-  grid open; it does not toggle back because the native `visible` is always false.
-  Escape closes, typing switches to search, and the entry's view button toggles by hand.
+  fullscreen windows.
+- **Second shortcut press while open:** the Sift handler closes the panel from either
+  view.
+- **GNOME overview enabled:** Super, Super+A, Activities, hot corner, swipe and login
+  behave normally; Sift's pair still opens Sift and closes a visible overview first.
 - **App list changes while the grid is open:** `installed-changed` marks the grid dirty;
-  the visible grid is left alone and rebuilt on the next open, so icons do not vanish
-  under the pointer.
+  the visible grid is left alone and rebuilt on the next open.
 - **App activation from the grid:** `AppIcon.activate()` calls `Main.overview.hide()`;
-  because that call is wrapped, it closes Sift after launching. No separate handler is
-  needed.
-- **Super+Alt+Up/Down (`shift-overview-up`/`down`):** these bypass the public methods and
-  drive the native state adjustment directly. With the native overview always hidden,
-  `down` is a no-op and `up` reaches `Main.overview.show()`, which our wrapper turns into
-  Sift. Harmless; they are left untouched in v1 to keep the patch set smaller.
-- **Sticky Keys enabled:** Mutter's `overlay-key` handler returns early (stock behavior),
-  so Super alone does nothing. The Activities button, hot corner, and Super+A still open
-  Sift. No workaround is attempted in v1.
+  with the block lifted that hides the GNOME overview; Sift closes itself separately.
+- **Sticky Keys enabled:** Mutter's `overlay-key` handler returns early; the block
+  still covers Activities, hot corner, Super+A and the swipe gesture.
 - **Session lock / user switch:** the extension is `["user"]`-only, so the shell runs
-  `disable()` on lock and `enable()` on unlock. `disable()` must close and destroy
-  everything; `enable()` must never open on its own. As defense in depth, the open path
-  refuses to run unless `Main.sessionMode.currentMode === 'user'`.
-- **Extension disabled while open:** `disable()` pops the modal and destroys the actor;
-  the shell must not be left grabbed.
-- **Shell error:** if any required method/field is missing at enable, log once and
-  refuse to enable rather than half-patch the Overview.
+  `disable()` on lock and `enable()` on unlock, restoring the overview either way.
+- **Extension disabled while open:** `disable()` pops the modal and destroys the actor,
+  removes the two keybindings, and restores the overview.
+- **Shell error:** if a required method/field is missing at enable, log once and
+  refuse to enable rather than half-patch the overview.
 
 ## 9. Search
 
@@ -715,9 +685,9 @@ the "Rebuild index" button; it never touches shell actors.
 | `max-results` | int | 4–12; 6 | Maximum rows in the search view. |
 | `search-height` | int | 144–716; 404 | Expanded search-panel height in logical pixels; clamped to the monitor. |
 | `grid-labels` | bool | true | Show app names under grid icons; the cell geometry is unchanged. |
-| `overview-takeover` | bool | true | Replace GNOME's overview with Sift; off keeps GNOME's overview and binds the pair below. |
-| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search. With the takeover on and no user value, Super is the active trigger and this key is unbound; a recorded value replaces Super. |
-| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid. With the takeover on and no user value, Super+A is the active trigger and this key is unbound; a recorded value replaces Super+A. |
+| `disable-overview` | bool | true | Blocks GNOME's overview: Super, Super+A, Activities, the hot corner, swipe and the login overview do nothing. Off keeps GNOME's overview. Sift's pair below always works. |
+| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search; bound whether the GNOME overview is enabled or disabled. |
+| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid; bound whether the GNOME overview is enabled or disabled. |
 
 - **Groups:** Appearance (mode combo, opacity, blur radius, tint, animations), Behavior
   (search height, max results, app-grid labels, overview takeover, both shortcuts), and
@@ -731,10 +701,9 @@ the "Rebuild index" button; it never touches shell actors.
 - **Live apply:** the extension connects `changed::<key>` for every key. Glass keys
   update uniforms or rebuild the effect in place; `max-results` re-renders the current
   results; `grid-labels` relabels the cached grid without relayout; shortcut changes
-  immediately rebind the Sift pair or return Super/Super+A to GNOME;
-  `overview-takeover` installs or restores the overview wrappers immediately. No shell
-  restart and no reopen is required. Changes made while Sift is closed apply on the next
-  open.
+  rebind the Sift pair immediately; `disable-overview` blocks or restores every GNOME
+  overview trigger immediately. No shell restart and no reopen is required. Changes made
+  while Sift is closed apply on the next open.
 - **File indexing:** a note row explains that indexing runs in `siftd`, is configured in
   `~/.config/sift/config.toml`, and is disabled with `roots = []`. "Rebuild index" calls
   `Reindex`, which re-reads `config.toml` and rebuilds in the background; a toast reports

@@ -3,10 +3,12 @@
 Spotlight-style search for GNOME Shell 51: applications, files, a calculator, an
 app grid, and liquid glass.
 
-Sift replaces the GNOME Overview. Super, Activities, and the top-left hot corner
-open a centered search panel; Super+A opens the app grid. The UI and glass run in
-GJS. File indexing, fuzzy matching, and calculations run in a small Rust daemon
-(`siftd`) so the shell process stays responsive.
+Sift disables the GNOME Overview by default: Super, Super+A, Activities, the hot
+corner and the login overview do nothing, and Sift opens with **Ctrl+Space**;
+**Alt+A** opens its app grid. Turn off "Disable the GNOME overview" in the
+preferences to keep GNOME's overview; Sift's shortcuts keep working. The UI and
+glass run in GJS. File indexing, fuzzy matching, and calculations run in a small
+Rust daemon (`siftd`) so the shell process stays responsive.
 
 ## Requirements
 
@@ -47,9 +49,12 @@ gnome-extensions enable sift@alphabeast97.github.io
 
 ## Use
 
-- **Super**, **Activities**, or the top-left hot corner: open or close Sift.
-- **Super+A**, the grid button in the search bar, or the empty-state button: open
+- **Ctrl+Space**: open or close Sift search.
+- **Alt+A**, the grid button in the search bar, or the empty-state button: open
   the app grid.
+- Both shortcuts work whether the GNOME overview is disabled or enabled. With it
+  disabled (default), Super, Super+A, Activities and the hot corner do nothing,
+  and login goes straight to the desktop.
 - Type to search applications. Two or more characters also search file names,
   directories, and evaluate arithmetic and unit expressions.
 - **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.
