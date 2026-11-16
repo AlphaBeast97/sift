@@ -123,6 +123,10 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(api.overlay.visible && api.overlay.view === 'grid',
         'Super+A opens the Sift app grid');
+    Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible && api.overlay.view === 'search',
+        'Super+A again returns to search');
     api.overlay.close();
     await Scripting.waitLeisure();
 

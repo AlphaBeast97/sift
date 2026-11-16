@@ -134,7 +134,7 @@ export class OverviewBlocker {
         // overlay key separately. Super+A arrives as show(APP_GRID).
         Main.overview.show = state => {
             if (state === ControlsState.APP_GRID && this._isDefault(APPS_KEY))
-                this._closeNative(() => this._overlay.showApps());
+                this.toggleApps();
         };
         Main.overview.showApps = () => {};
         Main.overview.toggle = () => {};

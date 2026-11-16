@@ -34,7 +34,7 @@
 
 ## Additional issues
 
-- [ ] **Super+A does not open Sift on first try**
+- [x] **Super+A does not open Sift on first try**
 
   After login, Super+A does not open the app grid until Super is pressed first; occasionally it still fails afterwards.
 
@@ -50,8 +50,8 @@
 
   Preferences should offer standard grid sizes. Fixed-panel presets looked poor; revisit together with a panel that sizes itself around the chosen grid.
 
-- [ ] **Make Sift's shortcuts configurable and make the overview takeover optional**
+- [x] **Make Sift's shortcuts configurable and make the overview takeover optional**
 
-  Preferences should let people pick their own Sift shortcuts without overwriting existing keybindings. They should also choose whether Sift disables GNOME's overview. If the overview stays enabled, give Sift a second pair of shortcuts (Alt+Tab, Alt+A) so both can coexist.
+  Preferences should let people pick their own Sift shortcuts without overwriting existing keybindings. They should also choose whether Sift disables GNOME's overview. If the overview stays enabled, give Sift a second pair of shortcuts (Ctrl+Space, Alt+A) so both can coexist.
 
 - [ ] Add newly identified issues here as they are reported.

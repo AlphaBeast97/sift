@@ -209,10 +209,8 @@ function recordShortcut(window, settings, key, title) {
         }
 
         const accel = shortcutFromKey(keyval, state);
-        if (!accel) {
-            showError('Hold Ctrl, Alt, Shift or Super and press another key.');
+        if (!accel)
             return Gdk.EVENT_STOP;
-        }
 
         const conflict = findShortcutConflict(accel, bindings);
         if (conflict) {
