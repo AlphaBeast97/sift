@@ -101,7 +101,8 @@ function recordShortcut(window, settings, key, title) {
         title: `Set ${title}`,
         use_header_bar: true,
     });
-    dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
+    const cancel = dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
+    cancel.connect('clicked', () => dialog.close());
 
     const content = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -121,12 +122,14 @@ function recordShortcut(window, settings, key, title) {
     });
     content.append(prompt);
     content.append(error);
-    content.can_focus = true;
     dialog.get_content_area().append(content);
     const bindings = shortcutBindings(settings, key);
 
+    // Capture on the window: focus starts on the Cancel button, so a
+    // controller on the content box never sees the key presses.
     const controller = new Gtk.EventControllerKey();
-    content.add_controller(controller);
+    controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE);
+    dialog.add_controller(controller);
     controller.connect('key-pressed', (_controller, keyval, _keycode, state) => {
         if (keyval === Gdk.KEY_Escape) {
             dialog.close();
@@ -151,7 +154,6 @@ function recordShortcut(window, settings, key, title) {
     });
 
     dialog.present();
-    content.grab_focus();
 }
 
 function addShortcutRow(group, window, settings, key, title, subtitle) {
