@@ -715,9 +715,9 @@ the "Rebuild index" button; it never touches shell actors.
 | `max-results` | int | 4–12; 6 | Maximum rows in the search view. |
 | `search-height` | int | 144–716; 404 | Expanded search-panel height in logical pixels; clamped to the monitor. |
 | `grid-labels` | bool | true | Show app names under grid icons; the cell geometry is unchanged. |
-| `overview-takeover` | bool | true | Replace GNOME's overview with Sift; off keeps GNOME's overview and Sift's own shortcuts. |
-| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search; Sift never rewrites GNOME bindings. |
-| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid. |
+| `overview-takeover` | bool | true | Replace GNOME's overview with Sift; off keeps GNOME's overview and binds the pair below. |
+| `sift-search-shortcut` | string array | `<Control>space` | Opens Sift search. With the takeover on and no user value, Super is the active trigger and this key is unbound; a recorded value replaces Super. |
+| `sift-apps-shortcut` | string array | `<Alt>a` | Opens Sift's app grid. With the takeover on and no user value, Super+A is the active trigger and this key is unbound; a recorded value replaces Super+A. |
 
 - **Groups:** Appearance (mode combo, opacity, blur radius, tint, animations), Behavior
   (search height, max results, app-grid labels, overview takeover, both shortcuts), and
@@ -730,10 +730,11 @@ the "Rebuild index" button; it never touches shell actors.
   per-row reset button.
 - **Live apply:** the extension connects `changed::<key>` for every key. Glass keys
   update uniforms or rebuild the effect in place; `max-results` re-renders the current
-  results; `grid-labels` relabels the cached grid without relayout; shortcut changes are
-  picked up by the shell's keybinding watcher; `overview-takeover` installs or restores
-  the overview wrappers immediately. No shell restart and no reopen is required. Changes
-  made while Sift is closed apply on the next open.
+  results; `grid-labels` relabels the cached grid without relayout; shortcut changes
+  immediately rebind the Sift pair or return Super/Super+A to GNOME;
+  `overview-takeover` installs or restores the overview wrappers immediately. No shell
+  restart and no reopen is required. Changes made while Sift is closed apply on the next
+  open.
 - **File indexing:** a note row explains that indexing runs in `siftd`, is configured in
   `~/.config/sift/config.toml`, and is disabled with `roots = []`. "Rebuild index" calls
   `Reindex`, which re-reads `config.toml` and rebuilds in the background; a toast reports

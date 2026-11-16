@@ -398,6 +398,54 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(!api.overlay.visible, 'second Super toggle closes Sift');
 
+    // With the takeover on, the Sift pair must not be a second way in.
+    assert(!Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'the Sift search shortcut stays unbound while takeover owns Super');
+    assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'the Sift app-grid shortcut stays unbound while takeover owns Super+A');
+
+    // A recorded search shortcut replaces Super instead of adding a second one.
+    api.settings.set_strv('sift-search-shortcut', ['<Control>k']);
+    await Scripting.waitLeisure();
+    assert(Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'a custom search shortcut is bound');
+    Main.overview.toggle();
+    await waitFor(() => Main.overview.visible,
+        'Super falls back to GNOME with a custom search shortcut', 2000);
+    assert(!api.overlay.visible, 'Super no longer opens Sift once customized');
+    Main.overview.hide();
+    await Scripting.waitLeisure();
+    api.takeover.toggle();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'the custom search shortcut still opens Sift', 2000);
+    api.overlay.close();
+    await Scripting.waitLeisure();
+
+    api.settings.reset('sift-search-shortcut');
+    await Scripting.waitLeisure();
+    assert(!Main.wm._allowedKeybindings['sift-search-shortcut'],
+        'resetting the search shortcut releases the Sift binding');
+    Main.overview.toggle();
+    await Scripting.waitLeisure();
+    assert(api.overlay.visible, 'Super opens Sift again after reset');
+    Main.overview.toggle();
+    await Scripting.waitLeisure();
+
+    // The same applies to the app grid: custom opens Sift, Super+A is GNOME's.
+    api.settings.set_strv('sift-apps-shortcut', ['<Control>j']);
+    await Scripting.waitLeisure();
+    assert(Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'a custom app-grid shortcut is bound');
+    api.takeover.toggleApps();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'the custom app-grid shortcut opens Sift', 2000);
+    api.overlay.close();
+    await Scripting.waitLeisure();
+    api.settings.reset('sift-apps-shortcut');
+    await Scripting.waitLeisure();
+    assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
+        'resetting the app-grid shortcut releases the Sift binding');
+
     Main.extensionManager.disableExtension(UUID);
     await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.INACTIVE,
         'extension is inactive on disable');

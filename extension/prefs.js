@@ -88,10 +88,47 @@ function shortcutBindings(settings, key) {
     const bindings = gnomeBindings();
     const otherKey = key === 'sift-search-shortcut'
         ? 'sift-apps-shortcut' : 'sift-search-shortcut';
-    const other = settings.get_strv(otherKey);
-    if (other.length > 0)
-        bindings.push({action: 'Sift\'s other shortcut', accels: other});
+    const otherActive = settings.get_user_value(otherKey) !== null ||
+        !settings.get_boolean('overview-takeover');
+    if (otherActive) {
+        const other = settings.get_strv(otherKey);
+        if (other.length > 0)
+            bindings.push({action: 'Sift\'s other shortcut', accels: other});
+    }
     return bindings;
+}
+
+function overlayKeyName() {
+    const mutter = new Gio.Settings({schema_id: 'org.gnome.mutter'});
+    return mutter.get_string('overlay-key') || 'Super';
+}
+
+function gnomeAccelerator(schemaId, key) {
+    const schema = Gio.SettingsSchemaSource.get_default()?.lookup(schemaId, true);
+    if (!schema)
+        return '';
+    const gnome = new Gio.Settings({settings_schema: schema});
+    return gnome.get_strv(key)[0] ?? '';
+}
+
+function acceleratorLabel(accel) {
+    const [ok, keyval, mods] = Gtk.accelerator_parse(accel);
+    return ok ? Gtk.accelerator_get_label(keyval, mods) : accel;
+}
+
+// The text must match the shortcut that Sift actually binds.
+function shortcutText(settings, key) {
+    if (settings.get_user_value(key) === null &&
+        settings.get_boolean('overview-takeover')) {
+        if (key === 'sift-search-shortcut')
+            return overlayKeyName();
+
+        const accel = gnomeAccelerator('org.gnome.shell.keybindings',
+            'toggle-application-view');
+        return acceleratorLabel(accel || '<Super>a');
+    }
+
+    return acceleratorLabel(settings.get_strv(key)[0] ?? '') || 'Not set';
 }
 
 function recordShortcut(window, settings, key, title) {
@@ -158,9 +195,7 @@ function recordShortcut(window, settings, key, title) {
 
 function addShortcutRow(group, window, settings, key, title, subtitle) {
     const row = valueRow(title, subtitle);
-    const label = new Gtk.ShortcutLabel({
-        accelerator: settings.get_strv(key)[0] ?? '',
-        disabled_text: 'Not set',
+    const label = new Gtk.Label({
         valign: Gtk.Align.CENTER,
     });
     const button = new Gtk.Button({
@@ -172,10 +207,12 @@ function addShortcutRow(group, window, settings, key, title, subtitle) {
     const reset = resetButton(settings, key);
 
     const sync = () => {
-        label.accelerator = settings.get_strv(key)[0] ?? '';
+        label.label = shortcutText(settings, key);
         reset.sensitive = settings.get_user_value(key) !== null;
     };
     settings.connect(`changed::${key}`, sync);
+    settings.connect('changed::overview-takeover', sync);
+    sync();
     button.connect('clicked', () => recordShortcut(window, settings, key, title));
 
     row.add_suffix(button);
@@ -356,11 +393,11 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const shortcutGroup = new Adw.PreferencesGroup({
             title: 'Shortcuts',
-            description: 'Sift never changes the GNOME shortcuts.',
+            description: 'Only the shortcuts shown here open Sift. GNOME shortcuts are never changed.',
         });
         const takeoverRow = new Adw.SwitchRow({
             title: 'Replace the GNOME overview',
-            subtitle: 'Super, Activities, the hot corner and Super+A open Sift. Turn off to keep the GNOME overview; the shortcuts below still open Sift.',
+            subtitle: 'Super, Activities, the hot corner and Super+A open Sift. Recording a shortcut replaces that trigger. Turn off to keep GNOME\'s overview.',
         });
         settings.bind('overview-takeover', takeoverRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);

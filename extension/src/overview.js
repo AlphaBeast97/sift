@@ -9,8 +9,9 @@ import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewContro
 
 const PATCHED = ['show', 'hide', 'toggle', 'focusSearch', 'showApps',
     'shouldToggleByCornerOrButton', 'runStartupAnimation'];
-const SIFT_SHORTCUTS = ['sift-search-shortcut', 'sift-apps-shortcut'];
 const ACTIVATION_GUARD_MS = 500;
+const KEY_FLAGS = Meta.KeyBindingFlags.IGNORE_AUTOREPEAT;
+const KEY_MODES = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
 
 export class OverviewTakeover {
     constructor({overlay, settings}) {
@@ -23,8 +24,9 @@ export class OverviewTakeover {
         this._keybindingInstalled = false;
         this._appsKeybindingInstalled = false;
         this._startupShowingId = 0;
-        this._shortcutsInstalled = false;
-        this._settingsId = 0;
+        this._settingsIds = [];
+        this._searchInstalled = false;
+        this._appsInstalled = false;
         this._installed = false;
     }
 
@@ -33,31 +35,26 @@ export class OverviewTakeover {
     }
 
     install() {
-        if (this._shortcutsInstalled)
+        if (this._settingsIds.length > 0)
             return;
 
-        this._addSiftShortcut('sift-search-shortcut', () => this.toggle());
-        this._addSiftShortcut('sift-apps-shortcut', () => this.toggleApps());
-        this._shortcutsInstalled = true;
-
-        this._settingsId = this._settings.connect('changed::overview-takeover',
-            () => this._syncOverview());
-        this._syncOverview();
+        const keys = ['overview-takeover', 'sift-search-shortcut',
+            'sift-apps-shortcut'];
+        for (const key of keys)
+            this._settingsIds.push(this._settings.connect(`changed::${key}`,
+                () => this._sync()));
+        this._sync();
     }
 
     destroy() {
-        if (this._settingsId) {
-            this._settings.disconnect(this._settingsId);
-            this._settingsId = 0;
-        }
+        for (const id of this._settingsIds)
+            this._settings.disconnect(id);
+        this._settingsIds = [];
 
         this._uninstallOverview();
 
-        if (this._shortcutsInstalled) {
-            for (const key of SIFT_SHORTCUTS)
-                Main.wm.removeKeybinding(key);
-            this._shortcutsInstalled = false;
-        }
+        this._bindSift('sift-search-shortcut', () => {}, false);
+        this._bindSift('sift-apps-shortcut', () => {}, false);
     }
 
     toggle() {
@@ -74,15 +71,28 @@ export class OverviewTakeover {
             this._showApps();
     }
 
-    _syncOverview() {
-        const enabled = this._settings.get_boolean('overview-takeover');
-        if (enabled === this._installed)
-            return;
+    _sync() {
+        const takeover = this._settings.get_boolean('overview-takeover');
 
-        if (enabled)
+        if (takeover)
             this._installOverview();
         else
             this._uninstallOverview();
+
+        if (this._installed)
+            this._syncNativeTriggers();
+
+        // One pair only: with the takeover on and no custom shortcut, the
+        // GNOME overview triggers are the Sift shortcuts. A recorded shortcut
+        // replaces its default trigger instead of adding a second one.
+        this._bindSift('sift-search-shortcut', () => this.toggle(),
+            !takeover || this._hasCustom('sift-search-shortcut'));
+        this._bindSift('sift-apps-shortcut', () => this.toggleApps(),
+            !takeover || this._hasCustom('sift-apps-shortcut'));
+    }
+
+    _hasCustom(key) {
+        return this._settings.get_user_value(key) !== null;
     }
 
     _installOverview() {
@@ -115,6 +125,11 @@ export class OverviewTakeover {
             this._closeNative();
         };
         Main.overview.toggle = () => {
+            // A custom search shortcut releases Super to GNOME.
+            if (this._hasCustom('sift-search-shortcut')) {
+                this._nativeToggle();
+                return;
+            }
             if (this._overlay.visible)
                 this._overlay.close();
             else
@@ -145,23 +160,6 @@ export class OverviewTakeover {
         }
 
         this._keySettings = new Gio.Settings({schema_id: 'org.gnome.shell.keybindings'});
-        if (this._keySettings.get_strv('toggle-overview').length > 0) {
-            Main.wm.removeKeybinding('toggle-overview');
-            Main.wm.addKeybinding('toggle-overview', this._keySettings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-                () => this.toggle());
-            this._keybindingInstalled = true;
-        }
-
-        if (this._keySettings.get_strv('toggle-application-view').length > 0) {
-            Main.wm.removeKeybinding('toggle-application-view');
-            Main.wm.addKeybinding('toggle-application-view', this._keySettings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-                () => this.toggleApps());
-            this._appsKeybindingInstalled = true;
-        }
 
         if (Main.overview.visible)
             this._dismissNative();
@@ -169,6 +167,31 @@ export class OverviewTakeover {
         this._swipeEnabled = Main.overview._swipeTracker.enabled;
         Main.overview._swipeTracker.enabled = false;
         this._installed = true;
+    }
+
+    // Super and Super+A open Sift unless that action has a custom shortcut,
+    // in which case they go back to GNOME's own overview behavior.
+    _syncNativeTriggers() {
+        const customSearch = this._hasCustom('sift-search-shortcut');
+        const customApps = this._hasCustom('sift-apps-shortcut');
+
+        Main.wm.removeKeybinding('toggle-overview');
+        this._keybindingInstalled = false;
+        if (this._keySettings.get_strv('toggle-overview').length > 0) {
+            Main.wm.addKeybinding('toggle-overview', this._keySettings,
+                KEY_FLAGS, KEY_MODES,
+                customSearch ? () => this._nativeToggle() : () => this.toggle());
+            this._keybindingInstalled = true;
+        }
+
+        Main.wm.removeKeybinding('toggle-application-view');
+        this._appsKeybindingInstalled = false;
+        if (this._keySettings.get_strv('toggle-application-view').length > 0) {
+            Main.wm.addKeybinding('toggle-application-view', this._keySettings,
+                KEY_FLAGS, KEY_MODES,
+                customApps ? () => this._nativeApps() : () => this.toggleApps());
+            this._appsKeybindingInstalled = true;
+        }
     }
 
     _uninstallOverview() {
@@ -182,6 +205,16 @@ export class OverviewTakeover {
             this._startupShowingId = 0;
         }
 
+        if (this._keybindingInstalled) {
+            Main.wm.removeKeybinding('toggle-overview');
+            this._keybindingInstalled = false;
+        }
+
+        if (this._appsKeybindingInstalled) {
+            Main.wm.removeKeybinding('toggle-application-view');
+            this._appsKeybindingInstalled = false;
+        }
+
         for (const name of PATCHED) {
             const saved = this._saved[name];
             if (saved.hasOwn)
@@ -191,28 +224,21 @@ export class OverviewTakeover {
         }
         this._saved = {};
 
-        if (this._keybindingInstalled) {
-            Main.wm.removeKeybinding('toggle-overview');
+        if (this._keySettings.get_strv('toggle-overview').length > 0) {
             Main.wm.addKeybinding('toggle-overview', this._keySettings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-                () => Main.overview.toggle());
-            this._keybindingInstalled = false;
+                KEY_FLAGS, KEY_MODES, () => Main.overview.toggle());
         }
 
-        if (this._appsKeybindingInstalled) {
-            Main.wm.removeKeybinding('toggle-application-view');
+        if (this._keySettings.get_strv('toggle-application-view').length > 0) {
             Main.wm.addKeybinding('toggle-application-view', this._keySettings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-                () => {
-                    if (Main.overview.visible)
+                KEY_FLAGS, KEY_MODES, () => {
+                    if (Main.overview.visible) {
                         Main.overview.dash.showAppsButton.checked =
                             !Main.overview.dash.showAppsButton.checked;
-                    else
+                    } else {
                         Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+                    }
                 });
-            this._appsKeybindingInstalled = false;
         }
         this._keySettings = null;
 
@@ -220,11 +246,44 @@ export class OverviewTakeover {
         this._installed = false;
     }
 
-    _addSiftShortcut(key, handler) {
-        Main.wm.addKeybinding(key, this._settings,
-            Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-            handler);
+    _bindSift(key, handler, wanted) {
+        const installed = key === 'sift-search-shortcut'
+            ? this._searchInstalled : this._appsInstalled;
+        if (wanted === installed)
+            return;
+
+        if (wanted)
+            Main.wm.addKeybinding(key, this._settings, KEY_FLAGS, KEY_MODES, handler);
+        else
+            Main.wm.removeKeybinding(key);
+
+        if (key === 'sift-search-shortcut')
+            this._searchInstalled = wanted;
+        else
+            this._appsInstalled = wanted;
+    }
+
+    // Force GNOME's own overview, bypassing the wrappers.
+    _nativeShow(state) {
+        this._overlay.close();
+        this._saved.show.value.call(Main.overview, state);
+    }
+
+    _nativeToggle() {
+        if (Main.overview.visible) {
+            this._hideNative();
+            return;
+        }
+        this._nativeShow(OverviewControls.ControlsState.WINDOW_PICKER);
+    }
+
+    _nativeApps() {
+        if (Main.overview.visible) {
+            Main.overview.dash.showAppsButton.checked =
+                !Main.overview.dash.showAppsButton.checked;
+            return;
+        }
+        this._nativeShow(OverviewControls.ControlsState.APP_GRID);
     }
 
     _showSearch() {
