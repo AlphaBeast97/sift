@@ -186,13 +186,15 @@ export const SiftOverlay = GObject.registerClass({
             visible: false,
             x_expand: true,
             y_expand: true,
-            layout_manager: new Clutter.BinLayout(),
+            clip_to_allocation: true,
+            layout_manager: new Clutter.FixedLayout(),
         });
         this._grid = new AppGrid({
             apps,
             showLabels: settings.get_boolean('grid-labels'),
             settings,
             onActivate: (record, options) => this._activateRow(appRow(record), options),
+            onClose: () => this.close(),
         });
         this._gridView.add_child(this._grid);
 
@@ -588,7 +590,7 @@ export const SiftOverlay = GObject.registerClass({
 
         // The grid lays out once, at its target size, before it is shown.
         this._content.remove_all_transitions();
-        this._content.set_size(target.width, target.height);
+        this._sizeContent(target.width, target.height);
         this._content.set_position(0, 0);
         this._setViewState(view);
         this._applyGeometry(false);
@@ -606,7 +608,7 @@ export const SiftOverlay = GObject.registerClass({
         this.refreshApps();
         this._glass?.applySettings();
 
-        this._content.set_size(target.width, target.height);
+        this._sizeContent(target.width, target.height);
         this._content.set_position(0, 0);
         this._content.opacity = 255;
 
@@ -734,7 +736,7 @@ export const SiftOverlay = GObject.registerClass({
         }
 
         this._content.remove_all_transitions();
-        this._content.set_size(target.width, target.height);
+        this._sizeContent(target.width, target.height);
         this._content.set_position(0, 0);
         this._suspendGeometry = true;
         this._setViewState(view);
@@ -1082,7 +1084,7 @@ export const SiftOverlay = GObject.registerClass({
 
                 // The outgoing content is hidden by opacity 0; resize while it
                 // is invisible so the incoming grid lays out once at its target.
-                this._content.set_size(target.width, target.height);
+                this._sizeContent(target.width, target.height);
                 this._content.set_position(0, 0);
                 this._setViewState(next);
                 this._content.opacity = 0;
@@ -1162,10 +1164,10 @@ export const SiftOverlay = GObject.registerClass({
         this._rect = rect;
 
         if (growing)
-            this._content.set_size(rect.width, rect.height);
+            this._sizeContent(rect.width, rect.height);
 
         this._springTo(rect, growing ? null : () => {
-            this._content.set_size(rect.width, rect.height);
+            this._sizeContent(rect.width, rect.height);
         });
     }
 
@@ -1176,6 +1178,20 @@ export const SiftOverlay = GObject.registerClass({
             width: this._panel.width,
             height: this._panel.height,
         };
+    }
+
+    // The content and grid are sized from code, never from their children:
+    // the icon grid is several pages wide and would otherwise push its
+    // parents wider and taller while it builds. 92 = entry bar 60 + footer 32;
+    // the grid is inset 8 px on the sides and bottom.
+    _sizeContent(width, height) {
+        this._content.set_size(width, height);
+
+        const gridHeight = Math.max(0, height - 92);
+        this._gridView.set_size(width, gridHeight);
+        this._grid.set_position(8, 0);
+        this._grid.set_size(Math.max(0, width - 16), Math.max(0, gridHeight - 8));
+        this._grid.syncSize();
     }
 
     _seedSprings(rect) {
@@ -1278,7 +1294,7 @@ export const SiftOverlay = GObject.registerClass({
         this._content.remove_all_transitions();
         this._revealPending = false;
         this._content.set_position(0, 0);
-        this._content.set_size(rect.width, rect.height);
+        this._sizeContent(rect.width, rect.height);
         this._seedSprings(rect);
         this._glass?.setRect(rect);
         this._glass?.settle();

@@ -325,7 +325,10 @@ export async function run() {
     api.blocker.toggleApps();
     await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
         'Super+A opens the grid for the close test', 2000);
+    const gridHeight = api.appGrid.height;
     await settle(api, 'the grid settles before close');
+    assert(api.appGrid.height === gridHeight,
+        'the grid keeps its size from the first opening frame');
     api.overlay.close();
     assert(api.overlay.closing, 'the grid starts its close fade');
     api.blocker.toggleApps();
@@ -453,6 +456,28 @@ export async function run() {
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
     assert(api.glass.cloneCount === 0, 'clones removed on close');
+
+    // A mouse activation goes through Sift, so the grid closes like Enter.
+    await openOverlay(api, 'grid');
+    const clickedRecord = api.appGrid._records[0];
+    const clickedApp = clickedRecord.app;
+    const activateApp = clickedApp.activate;
+    let activations = 0;
+    clickedApp.activate = () => {
+        activations++;
+    };
+    api.appGrid._tiles[0].activate();
+    assert(activations === 1, 'a tile click activates the app through Sift');
+    assert(!api.overlay.visible, 'a tile click closes the app grid');
+    clickedApp.activate = activateApp;
+
+    await openOverlay(api, 'grid');
+    api.appGrid._tiles[0].popupMenu();
+    assert(api.appGrid._tiles[0]._menu !== null,
+        'right-click opens the normal app menu');
+    api.appGrid._tiles[0]._menu.close();
+    await Scripting.waitLeisure();
+    await closeOverlay(api);
 
     // A layout change while closed must be right on the next open, not only
     // after closing and opening again.

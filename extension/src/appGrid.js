@@ -13,21 +13,24 @@ import {gridLayout, moveSelection, pageSelection} from './lib/gridMath.js';
 const CHUNK_SIZE = 30;
 const SCROLL_TIMEOUT = 150;
 const SPACING = 8;
+const INDICATOR_HEIGHT = 28;
 
 export const AppGrid = GObject.registerClass(
     class AppGrid extends St.BoxLayout {
         _init({apps = null, iconSize = 96, showLabels = true, settings = null,
-            onActivate = null} = {}) {
+            onActivate = null, onClose = null} = {}) {
             super._init({
                 orientation: Clutter.Orientation.VERTICAL,
                 style_class: 'sift-app-grid',
                 x_expand: true,
                 y_expand: true,
+                layout_manager: new Clutter.FixedLayout(),
             });
 
             this._apps = apps;
             this._settings = settings;
             this._onActivate = onActivate;
+            this._onClose = onClose;
             this._iconSize = iconSize;
             this._showLabels = showLabels;
             this._syncLabelStyle();
@@ -93,6 +96,23 @@ export const AppGrid = GObject.registerClass(
 
             this._grid.connect('pages-changed', () => this._syncPages());
             this._grid.connect('notify::allocation', () => this._scheduleLayout());
+
+            this.connect('notify::allocation', () => this.syncSize());
+            this.syncSize();
+        }
+
+        // The scroll view is the grid's viewport and the indicators sit below
+        // it; sizing both here keeps the icon grid's page height stable from
+        // its first allocation, instead of growing it frame by frame.
+        syncSize() {
+            const width = Math.max(0, this.width);
+            const height = Math.max(0, this.height);
+            const scrollHeight = Math.max(0, height - INDICATOR_HEIGHT);
+
+            this._scroll.set_position(0, 0);
+            this._scroll.set_size(width, scrollHeight);
+            this._indicators.set_position(0, scrollHeight);
+            this._indicators.set_size(width, INDICATOR_HEIGHT);
         }
 
         get itemCount() {
@@ -299,7 +319,31 @@ export const AppGrid = GObject.registerClass(
                     expandTitleOnHover: false,
                 });
                 tile.can_focus = false;
-                tile.popupMenu = () => {};
+                tile.activate = button => {
+                    const event = Clutter.get_current_event();
+                    const state = event ? event.get_state() : 0;
+                    this._onActivate?.(record, {
+                        newWindow: button === Clutter.BUTTON_MIDDLE ||
+                            (state & Clutter.ModifierType.CONTROL_MASK) !== 0,
+                    });
+                };
+                const popupMenu = tile.popupMenu.bind(tile);
+                tile.popupMenu = () => {
+                    const result = popupMenu();
+                    const menu = tile._menu;
+                    if (menu && !menu._siftHooked) {
+                        menu._siftHooked = true;
+                        menu.connectObject('activate', (_menu, item) => {
+                            // Favourites and Quit leave the overview open;
+                            // launching, details and window actions close it.
+                            if (item === menu._toggleFavoriteItem ||
+                                item === menu._quitItem)
+                                return;
+                            this._onClose?.();
+                        }, tile);
+                    }
+                    return result;
+                };
                 tile.accessible_name = record.name;
                 tile.icon.label.visible = this._showLabels;
                 this._grid.appendItem(tile);
