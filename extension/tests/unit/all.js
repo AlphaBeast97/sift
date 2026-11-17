@@ -6,6 +6,7 @@ import {run as gridMath} from './gridMath.test.js';
 import {run as keys} from './keys.test.js';
 import {run as merge} from './merge.test.js';
 import {run as shortcuts} from './shortcuts.test.js';
+import {run as spring} from './spring.test.js';
 import {run as stats} from './stats.test.js';
 import {run as windowStack} from './windowStack.test.js';
 
@@ -18,6 +19,7 @@ const tests = [
     ['glassParams', glassParams],
     ['merge', merge],
     ['shortcuts', shortcuts],
+    ['spring', spring],
     ['gridMath', gridMath],
     ['windowStack', windowStack],
 ];
