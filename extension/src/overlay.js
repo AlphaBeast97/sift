@@ -20,6 +20,7 @@ import {ResultsView} from './results.js';
 
 const OPEN_FADE_MS = 120;
 const CLOSE_FADE_MS = 120;
+const CONTENT_OUT_MS = 80;
 const CONTENT_IN_MS = 120;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
@@ -637,13 +638,14 @@ export const SiftOverlay = GObject.registerClass({
         }
 
         this._ease?.destroy();
-        const startY = this._panel.y;
+        const start = this._panelRect();
+        const startY = start.y;
         const endY = this._rect.y + 8;
         const startOpacity = this.opacity;
         this._ease = new EaseDriver(this._panel, CLOSE_FADE_MS, progress => {
             const y = startY + (endY - startY) * progress;
             this._panel.set_position(this._panel.x, y);
-            this._glass?.setRect({...this._rect, y});
+            this._glass?.setRect({...start, y});
             this.opacity = Math.round(startOpacity * (1 - progress));
         }, () => this._finishClose());
         this._ease.start();
@@ -985,13 +987,56 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _setView(view) {
-        if (view === this._view) {
+        const next = view === 'grid' ? 'grid' : 'search';
+        if (next === this._view) {
             this._entry.clutter_text.grab_key_focus();
             return;
         }
 
-        this._setViewState(view);
-        this._applyGeometry(false);
+        this._content.remove_all_transitions();
+        this._viewToken++;
+
+        if (!this.visible || this._state !== 'open' ||
+            !this._animationsEnabled()) {
+            this._revealPending = false;
+            this._content.opacity = 255;
+            this._setViewState(next);
+            this._applyGeometry(false);
+            this._finishOpening();
+            return;
+        }
+
+        const token = this._viewToken;
+        const target = this._targetRect(next);
+        if (!target)
+            return;
+        this._view = next;
+        this._rect = target;
+        this._revealPending = false;
+        this._springTo(target);
+
+        this._content.ease({
+            opacity: 0,
+            duration: CONTENT_OUT_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onComplete: () => {
+                if (token !== this._viewToken || this._state !== 'open')
+                    return;
+
+                // The outgoing content is hidden by opacity 0; resize while it
+                // is invisible so the incoming grid lays out once at its target.
+                this._content.set_size(target.width, target.height);
+                this._content.set_position(0, 0);
+                this._setViewState(next);
+                this._content.opacity = 0;
+                this._revealPending = true;
+
+                if (this._allSettled() ||
+                    this._travelLeft() <=
+                        Math.max(1, this._geometryTravel * 0.2))
+                    this._reveal(token);
+            },
+        });
     }
 
     _setViewState(view) {
