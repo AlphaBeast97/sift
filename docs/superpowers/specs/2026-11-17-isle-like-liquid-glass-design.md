@@ -146,9 +146,13 @@ presets ported from Isle's `LOOKS.glass` and `DARK_GLASS`:
 | `rimWidth` | 1.1 | 1.1 | Edge light falloff, px |
 
 - Blend from clear to dark using Isle's non-linear curves: with
-  `tint = 1 - brightness / 100`, `early = sqrt(tint)` for fill/edge values and
-  `late = tint²` for the backdrop tone, so the slider only ever greys and settles
-  instead of dipping darker halfway.
+  `tint = 1 - brightness / 100`, `early = sqrt(tint)` and `late = tint²`, so the
+  slider only ever greys and settles instead of dipping darker halfway.
+- **Early curve:** fill colour, fill alpha, sheen, and glow.
+- **Late curve:** blur radius, `lo`, `span`, `gamma`, `deep`, `knee`, `saturation`,
+  `lens`, `band`, `spread`, `rim`, and `rimWidth`.
+- At brightness 50 (`tint = 0.5`) the late curve is 0.25, so blur is 18 px rather
+  than the linear 22 px; the glass stays crisp and gains smoke first, then blur.
 - A light system colour scheme uses a light fill palette (so Sift's existing dark
   text stays readable) with the same tone structure. A dark scheme uses the dark
   palette above.
@@ -244,6 +248,13 @@ shader width/height, and then re-filters and re-places the existing copies. It n
 destroys and recreates the whole backdrop for a move or resize. This is what lets the
 glass track a spring frame-by-frame.
 
+**Spring sync area.** While a geometry spring runs, the clone set is filtered against
+the union of the start and target padded frames, not the current frame. Windows that
+will enter the glass are copied before the edge reaches them, so no clone is created
+or destroyed mid-animation and there is no pop-in at the moving edge. Each clone's
+`paintArea` still tracks the current frame. At rest, `setRect` prunes the set to the
+final frame. Close clears the union set as usual.
+
 **Close.** Destroy clones, clear the map and watchers, remove the before-redraw
 callback, hide the glass.
 
@@ -327,7 +338,16 @@ Configs (tunable after visual review):
 - Springs drive y → rect.y + 8 and opacity → 0.
 - Keep the modal grab and ignore input while closing; when the springs settle, hide
   the overlay, call `glass.close()`, clear the old view content, and emit `closed`.
-- Reopening during close cancels the close and retargets the same springs.
+- `SiftOverlay` gains a distinct `closing` state and a `closing` getter. `close()`
+  is a no-op while closing. `open()` while closing cancels the close, keeps the
+  existing grab, and retargets the springs.
+- `OverviewBlocker.toggle()` and `toggleApps()` check `closing`: a second Super
+  reopens search, and a second Super+A reopens the grid, instead of treating the
+  still-visible fading overlay as already open. This is a small change to
+  `overview.js`; it changes close/reopen behavior, not the keybindings.
+- **Snap close.** Result activation and monitor changes use `close({immediate: true})`:
+  no spring, pop the grab before the launched app or file needs focus, hide at once.
+  Typing in a just-launched terminal must not wait for a fade.
 - With animations off, close immediately as today.
 
 **Compact ↔ expanded search**
@@ -335,19 +355,29 @@ Configs (tunable after visual review):
 - The compact bar (60 px) on open, the expanded search rect on the first keystroke,
   and the collapse on an emptied query all use the `MOVE` springs instead of jumping.
 - Results update immediately; the panel clip reveals them as it grows.
-- Settings changes to panel height or maximum rows use the same path while open.
+- Changes to `search-height` use the same path while open. `max-results` does not
+  change the panel rect today and does not start doing so: it only changes how many
+  rows fit before the list scrolls, so result-count changes never retrigger geometry.
 
 **View switch (search ↔ grid)**
 
-- Fade the outgoing content out over roughly 80 ms.
-- Set the new view at the target rect.
-- Spring x, y, width, and height from the previous rect to the target rect.
-- Fade the incoming content in near the end of the geometry spring.
-- The app grid is not allocated and reflowed on every animation frame. It opens and
-  builds once the panel is at or near its final size, then fades in. This avoids
-  frame-by-frame `IconGrid` re-pagination, the main risk to 60 fps.
-- The glass follows every frame through `setRect`; clones are re-filtered and
-  re-placed, never rebuilt.
+- The geometry spring starts immediately on the toggle; the panel does not hold at
+  the old rect first.
+- The outgoing content fades to 0 over roughly 80 ms while the panel starts moving.
+  At the end of that fade the new view state is set, but its content stays invisible.
+- The single content layer is allocated at the current panel size each frame. Only
+  the outgoing view can reflow during its short fade; the incoming view is invisible
+  and held, so text and tiles never re-wrap through the whole morph.
+- When the geometry spring reaches roughly the last fifth of its travel, the incoming
+  view is shown and fades in over about 120 ms while the spring settles.
+- For an incoming grid, `AppGrid` gets a layout hold: allocation notifications during
+  the morph are ignored, and `open()` runs once when the grid is shown, at the final
+  or near-final size. This avoids frame-by-frame `IconGrid` re-pagination, the main
+  risk to 60 fps. The outgoing grid is also held while it fades, for the same reason.
+- The middle of the morph shows empty glass over the desktop. That is the intended
+  "the window grows over the desktop" moment, not a loading state.
+- The glass follows every frame through `setRect`; its copies are re-filtered against
+  the union area and re-placed, never destroyed and rebuilt.
 
 **Animations off**
 
@@ -372,7 +402,9 @@ Configs (tunable after visual review):
 
 - `extension/src/glass.js` — actor tree, AreaClone, sync/caching, shader, brightness.
 - `extension/src/overlay.js` — springs, open/close, compact expansion, view switch,
-  remove freeze/thaw, close deferral.
+  closing state, remove freeze/thaw, close deferral.
+- `extension/src/overview.js` — reopen from the closing state in toggle/toggleApps.
+- `extension/src/appGrid.js` — layout hold while hidden during a view morph.
 - `extension/src/lib/glassParams.js` — presets, brightness mapping, pad/radius.
 - `extension/src/lib/spring.js` — pure spring math.
 - `extension/src/motion.js` — SpringDriver (new).
@@ -383,7 +415,8 @@ Configs (tunable after visual review):
 - `extension/stylesheet.css` — remove mode classes and border; fallback style.
 - Unit tests: `glassParams`, `spring`, `windowStack`, `schema`.
 - `tools/test/headless.js` — remove mode/off assertions; brightness live, clone
-  count, open/view/close with animations on and off.
+  count, open/view/close with animations on and off, a second toggle while closing
+  reopens, and activation closes immediately.
 
 ### 5.8 Verification
 
@@ -427,15 +460,24 @@ These are implementation decisions, not things the user agreed to:
 - The top bar is copied through `Main.panel` to avoid duplicating Blur my Shell.
 - Open/close move the real panel by 8–12 px and fade it, rather than scaling it; view
   switches use full geometry springs.
-- The app grid waits until the panel is near its final size before it is laid out.
-- Close keeps the modal grab until the fade finishes.
+- View switches fade the outgoing content out, morph with empty glass, then fade the
+  incoming content in near the end; there is one content layer and no snapshot.
+- The app grid waits until the panel is near its final size before it is laid out,
+  with its layout held while hidden.
+- A second Super or Super+A during the close fade reopens the requested view; result
+  activation and monitor changes snap-close so the launched app gets focus at once.
+- Close keeps the modal grab until the fade finishes, except for snap-close paths.
+- During a geometry spring the clone set covers the union of the start and target
+  frames, so nothing is created or destroyed mid-morph.
+- Brightness uses the early curve for fill/sheen/glow and the late curve for blur and
+  the tone/lens/rim parameters.
 - Light scheme uses a light fill palette with the same tone structure.
 - No settings migration, no new preference beyond brightness, no fallback mode.
 
 ## 7. Left to the builder
 
 - Exact preset numbers and spring stiffness/damping after visual tuning.
-- Whether the incoming grid appears at spring rest or during the last fifth of it.
+- The exact fraction of the geometry spring at which the incoming view fades in.
 - File/class layout for `SpringDriver` and the AreaClone class.
 - Test details and headless assertions.
 - How to express the long shader cleanly within the existing `glass.js` conventions.
@@ -445,9 +487,11 @@ These are implementation decisions, not things the user agreed to:
 - A large grid panel at 1.25 scale with a 30 px blur may still miss 60 fps on this
   hardware. The bounded frame, cached clones, paint volumes, and edge-only lens help;
   the fallback is a smaller blur/pad, not a user-visible mode.
-- Deferring the grid layout until the end of the morph can show a brief empty glass
-  panel on slow machines. The user must judge whether that feels slower than the
-  current instant-but-broken layout.
+- Deferring the grid layout until the end of the morph means the middle of a view
+  switch shows empty glass. On slow machines that could feel slower than the current
+  instant-but-broken layout; the user must judge it in motion.
+- The union clone set keeps a few extra windows copied during a large morph. The cost
+  is bounded by the union area and disappears at rest.
 - Spring tuning is subjective; the first numbers are a starting point.
 - High brightness with light text over a white window depends on the `deep`/`knee`
   tone hold; this needs visual checking.
