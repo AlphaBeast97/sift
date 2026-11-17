@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Gio from 'gi://Gio';
 
-import {almost, assert, equal} from './assert.js';
+import {assert, equal} from './assert.js';
 
 const SCHEMA = 'org.gnome.shell.extensions.sift';
 
@@ -11,10 +11,7 @@ export function run() {
     assert(schema !== null, 'schema is installed');
     const settings = new Gio.Settings({schema_id: SCHEMA});
 
-    equal(settings.get_string('glass-mode'), 'auto');
-    almost(settings.get_double('glass-opacity'), 0.72);
-    equal(settings.get_int('blur-radius'), 40);
-    almost(settings.get_double('glass-tint'), 0.45);
+    equal(settings.get_int('glass-brightness'), 50);
     equal(settings.get_boolean('animations'), true);
     equal(settings.get_int('max-results'), 6);
     equal(settings.get_int('search-height'), 404);
@@ -25,14 +22,10 @@ export function run() {
 
     const range = key => settings.get_range(key).recursiveUnpack()[1];
 
+    equal(range('glass-brightness').join(','), '0,100');
     equal(range('max-results').join(','), '4,12');
     equal(range('search-height').join(','), '144,716');
-    equal(range('blur-radius').join(','), '0,64');
-    almost(range('glass-opacity')[0], 0.30);
-    almost(range('glass-opacity')[1], 0.95);
-    almost(range('glass-tint')[0], 0.0);
-    almost(range('glass-tint')[1], 1.0);
 
     equal(schema.list_keys().sort().join(','),
-        'animations,blur-radius,disable-overview,glass-mode,glass-opacity,glass-tint,grid-labels,max-results,search-height,sift-apps-shortcut,sift-search-shortcut');
+        'animations,disable-overview,glass-brightness,grid-labels,max-results,search-height,sift-apps-shortcut,sift-search-shortcut');
 }

@@ -1,38 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <enum id="org.gnome.shell.extensions.sift.glass-mode">
-    <value nick="auto" value="0"/>
-    <value nick="liquid" value="1"/>
-    <value nick="frosted" value="2"/>
-    <value nick="off" value="3"/>
-  </enum>
-
   <schema id="org.gnome.shell.extensions.sift" path="/org/gnome/shell/extensions/sift/">
-    <key name="glass-mode" enum="org.gnome.shell.extensions.sift.glass-mode">
-      <default>'auto'</default>
-      <summary>Glass mode</summary>
-      <description>Auto uses liquid glass when available and falls back to frosted; liquid forces the shader; frosted uses blur only; off disables glass.</description>
-    </key>
-
-    <key name="glass-opacity" type="d">
-      <range min="0.30" max="0.95"/>
-      <default>0.72</default>
-      <summary>Glass opacity</summary>
-      <description>Opacity of the glass tint over the blurred backdrop.</description>
-    </key>
-
-    <key name="blur-radius" type="i">
-      <range min="0" max="64"/>
-      <default>40</default>
-      <summary>Blur radius</summary>
-      <description>Backdrop blur radius in pixels.</description>
-    </key>
-
-    <key name="glass-tint" type="d">
-      <range min="0.0" max="1.0"/>
-      <default>0.45</default>
-      <summary>Glass tint</summary>
-      <description>Darkening tint applied to the blurred backdrop.</description>
+    <key name="glass-brightness" type="i">
+      <range min="0" max="100"/>
+      <default>50</default>
+      <summary>Glass brightness</summary>
+      <description>0 is dark smoked glass; 100 shows the desktop through clear bright glass. Higher values mean less darkening, not more white paint.</description>
     </key>
 
     <key name="animations" type="b">

@@ -8,15 +8,13 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 
 import {findShortcutConflict, shortcutFromKey} from './src/lib/shortcuts.js';
 
-const GLASS_MODES = ['auto', 'liquid', 'frosted', 'off'];
-const MODE_LABELS = ['Auto', 'Liquid', 'Frosted', 'Off'];
 const BUS_NAME = 'io.github.alphabeast97.Sift';
 const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
-    'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
-    'max-results', 'search-height', 'grid-labels', 'disable-overview',
-    'sift-search-shortcut', 'sift-apps-shortcut',
+    'glass-brightness', 'animations', 'max-results', 'search-height',
+    'grid-labels', 'disable-overview', 'sift-search-shortcut',
+    'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -253,39 +251,8 @@ function addShortcutRow(group, window, settings, key, title, subtitle) {
     group.add(row);
 }
 
-function addDoubleRow(group, settings, key, title, {lower, upper, step}) {
-    const row = valueRow(title);
-    const reset = resetButton(settings, key);
-    const adjustment = new Gtk.Adjustment({
-        lower,
-        upper,
-        step_increment: step,
-        page_increment: step * 2,
-    });
-    const scale = new Gtk.Scale({
-        adjustment,
-        digits: 2,
-        draw_value: false,
-        hexpand: true,
-        valign: Gtk.Align.CENTER,
-        width_request: 200,
-    });
-
-    const sync = () => {
-        row.subtitle = settings.get_double(key).toFixed(2);
-        reset.sensitive = settings.get_user_value(key) !== null;
-    };
-
-    settings.bind(key, adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
-    settings.connect(`changed::${key}`, sync);
-    sync();
-
-    row.add_suffix(scale);
-    row.add_suffix(reset);
-    group.add(row);
-}
-
-function addIntRow(group, settings, key, title, {lower, upper, step}) {
+function addIntRow(group, settings, key, title,
+    {lower, upper, step, subtitle = value => String(value)} = {}) {
     const row = valueRow(title);
     const reset = resetButton(settings, key);
     const adjustment = new Gtk.Adjustment({
@@ -304,7 +271,7 @@ function addIntRow(group, settings, key, title, {lower, upper, step}) {
     });
 
     const sync = () => {
-        row.subtitle = String(settings.get_int(key));
+        row.subtitle = subtitle(settings.get_int(key));
         reset.sensitive = settings.get_user_value(key) !== null;
     };
 
@@ -340,25 +307,6 @@ export default class SiftPreferences extends ExtensionPreferences {
             description: 'The search overlay uses the desktop behind it as its backdrop.',
         });
 
-        const modeRow = new Adw.ComboRow({
-            title: 'Mode',
-            model: new Gtk.StringList({strings: MODE_LABELS}),
-        });
-        modeRow.selected = Math.max(0,
-            GLASS_MODES.indexOf(settings.get_string('glass-mode')));
-        modeRow.connect('notify::selected', () => {
-            const mode = GLASS_MODES[modeRow.selected];
-            if (settings.get_string('glass-mode') !== mode)
-                settings.set_string('glass-mode', mode);
-        });
-        settings.connect('changed::glass-mode', () => {
-            const selected = Math.max(0,
-                GLASS_MODES.indexOf(settings.get_string('glass-mode')));
-            if (modeRow.selected !== selected)
-                modeRow.selected = selected;
-        });
-        appearanceGroup.add(modeRow);
-
         const animationsRow = new Adw.SwitchRow({
             title: 'Animations',
             subtitle: 'Animate opening and switching views.',
@@ -367,12 +315,13 @@ export default class SiftPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         appearanceGroup.add(animationsRow);
 
-        addDoubleRow(appearanceGroup, settings, 'glass-opacity', 'Opacity',
-            {lower: 0.30, upper: 0.95, step: 0.05});
-        addIntRow(appearanceGroup, settings, 'blur-radius', 'Blur radius',
-            {lower: 0, upper: 64, step: 1});
-        addDoubleRow(appearanceGroup, settings, 'glass-tint', 'Tint',
-            {lower: 0, upper: 1, step: 0.05});
+        addIntRow(appearanceGroup, settings, 'glass-brightness', 'Brightness', {
+            lower: 0,
+            upper: 100,
+            step: 5,
+            subtitle: value => value <= 25 ? `Dark (${value})` :
+                value >= 75 ? `Clear (${value})` : String(value),
+        });
 
         appearance.add(appearanceGroup);
 
