@@ -171,7 +171,7 @@ export async function run() {
     assert(target !== undefined, 'installed apps available');
     api.overlay.entry.set_text(target.get_name());
     await Scripting.waitLeisure();
-    await waitFor(() => api.glass.rect.height === 404,
+    await waitFor(() => api.glass.rect.height === 404 && !api.overlay.animating,
         'typing settles the expanded height', 2000);
     assert(api.overlay.rowCount > 0, 'app results render');
     assert(!api.overlay.emptyVisible, 'results hide the empty state');
@@ -260,7 +260,7 @@ export async function run() {
     await waitFor(() => api.overlay.scrollView.vadjustment.upper >
         api.overlay.scrollView.vadjustment.page_size,
     'overflow content is scrollable', 2000);
-    await waitFor(() => api.glass.rect.height === 300,
+    await waitFor(() => api.glass.rect.height === 300 && !api.overlay.animating,
         'the panel height setting settles', 2000);
     assert(api.glass.rect.height === 300,
         'the panel height setting applies live');
@@ -278,7 +278,7 @@ export async function run() {
     fake.files = [];
     api.overlay.entry.set_text('');
     await Scripting.waitLeisure();
-    await waitFor(() => api.glass.rect.height === 60,
+    await waitFor(() => api.glass.rect.height === 60 && !api.overlay.animating,
         'clearing the query settles the compact bar', 2000);
 
     const savedBrightness = api.settings.get_int('glass-brightness');
