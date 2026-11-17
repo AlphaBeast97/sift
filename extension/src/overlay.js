@@ -54,6 +54,7 @@ export const SiftOverlay = GObject.registerClass({
         this._motionDone = true;
         this._openFade = false;
         this._revealPending = false;
+        this._shownView = 'search';
         this._onSettled = null;
         this._geometryTravel = 0;
         this._viewToken = 0;
@@ -993,6 +994,24 @@ export const SiftOverlay = GObject.registerClass({
             return;
         }
 
+        // Toggled back before the outgoing content faded: stay on the view
+        // that is still on screen instead of flashing it out and in again.
+        if (next === this._shownView) {
+            this._content.remove_all_transitions();
+            this._content.opacity = 255;
+            this._revealPending = false;
+            this._view = next;
+            if (next === 'grid')
+                this._entry.text = '';
+            const target = this._targetRect(next);
+            if (target) {
+                this._rect = target;
+                this._springTo(target);
+            }
+            this._entry.clutter_text.grab_key_focus();
+            return;
+        }
+
         this._content.remove_all_transitions();
         this._viewToken++;
 
@@ -1041,6 +1060,7 @@ export const SiftOverlay = GObject.registerClass({
 
     _setViewState(view) {
         this._view = view === 'grid' ? 'grid' : 'search';
+        this._shownView = this._view;
 
         const grid = this._view === 'grid';
         this._results.visible = !grid;
