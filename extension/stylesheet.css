@@ -112,6 +112,47 @@
     height: 28px;
 }
 
+/* A tile hover reads like the panel: a faint gradient and a light inner rim,
+   instead of the theme's flat fill. */
+.sift-app-grid .overview-tile:hover,
+.sift-app-grid .overview-tile:focus {
+    color: #ffffff;
+    background-color: transparent;
+    background-gradient-direction: vertical;
+    background-gradient-start: rgba(255, 255, 255, 0.14);
+    background-gradient-end: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.sift-app-grid .overview-tile:active {
+    background-gradient-start: rgba(255, 255, 255, 0.20);
+    background-gradient-end: rgba(255, 255, 255, 0.08);
+}
+
+.sift-light .sift-app-grid .overview-tile:hover,
+.sift-light .sift-app-grid .overview-tile:focus {
+    color: rgba(0, 0, 0, 0.9);
+    background-color: transparent;
+    background-gradient-start: rgba(255, 255, 255, 0.50);
+    background-gradient-end: rgba(255, 255, 255, 0.25);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+
+.sift-light .sift-app-grid .overview-tile:active {
+    background-gradient-start: rgba(255, 255, 255, 0.65);
+    background-gradient-end: rgba(255, 255, 255, 0.40);
+}
+
+.sift-app-grid .overview-icon.overview-icon-with-label StLabel {
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.sift-light .sift-app-grid .overview-icon.overview-icon-with-label StLabel {
+    color: rgba(0, 0, 0, 0.88);
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
+}
+
 .sift-footer {
     height: 32px;
     padding: 0 16px;
