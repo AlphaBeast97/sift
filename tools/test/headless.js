@@ -341,6 +341,21 @@ export async function run() {
         'activation closes immediately, without the fade');
     assert(api.glass.cloneCount === 0, 'activation removes the copies at once');
 
+    // A grid switch requested while search is still opening must animate from
+    // the compact bar, not snap to the finished grid.
+    api.overlay.open('search');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'search opens for the early grid switch', 2000);
+    api.blocker.toggleApps();
+    assert(api.glass.rect.height === 60,
+        'the early grid switch starts from the compact search bar');
+    await waitFor(() => api.overlay.view === 'grid',
+        'the early grid switch changes view', 2000);
+    await settle(api, 'the early grid switch settles');
+    assert(api.glass.rect.height > 60,
+        'the early grid switch follows the geometry spring');
+    await closeOverlay(api);
+
     api.settings.set_boolean('animations', false);
     await Scripting.waitLeisure();
     await openOverlay(api, 'search');

@@ -70,6 +70,7 @@ export const SiftOverlay = GObject.registerClass({
         this._queryBusy = false;
         this._latestQuery = null;
         this._reindexTimer = 0;
+        this._prewarmId = 0;
         this._themeId = 0;
 
         this._syncTheme();
@@ -194,6 +195,8 @@ export const SiftOverlay = GObject.registerClass({
             onActivate: (record, options) => this._activateRow(appRow(record), options),
         });
         this._gridView.add_child(this._grid);
+
+        this._schedulePrewarm();
 
         const footer = new St.BoxLayout({
             orientation: Clutter.Orientation.HORIZONTAL,
@@ -387,6 +390,8 @@ export const SiftOverlay = GObject.registerClass({
     onAppsChanged() {
         this._grid?.invalidate();
         this.refreshApps();
+        if (!this.visible)
+            this._grid?.prewarm();
     }
 
     onDaemonChanged() {
@@ -485,6 +490,27 @@ export const SiftOverlay = GObject.registerClass({
         const text = this.footerText;
         this._statusLabel.text = text;
         this._statusLabel.visible = text !== '';
+    }
+
+    // Builds the app grid while the overlay is hidden, so the first open does
+    // not create every tile in the middle of its animation.
+    _schedulePrewarm() {
+        if (this._prewarmId || this._destroyed)
+            return;
+
+        this._prewarmId = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, 5, () => {
+            this._prewarmId = 0;
+            if (this._destroyed)
+                return GLib.SOURCE_REMOVE;
+
+            if (this.visible) {
+                this._schedulePrewarm();
+                return GLib.SOURCE_REMOVE;
+            }
+
+            this._grid?.prewarm();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _syncTheme() {
@@ -816,6 +842,10 @@ export const SiftOverlay = GObject.registerClass({
             GLib.source_remove(this._reindexTimer);
             this._reindexTimer = 0;
         }
+        if (this._prewarmId) {
+            GLib.source_remove(this._prewarmId);
+            this._prewarmId = 0;
+        }
 
         if (this._grab) {
             const grab = this._grab;
@@ -1022,8 +1052,8 @@ export const SiftOverlay = GObject.registerClass({
         this._content.remove_all_transitions();
         this._viewToken++;
 
-        if (!this.visible || this._state !== 'open' ||
-            !this._animationsEnabled()) {
+        if (!this.visible || !this._animationsEnabled() ||
+            (this._state !== 'open' && this._state !== 'opening')) {
             this._revealPending = false;
             this._content.opacity = 255;
             this._setViewState(next);
@@ -1046,7 +1076,8 @@ export const SiftOverlay = GObject.registerClass({
             duration: CONTENT_OUT_MS,
             mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
             onComplete: () => {
-                if (token !== this._viewToken || this._state !== 'open')
+                if (token !== this._viewToken ||
+                    (this._state !== 'open' && this._state !== 'opening'))
                     return;
 
                 // The outgoing content is hidden by opacity 0; resize while it

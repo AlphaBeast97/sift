@@ -144,6 +144,20 @@ export const AppGrid = GObject.registerClass(
             this._dirty = true;
         }
 
+        // Builds tiles while the overlay is hidden; layout waits for the real
+        // allocation, so only the creation cost moves out of the first open.
+        prewarm() {
+            if (this._destroyed || this._chunkId)
+                return;
+
+            if (!this._dirty && this._tiles.length > 0)
+                return;
+
+            this.setApps(this._apps ? this._apps.gridApps() : []);
+            this._dirty = false;
+            this._build();
+        }
+
         open() {
             if (this._dirty) {
                 this.setApps(this._apps ? this._apps.gridApps() : []);
