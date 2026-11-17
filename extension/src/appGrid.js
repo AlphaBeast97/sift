@@ -220,6 +220,14 @@ export const AppGrid = GObject.registerClass(
             if (page < 0 || page >= this._grid.nPages)
                 return;
 
+            // A selection move inside the page should not restart the page
+            // scroll; only a real offset change or a repage needs it.
+            const target = page * this._grid.layout_manager.pageWidth;
+            if (Math.abs(this._grid.hadjustment.value - target) < 1) {
+                this._indicators.setCurrentPosition(page);
+                return;
+            }
+
             this._grid.goToPage(page, animate && this._animationsEnabled());
             this._indicators.setCurrentPosition(page);
         }
@@ -301,6 +309,7 @@ export const AppGrid = GObject.registerClass(
                 this._tiles.push(tile);
             }
 
+            this._snapLayout();
             this._layout();
             this._syncPages();
             this._applySelection();
@@ -388,6 +397,13 @@ export const AppGrid = GObject.registerClass(
                 tile.icon.setIconSize(this._iconSize);
                 tile.queue_relayout();
             }
+            this._snapLayout();
+        }
+
+        // The shell staggers every tile into a new layout; Sift sizes the grid
+        // once before revealing it, so that easing reads as a first-open settle.
+        _snapLayout() {
+            this._grid.layout_manager._shouldEaseItems = false;
         }
 
         _applySelection() {

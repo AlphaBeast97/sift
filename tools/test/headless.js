@@ -378,6 +378,23 @@ export async function run() {
     await Scripting.waitLeisure();
     await waitForGrid(api.appGrid._grid, 'grid icons fit their pages');
 
+    // Moving inside the page must not restart the page scroll; that repeated
+    // scroll is what made the tiles re-settle on every arrow key.
+    const grid = api.appGrid._grid;
+    const goToPage = grid.goToPage.bind(grid);
+    let pageMoves = 0;
+    grid.goToPage = (...args) => {
+        pageMoves++;
+        return goToPage(...args);
+    };
+    const beforeArrow = api.appGrid.selectedIndex;
+    api.overlay.handleKey('Right', 0);
+    await Scripting.waitLeisure();
+    assert(api.appGrid.selectedIndex === beforeArrow + 1,
+        'right selects the next app');
+    assert(pageMoves === 0, 'moving inside a page does not scroll the page');
+    delete grid.goToPage;
+
     // Scrolling moves whole pages; native scrolling used to stop between.
     const gridScroll = api.appGrid._scroll;
     assert(!gridScroll.enable_mouse_scrolling &&
