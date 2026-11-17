@@ -10,6 +10,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {GLASS_PAD, glassParams} from './lib/glassParams.js';
+import {backdropWindows, intersects} from './lib/windowStack.js';
 
 const UNIFORMS = `
 uniform float width;
@@ -75,11 +76,6 @@ const GlassEffect = GObject.registerClass({
             this.queue_repaint();
     }
 });
-
-function intersects(a, b) {
-    return a.x < b.x + b.width && a.x + a.width > b.x &&
-        a.y < b.y + b.height && a.y + a.height > b.y;
-}
 
 export class GlassPanel {
     constructor({settings = null} = {}) {
@@ -405,7 +401,7 @@ export class GlassPanel {
 
         try {
             this._addBackgroundClone();
-            this._addWindowClone();
+            this._addWindowClones();
             this._addPanelClone();
             this._connectWindows();
         } catch (error) {
@@ -457,37 +453,23 @@ export class GlassPanel {
         };
     }
 
-    _topWindow() {
-        const area = this._paddedRect();
-        const actors = global.get_window_actors().filter(actor => {
-            const window = actor.meta_window;
-            return actor.visible && !window.minimized &&
-                window.get_window_type() === Meta.WindowType.NORMAL;
-        });
-
-        for (let i = actors.length - 1; i >= 0; i--) {
-            const [x, y] = actors[i].get_transformed_position();
-            const [width, height] = actors[i].get_transformed_size();
-            if (intersects(area, {x, y, width, height}))
-                return actors[i];
-        }
-
-        return null;
-    }
-
-    _addWindowClone() {
-        const actor = this._topWindow();
-        if (!actor)
-            return;
-
-        const surface = actor.get_children().find(child =>
-            child.constructor.$gtype?.name?.startsWith('MetaSurface')) ?? actor;
-        const position = surface.get_transformed_position();
-        if (!position.every(Number.isFinite))
-            return;
-
+    _addWindowClones() {
         const [frameX, frameY] = this._frameOrigin();
-        this._addClone(surface, position[0] - frameX, position[1] - frameY);
+
+        // Clone every window in the backdrop, bottom to top, so overlapping
+        // windows stack the way they do behind the panel.
+        for (const actor of backdropWindows(global.get_window_actors(),
+            this._paddedRect(), Meta.WindowType.NORMAL)) {
+            // The surface carries the window content; the actor also has the
+            // shell-side frame and shadow.
+            const surface = actor.get_children().find(child =>
+                child.constructor.$gtype?.name?.startsWith('MetaSurface')) ?? actor;
+            const position = surface.get_transformed_position();
+            if (!position.every(Number.isFinite))
+                continue;
+
+            this._addClone(surface, position[0] - frameX, position[1] - frameY);
+        }
     }
 
     _addPanelClone() {

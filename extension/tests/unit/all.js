@@ -7,6 +7,7 @@ import {run as keys} from './keys.test.js';
 import {run as merge} from './merge.test.js';
 import {run as shortcuts} from './shortcuts.test.js';
 import {run as stats} from './stats.test.js';
+import {run as windowStack} from './windowStack.test.js';
 
 const tests = [
     ['stats', stats],
@@ -18,6 +19,7 @@ const tests = [
     ['merge', merge],
     ['shortcuts', shortcuts],
     ['gridMath', gridMath],
+    ['windowStack', windowStack],
 ];
 
 for (const [name, run] of tests) {
