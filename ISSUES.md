@@ -28,7 +28,7 @@
 
 ## Panel appearance
 
-- [ ] **Rounded corners are not applied consistently across all layers**
+- [x] **Rounded corners are not applied consistently across all layers**
 
   The panel's corner areas can show visible layer or background mismatches, including at the four panel corners.
 
