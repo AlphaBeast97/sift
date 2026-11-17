@@ -36,8 +36,14 @@ export function run() {
     equal(indexToCell(24, 6, 4).page, 1);
     equal(indexToCell(24, 6, 4).cell, 0);
     equal(cellToIndex(2, 3, 6, 4), 51);
-    equal(moveSelection(5, 1, 0, 100, 6), 5);
-    equal(moveSelection(99, 0, 1, 100, 6), 99);
+    equal(moveSelection(5, 1, 0, 100, 6, 4), 5);
+    equal(moveSelection(99, 0, 1, 100, 6, 4), 99);
+    // Arrows stay on the page: no wrap from its top or bottom row.
+    equal(moveSelection(24, 0, -1, 100, 6, 4), 24);
+    equal(moveSelection(23, 0, 1, 100, 6, 4), 23);
+    equal(moveSelection(24, 0, 1, 100, 6, 4), 30);
+    equal(moveSelection(25, -1, 0, 100, 6, 4), 24);
+    equal(moveSelection(48, 0, 1, 50, 6, 4), 48);
     equal(pageSelection(0, -1, 100, 6, 4), 0);
     equal(pageSelection(0, 1, 100, 6, 4), 24);
 }

@@ -42,17 +42,19 @@ export function cellToIndex(page, cell, columns, rows) {
     return page * columns * rows + cell;
 }
 
-export function moveSelection(current, dx, dy, count, columns) {
+export function moveSelection(current, dx, dy, count, columns, rows) {
+    const pageSize = columns * rows;
+    const pageStart = Math.floor(current / pageSize) * pageSize;
     const column = current % columns;
     const nextColumn = column + dx;
     if (nextColumn < 0 || nextColumn >= columns)
         return current;
 
-    const row = Math.floor(current / columns) + dy;
-    if (row < 0)
+    const row = Math.floor((current - pageStart) / columns) + dy;
+    if (row < 0 || row >= rows)
         return current;
 
-    const next = row * columns + nextColumn;
+    const next = pageStart + row * columns + nextColumn;
     return next >= count ? current : next;
 }
 

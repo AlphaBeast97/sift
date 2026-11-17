@@ -176,7 +176,7 @@ export const AppGrid = GObject.registerClass(
 
         moveSelection(dx, dy) {
             this.select(moveSelection(this._selected, dx, dy,
-                this.itemCount, this._columns));
+                this.itemCount, this._columns, this._rows));
         }
 
         page(direction) {
