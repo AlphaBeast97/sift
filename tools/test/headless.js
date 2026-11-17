@@ -25,6 +25,22 @@ async function waitFor(predicate, message, timeout = 5000) {
     throw new Error(message);
 }
 
+async function settle(api, message = 'the overlay settles') {
+    await waitFor(() => !api.overlay.animating, message, 2000);
+}
+
+async function openOverlay(api, view = 'search') {
+    api.overlay.open(view);
+    await waitFor(() => api.overlay.visible && api.overlay.view === view,
+        `the overlay opens ${view}`, 2000);
+    await settle(api, `the overlay settles ${view}`);
+}
+
+async function closeOverlay(api, options) {
+    api.overlay.close(options);
+    await waitFor(() => !api.overlay.visible, 'the overlay closes', 2000);
+}
+
 // Pages are laid out horizontally; an icon that outgrows its page or cell
 // overlaps the next page or the next icon.
 function gridFits(grid) {
@@ -112,41 +128,41 @@ export async function run() {
         'the app-grid key is unbound while Super+A is the default');
 
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'search',
-        'Super opens Sift search');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'Super opens Sift search', 2000);
+    await settle(api, 'the first search settles');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'Super closes Sift search');
+    await waitFor(() => !api.overlay.visible, 'Super closes Sift search', 2000);
 
     Main.overview.show(OverviewControls.ControlsState.APP_GRID);
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'grid',
-        'Super+A opens the Sift app grid');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'Super+A opens the Sift app grid', 2000);
+    await settle(api, 'the first grid settles');
     Main.overview.show(OverviewControls.ControlsState.APP_GRID);
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'search',
-        'Super+A again returns to search');
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'Super+A again returns to search', 2000);
+    await settle(api, 'the first grid returns to search');
+    await closeOverlay(api);
 
     api.blocker.toggle();
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'search',
-        'the Sift search shortcut opens search');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'the Sift search shortcut opens search', 2000);
+    await settle(api, 'the shortcut search settles');
     assert(!api.overlay.emptyVisible, 'the empty query shows only the search bar');
     assert(api.glass.rect.height === 60,
         'the empty query uses the compact bar height');
     assert(api.overlay.entry.accessible_name === 'Search', 'entry is named Search');
 
     api.blocker.toggleApps();
-    await Scripting.waitLeisure();
-    assert(api.overlay.view === 'grid',
-        'the Sift app-grid shortcut opens the grid');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'the Sift app-grid shortcut opens the grid', 2000);
+    await settle(api, 'the shortcut grid settles');
 
     api.overlay.focusSearch();
-    await Scripting.waitLeisure();
-    assert(api.overlay.view === 'search' && api.overlay.entry.clutter_text.has_key_focus(),
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'focusSearch returns to search', 2000);
+    await settle(api, 'focusSearch settles');
+    assert(api.overlay.entry.clutter_text.has_key_focus(),
         'focusSearch focuses the entry text');
 
     const installed = Shell.AppSystem.get_default().get_installed();
@@ -155,6 +171,8 @@ export async function run() {
     assert(target !== undefined, 'installed apps available');
     api.overlay.entry.set_text(target.get_name());
     await Scripting.waitLeisure();
+    await waitFor(() => api.glass.rect.height === 404,
+        'typing settles the expanded height', 2000);
     assert(api.overlay.rowCount > 0, 'app results render');
     assert(!api.overlay.emptyVisible, 'results hide the empty state');
     assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
@@ -242,6 +260,8 @@ export async function run() {
     await waitFor(() => api.overlay.scrollView.vadjustment.upper >
         api.overlay.scrollView.vadjustment.page_size,
     'overflow content is scrollable', 2000);
+    await waitFor(() => api.glass.rect.height === 300,
+        'the panel height setting settles', 2000);
     assert(api.glass.rect.height === 300,
         'the panel height setting applies live');
 
@@ -258,35 +278,72 @@ export async function run() {
     fake.files = [];
     api.overlay.entry.set_text('');
     await Scripting.waitLeisure();
+    await waitFor(() => api.glass.rect.height === 60,
+        'clearing the query settles the compact bar', 2000);
 
-    const savedGlassMode = api.settings.get_string('glass-mode');
-    const savedBlurRadius = api.settings.get_int('blur-radius');
+    const savedBrightness = api.settings.get_int('glass-brightness');
     const savedAnimations = api.settings.get_boolean('animations');
     const searchRect = api.glass.rect;
+    const clones = api.glass.cloneCount;
 
-    api.settings.set_string('glass-mode', 'liquid');
+    api.settings.set_boolean('animations', true);
+    api.settings.set_int('glass-brightness', 0);
     await Scripting.waitLeisure();
-    assert(api.glass.effectiveMode === 'liquid', 'glass mode applies live');
+    assert(api.glass.brightness === 0 && api.glass.blurRadius === 30,
+        'dark brightness applies live');
+    assert(api.glass.cloneCount === clones,
+        'brightness does not rebuild the backdrop');
 
-    api.settings.set_int('blur-radius', 0);
+    api.settings.set_int('glass-brightness', 100);
     await Scripting.waitLeisure();
-    assert(api.glass.blurRadius === 0, 'blur radius applies live');
+    assert(api.glass.brightness === 100 && api.glass.blurRadius === 14,
+        'clear brightness applies live');
+    assert(api.glass.cloneCount === clones,
+        'the clear end keeps the same copies');
 
-    api.settings.set_string('glass-mode', 'off');
+    api.settings.set_int('glass-brightness', 50);
     await Scripting.waitLeisure();
-    assert(api.glass.effectiveMode === 'off', 'glass off applies live');
+    assert(api.glass.blurRadius === 22, 'the default brightness blurs 22 px');
 
-    api.settings.set_string('glass-mode', savedGlassMode);
-    api.settings.set_int('blur-radius', savedBlurRadius);
+    api.settings.set_int('glass-brightness', savedBrightness);
     await Scripting.waitLeisure();
-    assert(api.glass.effectiveMode === 'off' || api.glass.cloneCount > 0,
-        'clones return when glass is re-enabled');
+    assert(api.glass.brightness === savedBrightness,
+        'brightness is restored');
+
+    await openOverlay(api, 'search');
+    api.overlay.close();
+    assert(api.overlay.closing, 'close reports the closing state');
+    assert(!api.overlay.reactive, 'close releases input at once');
+    assert(Main.modalCount === 0, 'close pops the modal grab at once');
+    api.blocker.toggle();
+    await waitFor(() => api.overlay.visible && !api.overlay.closing,
+        'Super reopens search during close', 2000);
+    await settle(api, 'the reopened search settles');
+    assert(api.overlay.view === 'search', 'reopening keeps search');
+    await closeOverlay(api);
+
+    api.blocker.toggleApps();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'Super+A opens the grid for the close test', 2000);
+    await settle(api, 'the grid settles before close');
+    api.overlay.close();
+    assert(api.overlay.closing, 'the grid starts its close fade');
+    api.blocker.toggleApps();
+    await waitFor(() => api.overlay.visible && !api.overlay.closing,
+        'Super+A reopens the grid during close', 2000);
+    await settle(api, 'the reopened grid settles');
+    assert(api.overlay.view === 'grid', 'reopening keeps the grid');
+    await closeOverlay(api);
+
+    await openOverlay(api, 'search');
+    api.overlay._activateRow({kind: 'calc', result: '2'});
+    assert(!api.overlay.visible,
+        'activation closes immediately, without the fade');
+    assert(api.glass.cloneCount === 0, 'activation removes the copies at once');
 
     api.settings.set_boolean('animations', false);
     await Scripting.waitLeisure();
-    api.overlay.close();
-    api.overlay.open();
-    await Scripting.waitLeisure();
+    await openOverlay(api, 'search');
     assert(api.overlay.visible && !api.overlay.animating,
         'opens without animation');
     api.settings.set_boolean('animations', savedAnimations);
@@ -294,7 +351,9 @@ export async function run() {
 
     api.overlay.entry.set_text('fire');
     api.blocker.toggleApps();
-    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'the app-grid shortcut switches views', 2000);
+    await settle(api, 'the grid view settles');
     assert(api.overlay.view === 'grid', 'grid view is active');
     assert(api.overlay.entry.text === '', 'entering grid clears query');
     assert(api.glass.rect.width > searchRect.width, 'glass rect follows the grid');
@@ -336,6 +395,7 @@ export async function run() {
     api.blocker.toggleApps();
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'grid', 'toggle opens the grid from search');
+    await settle(api, 'the grid after typing settles');
 
     api.settings.set_boolean('grid-labels', false);
     await Scripting.waitLeisure();
@@ -377,20 +437,17 @@ export async function run() {
         'first open without labels keeps the cell capacity');
     await waitForGrid(api.appGrid._grid,
         'first open after a closed label change fits');
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await closeOverlay(api);
     api.settings.set_boolean('grid-labels', true);
     await Scripting.waitLeisure();
 
     api.blocker.toggleApps();
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'grid',
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'the Sift app-grid shortcut opens the grid from closed', 2000);
+    await settle(api, 'the reopened grid from closed settles');
+    assert(api.overlay.view === 'grid',
         'the Sift app-grid shortcut opens the grid from closed');
-    api.overlay.close();
-    await Scripting.waitLeisure();
-
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await closeOverlay(api);
 
     // Nothing else opens the overview while it is disabled.
     assert(Main.overview.shouldToggleByCornerOrButton() === false,
@@ -433,8 +490,8 @@ export async function run() {
         'the Sift search shortcut opens over the GNOME overview', 2000);
     await waitFor(() => !Main.overview.visible,
         'the Sift search shortcut closes the GNOME overview', 2000);
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await settle(api, 'search over the GNOME overview settles');
+    await closeOverlay(api);
 
     Main.overview.show();
     await waitFor(() => Main.overview.visible,
@@ -444,8 +501,8 @@ export async function run() {
         'the Sift app-grid shortcut opens over the GNOME overview', 2000);
     await waitFor(() => !Main.overview.visible,
         'the Sift app-grid shortcut closes the GNOME overview', 2000);
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await settle(api, 'the grid over the GNOME overview settles');
+    await closeOverlay(api);
 
     // Disabling again takes the Super defaults back and suppresses the rest.
     api.settings.set_boolean('disable-overview', true);
@@ -462,11 +519,11 @@ export async function run() {
         'the GNOME overview stays closed after disabling again');
     assert(!api.overlay.visible, 'GNOME overview triggers do not open Sift');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible, 'Super opens Sift again');
+    await waitFor(() => api.overlay.visible, 'Super opens Sift again', 2000);
+    await settle(api, 'the reopened search settles');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'Super closes Sift again');
+    await waitFor(() => !api.overlay.visible,
+        'Super closes Sift again', 2000);
 
     // A custom accelerator replaces the default and stays bound.
     api.settings.set_strv('sift-search-shortcut', ['<Control>k']);
@@ -478,10 +535,12 @@ export async function run() {
     assert(!api.overlay.visible,
         'Super stops opening Sift once the search shortcut is customized');
     api.blocker.toggle();
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible, 'Sift opens after customizing the search shortcut');
+    await waitFor(() => api.overlay.visible,
+        'Sift opens after customizing the search shortcut', 2000);
+    await settle(api, 'the custom-shortcut search settles');
     api.blocker.toggle();
-    await Scripting.waitLeisure();
+    await waitFor(() => !api.overlay.visible,
+        'Sift closes after customizing the search shortcut', 2000);
     api.settings.reset('sift-search-shortcut');
     await Scripting.waitLeisure();
     assert(!Main.wm._allowedKeybindings['sift-search-shortcut'],
@@ -489,11 +548,12 @@ export async function run() {
     assert(api.settings.get_strv('sift-search-shortcut')[0] === '<Control>space',
         'the search shortcut default is restored');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible, 'Super opens Sift again after reset');
+    await waitFor(() => api.overlay.visible,
+        'Super opens Sift again after reset', 2000);
+    await settle(api, 'the reset search settles');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'Super closes Sift again after reset');
+    await waitFor(() => !api.overlay.visible,
+        'Super closes Sift again after reset', 2000);
 
     api.settings.set_strv('sift-apps-shortcut', ['<Control>j']);
     await Scripting.waitLeisure();
@@ -504,11 +564,10 @@ export async function run() {
     assert(!api.overlay.visible,
         'Super+A stops opening the grid once the app-grid shortcut is customized');
     api.blocker.toggleApps();
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'grid',
-        'Sift opens the grid after customizing the app-grid shortcut');
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'Sift opens the grid after customizing the app-grid shortcut', 2000);
+    await settle(api, 'the custom grid shortcut settles');
+    await closeOverlay(api);
     api.settings.reset('sift-apps-shortcut');
     await Scripting.waitLeisure();
     assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
@@ -516,11 +575,10 @@ export async function run() {
     assert(api.settings.get_strv('sift-apps-shortcut')[0] === '<Alt>a',
         'the app-grid shortcut default is restored');
     Main.overview.show(OverviewControls.ControlsState.APP_GRID);
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'grid',
-        'Super+A opens the grid again after reset');
-    api.overlay.close();
-    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
+        'Super+A opens the grid again after reset', 2000);
+    await settle(api, 'the reset grid settles');
+    await closeOverlay(api);
 
     Main.extensionManager.disableExtension(UUID);
     await waitFor(() => Main.extensionManager.lookup(UUID)?.state === ExtensionState.INACTIVE,
@@ -559,12 +617,12 @@ export async function run() {
     assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
         'the app-grid key is unbound again while Super+A is the default');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(api.overlay.visible && api.overlay.view === 'search',
-        'Super opens Sift after re-enabling');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'Super opens Sift after re-enabling', 2000);
+    await settle(api, 'the re-enabled search settles');
     global.display.emit('overlay-key');
-    await Scripting.waitLeisure();
-    assert(!api.overlay.visible, 'Super closes Sift after re-enabling');
+    await waitFor(() => !api.overlay.visible,
+        'Super closes Sift after re-enabling', 2000);
 
     print('sift shell smoke ok');
 }
