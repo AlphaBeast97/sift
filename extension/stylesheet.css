@@ -2,22 +2,13 @@
 
 .sift-panel {
     background-color: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 18px;
-    /* A box-shadow would be clipped to the allocation and only show inside
-       the rounded corner cut-outs, so the glass paints the edge instead. */
+    /* The shader paints the fill and the rounded edge; a CSS border would sit
+       outside the shader's antialiased cut. */
 }
 
-.sift-panel.sift-glass-liquid {
-    border-color: transparent;
-}
-
-.sift-panel.sift-glass-frosted {
-    background-color: rgba(28, 30, 36, 0.55);
-}
-
-.sift-panel.sift-glass-off {
+.sift-panel.sift-glass-fallback {
     background-color: rgba(28, 30, 36, 0.92);
+    border-radius: 18px;
 }
 
 .sift-entry-bar {
@@ -214,4 +205,40 @@
 
 .sift-light .sift-empty-button:hover {
     background-color: rgba(0, 0, 0, 0.14);
+}
+
+/* The glass brightness never flips the text colour: dark scheme stays white,
+   light scheme stays dark. These soft shadows hold the contrast over windows. */
+.sift-dark .sift-entry,
+.sift-dark .sift-entry StLabel.hint-text,
+.sift-dark .sift-row-title,
+.sift-dark .sift-row-subtitle,
+.sift-dark .sift-footer-hint,
+.sift-dark .sift-empty-title,
+.sift-dark .sift-empty-hint,
+.sift-dark .sift-empty-button {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.sift-dark .sift-search-icon,
+.sift-dark .sift-row-icon,
+.sift-dark .sift-grid-button {
+    icon-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.sift-light .sift-entry,
+.sift-light .sift-entry StLabel.hint-text,
+.sift-light .sift-row-title,
+.sift-light .sift-row-subtitle,
+.sift-light .sift-footer-hint,
+.sift-light .sift-empty-title,
+.sift-light .sift-empty-hint,
+.sift-light .sift-empty-button {
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
+}
+
+.sift-light .sift-search-icon,
+.sift-light .sift-row-icon,
+.sift-light .sift-grid-button {
+    icon-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
 }
