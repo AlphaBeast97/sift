@@ -384,6 +384,7 @@ export async function run() {
     await waitForGrid(api.appGrid._grid, 'grid icons fit their pages');
 
     const indicator = api.appGrid._indicators;
+    assert(indicator.width > 0, 'page indicators have their dots');
     assert(Math.abs(indicator.x + indicator.width / 2 -
         api.appGrid.width / 2) <= 1, 'page indicators are centered');
 
@@ -473,9 +474,10 @@ export async function run() {
         activations++;
     };
     api.appGrid._tiles[0].activate();
-    assert(activations === 1, 'a tile click activates the app through Sift');
+    assert(api.overlay.closing, 'a tile click starts the close fade');
     await waitFor(() => !api.overlay.visible,
         'a tile click closes the app grid', 2000);
+    assert(activations === 1, 'the app opens after the fade');
     clickedApp.activate = activateApp;
 
     await openOverlay(api, 'grid');

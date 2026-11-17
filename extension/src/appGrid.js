@@ -108,8 +108,10 @@ export const AppGrid = GObject.registerClass(
             const width = Math.max(0, this.width);
             const height = Math.max(0, this.height);
             const scrollHeight = Math.max(0, height - INDICATOR_HEIGHT);
-            const [, naturalWidth] = this._indicators.get_preferred_width(-1);
-            const indicatorWidth = Math.min(width, Math.max(0, naturalWidth));
+            const dotsWidth = this._indicators.get_children().reduce(
+                (total, dot) => total + (dot.width ||
+                    Math.max(0, dot.get_preferred_width(-1)[1])), 0);
+            const indicatorWidth = Math.min(width, Math.max(0, dotsWidth));
 
             this._scroll.set_position(0, 0);
             this._scroll.set_size(width, scrollHeight);

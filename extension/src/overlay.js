@@ -71,6 +71,7 @@ export const SiftOverlay = GObject.registerClass({
         this._latestQuery = null;
         this._reindexTimer = 0;
         this._prewarmId = 0;
+        this._afterClose = null;
         this._themeId = 0;
 
         this._syncTheme();
@@ -644,12 +645,13 @@ export const SiftOverlay = GObject.registerClass({
         this._syncFooter();
     }
 
-    close({immediate = false} = {}) {
+    close({immediate = false, then = null} = {}) {
         if (this._destroyed || this._state === 'closed' ||
             this._state === 'closing')
             return;
 
         this._state = 'closing';
+        this._afterClose = then;
         this._motion.stop();
         if (this._grab) {
             const grab = this._grab;
@@ -709,10 +711,15 @@ export const SiftOverlay = GObject.registerClass({
         this._content.opacity = 255;
         this.opacity = 255;
         this._rect = null;
+
+        const after = this._afterClose;
+        this._afterClose = null;
         this.emit('closed');
+        after?.();
     }
 
     _reopen(view) {
+        this._afterClose = null;
         const grab = Main.pushModal(this, {actionMode: Shell.ActionMode.OVERVIEW});
         if (!grab) {
             this._finishClose();
@@ -835,6 +842,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this._destroyed = true;
         this._state = 'closed';
+        this._afterClose = null;
         this._motion?.destroy();
         this._ease?.destroy();
         this._ease = null;
@@ -979,35 +987,37 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _activateRow(row, {newWindow = false} = {}) {
-        if (row.kind === 'app' && row.app) {
-            if (newWindow && row.app.can_open_new_window())
-                row.app.open_new_window(-1);
-            else
-                row.app.activate();
-        } else if (row.kind === 'file' || row.kind === 'dir') {
-            if (!this._activateFile(row, newWindow))
+        if (row.kind === 'file' || row.kind === 'dir') {
+            if (!Gio.File.new_for_path(row.path).query_exists(null)) {
+                this._daemonFiles = this._daemonFiles
+                    .filter(file => file.path !== row.path);
+                this.refreshApps();
+                this._scheduleReindex();
                 return;
-        } else if (row.kind === 'calc') {
-            this._copySelected();
+            }
         }
 
-        this._onActivate?.(row, {newWindow});
-        this.close();
-    }
+        // Launch after the fade: a window that takes focus or covers the
+        // screen must not cut the close animation short.
+        const activate = () => {
+            if (row.kind === 'app' && row.app) {
+                if (newWindow && row.app.can_open_new_window())
+                    row.app.open_new_window(-1);
+                else
+                    row.app.activate();
+            } else if (row.kind === 'file' || row.kind === 'dir') {
+                if (newWindow)
+                    revealFile(row.path);
+                else
+                    openFile(row.path);
+            } else if (row.kind === 'calc') {
+                this._copySelected();
+            }
 
-    _activateFile(row, reveal) {
-        if (!Gio.File.new_for_path(row.path).query_exists(null)) {
-            this._daemonFiles = this._daemonFiles.filter(file => file.path !== row.path);
-            this.refreshApps();
-            this._scheduleReindex();
-            return false;
-        }
+            this._onActivate?.(row, {newWindow});
+        };
 
-        if (reveal)
-            revealFile(row.path);
-        else
-            openFile(row.path);
-        return true;
+        this.close({then: activate});
     }
 
     _scheduleReindex() {
