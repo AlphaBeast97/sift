@@ -1,7 +1,7 @@
 # Sift — Isle-like Liquid Glass and Motion — Design
 
 Date: 2026-11-17
-Status: **Draft for approval.** No implementation starts until this document is approved.
+Status: **Approved.** Implemented by `docs/superpowers/plans/2026-11-17-isle-like-liquid-glass.md`.
 Scope: the visible glass and motion of Sift on GNOME Shell 51. Search behavior,
 shortcuts, the Rust daemon, and the app-grid feature set do not change.
 
