@@ -304,6 +304,27 @@ export async function run() {
     await Scripting.waitLeisure();
     await waitForGrid(api.appGrid._grid, 'grid icons fit their pages');
 
+    // Scrolling moves whole pages; native scrolling used to stop between.
+    const gridScroll = api.appGrid._scroll;
+    assert(!gridScroll.enable_mouse_scrolling &&
+        !gridScroll.enable_touch_scrolling,
+    'the grid disables native partial scrolling');
+    if (api.appGrid._grid.nPages > 1) {
+        const gridManager = api.appGrid._grid.layout_manager;
+        const hadjustment = api.appGrid._grid.hadjustment;
+        api.appGrid._onScroll(0, 1);
+        await waitFor(() => api.appGrid._grid.currentPage === 1,
+            'a scroll turns to the next page', 2000);
+        await waitFor(
+            () => Math.abs(hadjustment.value - gridManager.pageWidth) < 1,
+            'the scroll settles on a whole page', 2000);
+        api.appGrid._onScroll(0, -1);
+        await waitFor(() => api.appGrid._grid.currentPage === 0,
+            'a scroll turns back a page', 2000);
+        await waitFor(() => Math.abs(hadjustment.value) < 1,
+            'the scroll settles on the first page', 2000);
+    }
+
     api.overlay.handleKey('t', 0);
     api.overlay.entry.set_text('t');
     await Scripting.waitLeisure();

@@ -11,6 +11,7 @@ import * as PageIndicators from 'resource:///org/gnome/shell/ui/pageIndicators.j
 import {gridLayout, moveSelection, pageSelection} from './lib/gridMath.js';
 
 const CHUNK_SIZE = 30;
+const SCROLL_TIMEOUT = 150;
 const SPACING = 8;
 
 export const AppGrid = GObject.registerClass(
@@ -41,6 +42,7 @@ export const AppGrid = GObject.registerClass(
             this._chunkId = 0;
             this._mapId = 0;
             this._layoutId = 0;
+            this._scrollTimeoutId = 0;
             this._destroyed = false;
 
             const padding = new Clutter.Margin({
@@ -64,11 +66,24 @@ export const AppGrid = GObject.registerClass(
                 style_class: 'sift-app-grid-scroll',
                 x_expand: true,
                 y_expand: true,
+                enable_mouse_scrolling: false,
+                enable_touch_scrolling: false,
                 hscrollbar_policy: St.PolicyType.EXTERNAL,
                 vscrollbar_policy: St.PolicyType.NEVER,
                 child: this._grid,
             });
             this.add_child(this._scroll);
+
+            // Native scrolling freezes between pages. Turn wheel and touchpad
+            // scrolls into whole-page steps instead.
+            const scrollController = new Clutter.ScrollController({
+                flags: Clutter.ScrollControllerFlags.DISCRETE |
+                    Clutter.ScrollControllerFlags.SCROLL_HORIZONTAL |
+                    Clutter.ScrollControllerFlags.SCROLL_VERTICAL,
+            });
+            scrollController.connect('scroll',
+                (_controller, _sprite, _source, dx, dy) => this._onScroll(dx, dy));
+            this.add_action(scrollController);
 
             this._indicators = new PageIndicators.PageIndicators(
                 Clutter.Orientation.HORIZONTAL);
@@ -169,6 +184,18 @@ export const AppGrid = GObject.registerClass(
                 this._columns, this._rows));
         }
 
+        // Native scrolling stops between pages, so scrolls become page steps.
+        _onScroll(dx, dy) {
+            if (this._scrollTimeoutId || (dx === 0 && dy === 0))
+                return;
+
+            this.page(dx < 0 || dy < 0 ? -1 : 1);
+            this._scrollTimeoutId = GLib.timeout_add_once(
+                GLib.PRIORITY_DEFAULT, SCROLL_TIMEOUT, () => {
+                    this._scrollTimeoutId = 0;
+                });
+        }
+
         activateSelected({newWindow = false} = {}) {
             const record = this._records[this._selected];
             if (record)
@@ -189,6 +216,10 @@ export const AppGrid = GObject.registerClass(
             if (this._layoutId) {
                 GLib.source_remove(this._layoutId);
                 this._layoutId = 0;
+            }
+            if (this._scrollTimeoutId) {
+                GLib.source_remove(this._scrollTimeoutId);
+                this._scrollTimeoutId = 0;
             }
             this._tiles = [];
             super.destroy();
