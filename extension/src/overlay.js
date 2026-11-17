@@ -12,18 +12,19 @@ import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
+import {MOVE, Spring} from './lib/spring.js';
 import {AppGrid} from './appGrid.js';
 import {loadFileIcon, openFile, revealFile} from './files.js';
+import {EaseDriver, SpringDriver} from './motion.js';
 import {ResultsView} from './results.js';
 
-const OPEN_ANIMATION_MS = 120;
-const VIEW_ANIMATION_MS = 150;
+const OPEN_FADE_MS = 120;
+const CLOSE_FADE_MS = 120;
+const CONTENT_IN_MS = 120;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
-const GLASS_KEYS = new Set([
-    'glass-mode', 'glass-opacity', 'blur-radius', 'glass-tint', 'animations',
-]);
+const GLASS_KEYS = new Set(['glass-brightness', 'animations']);
 
 export const SiftOverlay = GObject.registerClass({
     Signals: {
@@ -48,7 +49,16 @@ export const SiftOverlay = GObject.registerClass({
         this._searchHeight = settings.get_int('search-height');
         this._grab = null;
         this._destroyed = false;
-        this._animating = false;
+        this._state = 'closed';
+        this._motionDone = true;
+        this._openFade = false;
+        this._revealPending = false;
+        this._onSettled = null;
+        this._geometryTravel = 0;
+        this._viewToken = 0;
+        this._ease = null;
+        this._content = null;
+        this._suspendGeometry = false;
         this._daemonCalc = null;
         this._daemonFiles = [];
         this._home = GLib.get_home_dir();
@@ -58,7 +68,6 @@ export const SiftOverlay = GObject.registerClass({
         this._queryBusy = false;
         this._latestQuery = null;
         this._reindexTimer = 0;
-        this._glassThawTimer = 0;
         this._themeId = 0;
 
         this._syncTheme();
@@ -71,20 +80,17 @@ export const SiftOverlay = GObject.registerClass({
             style_class: 'sift-panel',
             reactive: true,
             clip_to_allocation: true,
-            layout_manager: new Clutter.BinLayout(),
+            layout_manager: new Clutter.FixedLayout(),
         });
-        this._panel.set_pivot_point(0.5, 0.5);
         this.add_child(this._panel);
 
         this._glass = new GlassPanel({settings: this._settings});
         this._glass.attach(this._panel);
 
-        const content = new St.BoxLayout({
+        this._content = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
-            x_expand: true,
-            y_expand: true,
         });
-        this._panel.add_child(content);
+        this._panel.add_child(this._content);
 
         const entryBar = new St.BoxLayout({
             orientation: Clutter.Orientation.HORIZONTAL,
@@ -206,11 +212,20 @@ export const SiftOverlay = GObject.registerClass({
         footer.add_child(this._footerLabel);
         footer.add_child(this._statusLabel);
 
-        content.add_child(entryBar);
-        content.add_child(this._scroll);
-        content.add_child(this._empty);
-        content.add_child(this._gridView);
-        content.add_child(footer);
+        this._content.add_child(entryBar);
+        this._content.add_child(this._scroll);
+        this._content.add_child(this._empty);
+        this._content.add_child(this._gridView);
+        this._content.add_child(footer);
+
+        this._springs = {
+            x: new Spring(0, MOVE),
+            y: new Spring(0, MOVE),
+            width: new Spring(0, MOVE),
+            height: new Spring(0, MOVE),
+        };
+        this._motion = new SpringDriver(this._panel, Object.values(this._springs),
+            () => this._onMotionFrame());
 
         this._footerLabel.text = '↑↓ Navigate · Enter Open · Esc Close';
         this._syncFooter();
@@ -238,10 +253,8 @@ export const SiftOverlay = GObject.registerClass({
 
         this._settingsId = settings.connect('changed::max-results', () => {
             this._maxRows = settings.get_int('max-results');
-            if (this.visible && this._view === 'search') {
-                this._applyGeometry();
+            if (this.visible && this._view === 'search')
                 this.refreshApps();
-            }
         });
         this._gridLabelsId = settings.connect('changed::grid-labels', () => {
             this._grid?.setShowLabels(settings.get_boolean('grid-labels'));
@@ -259,7 +272,7 @@ export const SiftOverlay = GObject.registerClass({
             if (!this.visible)
                 return;
             const view = this._view;
-            this.close();
+            this.close({immediate: true});
             this.open(view);
         });
     }
@@ -268,8 +281,13 @@ export const SiftOverlay = GObject.registerClass({
         return this._view;
     }
 
+    get closing() {
+        return this._state === 'closing';
+    }
+
     get animating() {
-        return this._animating;
+        return this._state === 'opening' || this._state === 'closing' ||
+            this._motion.running || this._openFade || this._ease?.running;
     }
 
     get entry() {
@@ -334,6 +352,7 @@ export const SiftOverlay = GObject.registerClass({
         if (this._view !== 'search')
             return;
 
+        this._results.setMaxRows(this._maxRows);
         const previous = this._results.selectedRow?.key ?? null;
         const records = this._apps
             ? this._apps.search(this._entry.text, Math.min(4, this._maxRows))
@@ -351,7 +370,7 @@ export const SiftOverlay = GObject.registerClass({
         this._syncEmptyState();
 
         if (this.visible && this._view === 'search')
-            this._applyGeometry();
+            this._applyGeometry(true);
 
         for (let i = 0; i < this._results.rowCount; i++) {
             const row = this._results.rows[i];
@@ -513,6 +532,11 @@ export const SiftOverlay = GObject.registerClass({
         if (this._destroyed || Main.sessionMode.currentMode !== 'user')
             return;
 
+        if (this._state === 'closing') {
+            this._reopen(view);
+            return;
+        }
+
         if (this.visible) {
             this._setView(view);
             this._entry.clutter_text.grab_key_focus();
@@ -522,55 +546,185 @@ export const SiftOverlay = GObject.registerClass({
         this._monitorIndex = global.display.get_current_monitor();
         this._maxRows = this._settings.get_int('max-results');
         this._searchHeight = this._settings.get_int('search-height');
-        this._setView(view);
+        this._state = 'opening';
+        this._viewToken++;
+
+        const target = this._targetRect(view);
+        if (!target) {
+            this._state = 'closed';
+            return;
+        }
+
+        // The grid lays out once, at its target size, before it is shown.
+        this._content.remove_all_transitions();
+        this._content.set_size(target.width, target.height);
+        this._content.set_position(0, 0);
+        this._setViewState(view);
+        this._applyGeometry(false);
 
         const grab = Main.pushModal(this, {actionMode: Shell.ActionMode.OVERVIEW});
-        if (!grab)
+        if (!grab) {
+            this._state = 'closed';
             return;
+        }
 
         this._grab = grab;
+        this.reactive = true;
         this._syncFullscreen();
         this.show();
         this.refreshApps();
         this._glass?.applySettings();
-        this._animateOpen();
-        this._glass?.open();
+
+        this._content.set_size(target.width, target.height);
+        this._content.set_position(0, 0);
+        this._content.opacity = 255;
+
+        if (!this._animationsEnabled()) {
+            this.opacity = 255;
+            this._panel.set_position(target.x, target.y);
+            this._panel.set_size(target.width, target.height);
+            this._glass?.setRect(target);
+            this._glass?.open();
+            this._seedSprings(target);
+            this._state = 'open';
+        } else {
+            this._panel.set_position(target.x, target.y + 12);
+            this.opacity = 0;
+            this._seedSprings({...target, y: target.y + 12});
+            this._glass?.setRect(this._panelRect());
+            this._glass?.open();
+            this._openFade = true;
+            this.ease({
+                opacity: 255,
+                duration: OPEN_FADE_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+                onComplete: () => {
+                    this._openFade = false;
+                    this._finishOpening();
+                },
+            });
+            this._springTo(target);
+        }
+
         this._entry.clutter_text.grab_key_focus();
         this._daemon?.ensureFresh();
         this._syncFooter();
     }
 
-    close() {
-        if (this._destroyed)
+    close({immediate = false} = {}) {
+        if (this._destroyed || this._state === 'closed' ||
+            this._state === 'closing')
             return;
 
+        this._state = 'closing';
+        this._motion.stop();
         if (this._grab) {
             const grab = this._grab;
             this._grab = null;
             Main.popModal(grab);
         }
 
-        this._grid?.close();
-
-        if (!this.visible)
-            return;
-
+        this.reactive = false;
         this._queryGeneration++;
         this._cancelQueryTimer();
-        this._cancelGlassThaw();
         this._latestQuery = null;
         this._daemonCalc = null;
         this._daemonFiles = [];
+
+        if (immediate || !this._animationsEnabled()) {
+            this._finishClose();
+            return;
+        }
+
+        this._ease?.destroy();
+        const startY = this._panel.y;
+        const endY = this._rect.y + 8;
+        const startOpacity = this.opacity;
+        this._ease = new EaseDriver(this._panel, CLOSE_FADE_MS, progress => {
+            const y = startY + (endY - startY) * progress;
+            this._panel.set_position(this._panel.x, y);
+            this._glass?.setRect({...this._rect, y});
+            this.opacity = Math.round(startOpacity * (1 - progress));
+        }, () => this._finishClose());
+        this._ease.start();
+    }
+
+    _finishClose() {
+        this._ease?.destroy();
+        this._ease = null;
+        this._motion.stop();
+        if (this._grab) {
+            const grab = this._grab;
+            this._grab = null;
+            Main.popModal(grab);
+        }
+        this.reactive = false;
         this.remove_all_transitions();
-        this._panel.remove_all_transitions();
-        this._animating = false;
-        this._glass?.close();
+        this._content.remove_all_transitions();
+        this._openFade = false;
+        this._revealPending = false;
+        this._viewToken++;
+        this._state = 'closed';
         this.visible = false;
+        this._glass?.close();
+        this._grid?.close();
         this._entry.text = '';
         this._results.setRows([]);
         this._syncEmptyState();
         this._syncFooter();
+        this._content.opacity = 255;
+        this.opacity = 255;
+        this._rect = null;
         this.emit('closed');
+    }
+
+    _reopen(view) {
+        const grab = Main.pushModal(this, {actionMode: Shell.ActionMode.OVERVIEW});
+        if (!grab) {
+            this._finishClose();
+            return;
+        }
+
+        this._grab = grab;
+        this.reactive = true;
+        this._ease?.destroy();
+        this._ease = null;
+        this.remove_all_transitions();
+        this._viewToken++;
+        this._state = 'opening';
+        this._motionDone = false;
+        this._revealPending = false;
+
+        const target = this._targetRect(view);
+        if (!target) {
+            this._finishClose();
+            return;
+        }
+
+        this._content.remove_all_transitions();
+        this._content.set_size(target.width, target.height);
+        this._content.set_position(0, 0);
+        this._suspendGeometry = true;
+        this._setViewState(view);
+        this._suspendGeometry = false;
+        this._rect = target;
+        this._content.opacity = 255;
+
+        this._seedSprings(this._panelRect());
+        this._springTo(target);
+
+        this._openFade = true;
+        this.ease({
+            opacity: 255,
+            duration: OPEN_FADE_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onComplete: () => {
+                this._openFade = false;
+                this._finishOpening();
+            },
+        });
+
+        this._entry.clutter_text.grab_key_focus();
     }
 
     hide() {
@@ -578,13 +732,20 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     toggle() {
-        if (this.visible)
+        if (this._state === 'closing')
+            this.open('search');
+        else if (this.visible)
             this.close();
         else
             this.open('search');
     }
 
     showApps() {
+        if (this._state === 'closing') {
+            this.open('grid');
+            return;
+        }
+
         if (this.visible)
             this._setView('grid');
         else
@@ -592,7 +753,7 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     focusSearch() {
-        if (!this.visible)
+        if (this._state === 'closing' || !this.visible)
             this.open('search');
         else
             this._setView('search');
@@ -635,7 +796,10 @@ export const SiftOverlay = GObject.registerClass({
             return;
 
         this._destroyed = true;
-        this._animating = false;
+        this._state = 'closed';
+        this._motion?.destroy();
+        this._ease?.destroy();
+        this._ease = null;
         this._queryGeneration++;
         this._cancelQueryTimer();
         if (this._reindexTimer) {
@@ -669,7 +833,6 @@ export const SiftOverlay = GObject.registerClass({
             this._settings.disconnect(this._glassSettingsId);
             this._glassSettingsId = 0;
         }
-        this._cancelGlassThaw();
         if (this._themeId) {
             St.Settings.get().disconnect(this._themeId);
             this._themeId = 0;
@@ -787,7 +950,7 @@ export const SiftOverlay = GObject.registerClass({
         }
 
         this._onActivate?.(row, {newWindow});
-        this.close();
+        this.close({immediate: true});
     }
 
     _activateFile(row, reveal) {
@@ -822,13 +985,25 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _setView(view) {
+        if (view === this._view) {
+            this._entry.clutter_text.grab_key_focus();
+            return;
+        }
+
+        this._setViewState(view);
+        this._applyGeometry(false);
+    }
+
+    _setViewState(view) {
         this._view = view === 'grid' ? 'grid' : 'search';
 
         const grid = this._view === 'grid';
         this._results.visible = !grid;
         this._gridView.visible = grid;
-        this._gridIcon.icon_name = grid ? 'edit-find-symbolic' : 'view-app-grid-symbolic';
-        this._gridButton.accessible_name = grid ? 'Show search' : 'Show all applications';
+        this._gridIcon.icon_name = grid
+            ? 'edit-find-symbolic' : 'view-app-grid-symbolic';
+        this._gridButton.accessible_name = grid
+            ? 'Show search' : 'Show all applications';
 
         if (grid) {
             this._entry.text = '';
@@ -843,119 +1018,172 @@ export const SiftOverlay = GObject.registerClass({
             : '↑↓ Navigate · Enter Open · Esc Close';
         this._syncEmptyState();
         this._syncFooter();
-        this._glass?.freeze();
-        this._applyGeometry(this.visible);
-        this._scheduleGlassThaw();
     }
 
-    _scheduleGlassThaw() {
-        this._cancelGlassThaw();
-        const delay = this._animationsEnabled() ? VIEW_ANIMATION_MS : 0;
-        this._glassThawTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
-            this._glassThawTimer = 0;
-            this._glass?.thaw();
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    _cancelGlassThaw() {
-        if (!this._glassThawTimer)
-            return;
-
-        GLib.source_remove(this._glassThawTimer);
-        this._glassThawTimer = 0;
-    }
-
-    _applyGeometry(animate = false) {
+    _targetRect(view = this._view) {
         const monitor = Main.layoutManager.monitors[this._monitorIndex] ??
             Main.layoutManager.primaryMonitor;
         if (!monitor)
-            return;
+            return null;
 
         const panelBox = Main.layoutManager.panelBox;
         const topBarBottom = panelBox ? panelBox.y + panelBox.height : monitor.y;
 
-        if (this._view === 'grid') {
-            this._setPanelRect(gridPanel(monitor, topBarBottom), animate);
+        if (view === 'grid')
+            return gridPanel(monitor, topBarBottom);
+
+        const compact = this._entry.text.trim() === '';
+        return searchPanel(monitor, topBarBottom, this._searchHeight, compact);
+    }
+
+    _applyGeometry(animate = false) {
+        if (this._suspendGeometry)
+            return;
+
+        const rect = this._targetRect();
+        if (!rect)
+            return;
+
+        if (this._rect && this._rect.x === rect.x && this._rect.y === rect.y &&
+            this._rect.width === rect.width && this._rect.height === rect.height)
+            return;
+
+        if (!this.visible || !animate || !this._animationsEnabled() ||
+            this._state !== 'open') {
+            this._setPanelRectInstant(rect);
             return;
         }
 
-        this._results.setMaxRows(this._maxRows);
+        const growing = rect.width >= this._content.width &&
+            rect.height >= this._content.height;
+        this._rect = rect;
 
-        const compact = this._entry.text.trim() === '';
-        this._setPanelRect(
-            searchPanel(monitor, topBarBottom, this._searchHeight, compact), animate);
+        if (growing)
+            this._content.set_size(rect.width, rect.height);
+
+        this._springTo(rect, growing ? null : () => {
+            this._content.set_size(rect.width, rect.height);
+        });
     }
 
-    _setPanelRect(rect, animate = false) {
-        const previous = this._rect;
-        if (previous && previous.x === rect.x && previous.y === rect.y &&
-            previous.width === rect.width && previous.height === rect.height)
+    _panelRect() {
+        return {
+            x: this._panel.x,
+            y: this._panel.y,
+            width: this._panel.width,
+            height: this._panel.height,
+        };
+    }
+
+    _seedSprings(rect) {
+        this._motion.stop();
+        this._springs.x.reset(rect.x);
+        this._springs.y.reset(rect.y);
+        this._springs.width.reset(rect.width);
+        this._springs.height.reset(rect.height);
+        this._motionDone = true;
+    }
+
+    _springTo(rect, onSettled = null) {
+        this._springs.x.setTarget(rect.x);
+        this._springs.y.setTarget(rect.y);
+        this._springs.width.setTarget(rect.width);
+        this._springs.height.setTarget(rect.height);
+        this._geometryTravel = Math.max(
+            Math.abs(rect.x - this._springs.x.value),
+            Math.abs(rect.y - this._springs.y.value),
+            Math.abs(rect.width - this._springs.width.value),
+            Math.abs(rect.height - this._springs.height.value));
+        this._onSettled = onSettled;
+        this._motionDone = false;
+        this._motion.start();
+    }
+
+    _allSettled() {
+        return Object.values(this._springs).every(spring => spring.settled);
+    }
+
+    _travelLeft() {
+        return Math.max(
+            Math.abs(this._springs.x.target - this._springs.x.value),
+            Math.abs(this._springs.y.target - this._springs.y.value),
+            Math.abs(this._springs.width.target - this._springs.width.value),
+            Math.abs(this._springs.height.target - this._springs.height.value));
+    }
+
+    _onMotionFrame() {
+        const rect = {
+            x: this._springs.x.value,
+            y: this._springs.y.value,
+            width: Math.round(this._springs.width.value),
+            height: Math.round(this._springs.height.value),
+        };
+        this._panel.set_position(rect.x, rect.y);
+        this._panel.set_size(rect.width, rect.height);
+        this._glass?.setRect(rect);
+
+        if (this._revealPending &&
+            this._travelLeft() <= Math.max(1, this._geometryTravel * 0.2))
+            this._reveal(this._viewToken);
+
+        if (!this._allSettled())
+            return;
+
+        this._panel.set_position(this._rect.x, this._rect.y);
+        this._panel.set_size(this._rect.width, this._rect.height);
+        this._glass?.setRect(this._rect);
+        this._glass?.settle();
+        this._motionDone = true;
+
+        if (this._revealPending)
+            this._reveal(this._viewToken);
+
+        const settled = this._onSettled;
+        this._onSettled = null;
+        settled?.();
+        this._finishOpening();
+    }
+
+    _reveal(token) {
+        if (token !== this._viewToken || !this._revealPending)
+            return;
+
+        this._revealPending = false;
+        this._content.remove_all_transitions();
+        this._content.opacity = 0;
+        this._content.ease({
+            opacity: 255,
+            duration: CONTENT_IN_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+        });
+    }
+
+    _finishOpening() {
+        if (this._state !== 'opening' || this._openFade || !this._motionDone)
+            return;
+        this._state = 'open';
+    }
+
+    _setPanelRectInstant(rect) {
+        if (this._rect && this._rect.x === rect.x && this._rect.y === rect.y &&
+            this._rect.width === rect.width && this._rect.height === rect.height)
             return;
 
         this._rect = rect;
-
-        if (animate && previous && previous.width > 0 && previous.height > 0 &&
-            this._animationsEnabled()) {
-            this._panel.remove_all_transitions();
-            this._panel.set_pivot_point(0, 0);
-            this._panel.set_position(previous.x, previous.y);
-            this._panel.set_size(rect.width, rect.height);
-            this._panel.set_scale(previous.width / rect.width,
-                previous.height / rect.height);
-            this._panel.ease({
-                x: rect.x,
-                y: rect.y,
-                scale_x: 1,
-                scale_y: 1,
-                duration: VIEW_ANIMATION_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-                onComplete: () => this._panel.set_pivot_point(0.5, 0.5),
-            });
-        } else {
-            this._panel.remove_all_transitions();
-            this._panel.set_scale(1, 1);
-            this._panel.set_pivot_point(0.5, 0.5);
-            this._panel.set_position(rect.x, rect.y);
-            this._panel.set_size(rect.width, rect.height);
-        }
-
-        this._glass.setRect(rect);
+        this._panel.set_position(rect.x, rect.y);
+        this._panel.set_size(rect.width, rect.height);
+        this._content.remove_all_transitions();
+        this._revealPending = false;
+        this._content.set_position(0, 0);
+        this._content.set_size(rect.width, rect.height);
+        this._seedSprings(rect);
+        this._glass?.setRect(rect);
+        this._glass?.settle();
     }
 
     _syncFullscreen() {
         this.set_position(0, 0);
         this.set_size(global.screen_width, global.screen_height);
-    }
-
-    _animateOpen() {
-        this.remove_all_transitions();
-        this._panel.remove_all_transitions();
-
-        if (!this._animationsEnabled()) {
-            this._animating = false;
-            this.opacity = 255;
-            this._panel.set_scale(1, 1);
-            return;
-        }
-
-        this._animating = true;
-        this.opacity = 0;
-        this._panel.set_scale(0.98, 0.98);
-        this.ease({
-            opacity: 255,
-            duration: OPEN_ANIMATION_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-            onComplete: () => {
-                this._animating = false;
-            },
-        });
-        this._panel.ease({
-            scale_x: 1,
-            scale_y: 1,
-            duration: OPEN_ANIMATION_MS,
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-        });
     }
 
     _animationsEnabled() {
