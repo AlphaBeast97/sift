@@ -38,7 +38,7 @@
 
   After login, Super+A does not open the app grid until Super is pressed first; occasionally it still fails afterwards.
 
-- [ ] **Only the top window is used as the glass backdrop**
+- [x] **Only the top window is used as the glass backdrop**
 
   With several windows behind the panel, the backdrop shows only the topmost one and appears glitched.
 
