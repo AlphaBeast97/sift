@@ -992,7 +992,7 @@ export const SiftOverlay = GObject.registerClass({
         }
 
         this._onActivate?.(row, {newWindow});
-        this.close({immediate: true});
+        this.close();
     }
 
     _activateFile(row, reveal) {

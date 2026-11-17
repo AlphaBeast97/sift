@@ -108,11 +108,14 @@ export const AppGrid = GObject.registerClass(
             const width = Math.max(0, this.width);
             const height = Math.max(0, this.height);
             const scrollHeight = Math.max(0, height - INDICATOR_HEIGHT);
+            const [, naturalWidth] = this._indicators.get_preferred_width(-1);
+            const indicatorWidth = Math.min(width, Math.max(0, naturalWidth));
 
             this._scroll.set_position(0, 0);
             this._scroll.set_size(width, scrollHeight);
-            this._indicators.set_position(0, scrollHeight);
-            this._indicators.set_size(width, INDICATOR_HEIGHT);
+            this._indicators.set_size(indicatorWidth, INDICATOR_HEIGHT);
+            this._indicators.set_position(
+                Math.floor((width - indicatorWidth) / 2), scrollHeight);
         }
 
         get itemCount() {
@@ -466,6 +469,8 @@ export const AppGrid = GObject.registerClass(
             const dots = this._indicators.get_children();
             for (let i = 0; i < dots.length; i++)
                 dots[i].accessible_name = `Page ${i + 1}`;
+
+            this.syncSize();
         }
 
         _animationsEnabled() {

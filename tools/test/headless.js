@@ -340,9 +340,11 @@ export async function run() {
 
     await openOverlay(api, 'search');
     api.overlay._activateRow({kind: 'calc', result: '2'});
-    assert(!api.overlay.visible,
-        'activation closes immediately, without the fade');
-    assert(api.glass.cloneCount === 0, 'activation removes the copies at once');
+    assert(api.overlay.closing, 'activation starts the close fade');
+    await waitFor(() => !api.overlay.visible,
+        'activation closes the overlay', 2000);
+    assert(api.glass.cloneCount === 0,
+        'activation removes the copies when the fade ends');
 
     // A grid switch requested while search is still opening must animate from
     // the compact bar, not snap to the finished grid.
@@ -380,6 +382,10 @@ export async function run() {
     await waitFor(() => !api.appGrid._chunkId, 'grid build settles', 2000);
     await Scripting.waitLeisure();
     await waitForGrid(api.appGrid._grid, 'grid icons fit their pages');
+
+    const indicator = api.appGrid._indicators;
+    assert(Math.abs(indicator.x + indicator.width / 2 -
+        api.appGrid.width / 2) <= 1, 'page indicators are centered');
 
     // Moving inside the page must not restart the page scroll; that repeated
     // scroll is what made the tiles re-settle on every arrow key.
@@ -468,7 +474,8 @@ export async function run() {
     };
     api.appGrid._tiles[0].activate();
     assert(activations === 1, 'a tile click activates the app through Sift');
-    assert(!api.overlay.visible, 'a tile click closes the app grid');
+    await waitFor(() => !api.overlay.visible,
+        'a tile click closes the app grid', 2000);
     clickedApp.activate = activateApp;
 
     await openOverlay(api, 'grid');
