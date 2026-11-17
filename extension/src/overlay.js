@@ -399,6 +399,9 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _onTextChanged() {
+        if (this._state === 'closing' || this._state === 'closed')
+            return;
+
         this._queryGeneration++;
         this._cancelQueryTimer();
         this._daemonCalc = null;
@@ -765,6 +768,10 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     handleKey(symbol, state = 0, preedit) {
+        if (this._destroyed || this._state === 'closing' ||
+            this._state === 'closed')
+            return Clutter.EVENT_PROPAGATE;
+
         const composing = preedit ?? this._entry.clutter_text.has_preedit();
         if (composing)
             return Clutter.EVENT_PROPAGATE;
