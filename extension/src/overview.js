@@ -60,14 +60,18 @@ export class OverviewBlocker {
     }
 
     toggle() {
-        if (this._overlay.visible)
+        if (this._overlay.closing)
+            this._overlay.open('search');
+        else if (this._overlay.visible)
             this._overlay.close();
         else
             this._closeNative(() => this._overlay.open('search'));
     }
 
     toggleApps() {
-        if (this._overlay.visible && this._overlay.view === 'grid')
+        if (this._overlay.closing)
+            this._overlay.open('grid');
+        else if (this._overlay.visible && this._overlay.view === 'grid')
             this._overlay.focusSearch();
         else
             this._closeNative(() => this._overlay.showApps());
