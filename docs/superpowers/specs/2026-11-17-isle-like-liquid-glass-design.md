@@ -38,8 +38,8 @@ that quality. Every decision below serves either visual fidelity or the frame bu
   included, following moves, restacks, and content changes.
 - Clones cached and reused; repaints limited to the glass area; no clone rebuild
   during animation; no per-frame JS while idle.
-- Isle-like motion: springs drive open, close, compact/expanded, and view changes;
-  springs retarget mid-flight; content fades instead of stretching.
+- Isle-like motion: springs drive open, compact/expanded, and view changes; close is
+  a short slide-fade; springs retarget mid-flight; content fades instead of stretching.
 - Keep the existing behavior: shortcuts, overview takeover, focus, results, app grid,
   settings reset, and animations-off support.
 
@@ -148,7 +148,7 @@ the result rises with brightness at every sample.
 | `lens` | 8 | 26 | Edge refraction, px |
 | `band` | 20 | 24 | Depth of the lens band, px |
 | `spread` | 0.30 | 0.70 | Chromatic split at the edge |
-| `rim` | 0.15 | 0.50 | Edge catch-light strength |
+| `rim` | 0.15 | 0.50 | Edge rim strength |
 | `rimWidth` | 1.1 | 1.1 | Edge light falloff, px |
 
 **Light colour scheme**
@@ -162,9 +162,13 @@ the result rises with brightness at every sample.
 | `deep` | 0.12 | 0.10 |
 | `knee` | 0.40 | 0.40 |
 
-The light scheme uses the same blur, saturation, sheen, glow, lens, band, spread,
-rim, and rimWidth values. It has its own lifted tone band because the dark band caps
-backdrop luminance too low for dark text; "same tone structure" was wrong.
+The light scheme uses the same blur, saturation, lens, band, spread, and rim strength.
+Its `sheen` and `glow` are 0 because additive light clamps to white on an already
+bright surface. Its rim mixes toward a dark edge colour (`rimColour`
+`[0.12, 0.12, 0.14]`) instead of white; the dark scheme's rim mixes toward white. This
+keeps the panel edge visible when light glass sits over a white window. The light
+scheme has its own lifted tone band because the dark band caps backdrop luminance too
+low for dark text; "same tone structure" was wrong.
 
 - With the dark scheme, light text stays white at every brightness, with a soft
   `text-shadow`/`icon-shadow` (`0 1px 3px rgba(0, 0, 0, 0.55)`) to hold it over bright
@@ -173,6 +177,10 @@ backdrop luminance too low for dark text; "same tone structure" was wrong.
 - Contrast guardrails, checked by the unit test after the fill is applied:
   - dark scheme at luma 1: output ≤ 0.30 (white contrast ≥ 3.0, plus the shadow);
   - light scheme at luma 0: output ≥ 0.60 (dark-text contrast ≥ 4.3, plus the shadow).
+  - The test computes these from the **raw shader-space output** and treats that as a
+    conservative luminance floor; it does not claim WCAG contrast. The shader output is
+    sRGB-encoded, so displayed contrast is higher. If the test is later changed to
+    compute actual WCAG contrast, it must convert sRGB to linear first.
 - At brightness 50 the presets blend linearly, so blur is 22 px.
 - `GLASS_RADIUS` stays 18.
 - `GLASS_PAD` becomes 32 (the maximum blur plus a small margin) and stays fixed while
@@ -195,10 +203,11 @@ panel (St.Widget, FixedLayout, clip_to_allocation)
 ```
 
 - `panel` uses `Clutter.FixedLayout` and allocates neither child. `shape` is sized to
-  the panel rect by `setRect`. `content` is positioned at 0,0 and sized once to the
-  target view rect for the current transition; the panel's `clip_to_allocation` hides
-  whatever is outside the current panel rect. Content is never re-sized per animation
-  frame, so labels and grid tiles do not reflow as the panel springs.
+  the panel rect by `setRect`. `content` is positioned at 0,0 and has one explicit
+  size: the outgoing view's size while it fades in a view switch, then the target view
+  rect. It is never re-sized per animation frame, so labels and grid tiles do not
+  reflow as the panel springs. The panel's `clip_to_allocation` hides whatever is
+  outside its current rect.
 - `shape` is at 0,0 in the panel and is exactly the panel rect. It carries the mask
   and tone shader. The shader is the outermost glass effect, and it cuts the rounded
   corners.
@@ -310,9 +319,10 @@ shader module.
 5. Tone-map:
    `lo + span * luma^gamma * (1 - deep * smoothstep(knee, 1, luma))`, then apply
    saturation to the colour difference.
-6. Add `sheen` from the top, `glow` inside the edge, and the directional rim:
-   brightest where the edge faces up-left, dimmer down-right, with two exponential
-   falloffs across `rimWidth`.
+6. Add `sheen` from the top and `glow` inside the edge. Add the directional rim by
+   mixing toward `rimColour`: brightest where the edge faces up-left, dimmer
+   down-right, with two exponential falloffs across `rimWidth`. White on dark glass,
+   dark on light glass, so the edge never clamps into the fill.
 7. Mix in the fill colour by its alpha.
 8. Clamp, re-premultiply, and multiply by body coverage.
 9. Preserve `cogl_color_in`'s alpha so the panel's open/close opacity fades the glass
@@ -320,7 +330,7 @@ shader module.
 
 **Uniforms:** `width`, `height`, `radius`, `fill` (vec4), `saturation`, `lo`, `span`,
 `gamma`, `deep`, `knee`, `sheen`, `glow`, `reach`, `lens`, `band`, `spread`, `rim`,
-`rimWidth`.
+`rimWidth`, `rimColour` (vec3).
 
 **Repaints:** uniforms are compared before being set; only a change queues a repaint.
 The lens samples run only inside the edge band. If the shader cannot be created, log
@@ -348,15 +358,17 @@ Configs (tunable after visual review):
 
 - `MOVE = {stiffness: 180, damping: 22}` for panel y and view geometry.
 
-**Timed eases.** Springs drive geometry only. Opacity and content fades use fixed
-durations with `EASE_OUT_CUBIC`, so a fade is exactly the length it says:
+**Timed eases.** Springs drive open, compact/expanded, and view geometry; close is a
+short slide-fade. Opacity and content fades use fixed durations with
+`EASE_OUT_CUBIC`, so each takes exactly the length it says:
 
-- open/close panel opacity: 120 ms;
+- open panel opacity: 120 ms;
+- close panel opacity and y: 120 ms;
 - outgoing content fade-out: 80 ms;
 - incoming content fade-in: 120 ms.
 
-The spring settle threshold is therefore always in pixels and pixels per second. No
-content opacity is run through a spring.
+The `MOVE` spring's settle threshold is therefore always in pixels and pixels per
+second. No content opacity is run through a spring.
 
 **Open**
 
@@ -373,18 +385,20 @@ content opacity is run through a spring.
 
 - `close()` pops the modal grab immediately and sets the overlay non-reactive. Esc,
   click-outside, and keys intended for the next app are never held by the fade.
-- The `MOVE` spring drives y → rect.y + 8; a 120 ms ease drives opacity → 0. When the
-  spring settles, hide the overlay, call `glass.close()`, clear the old view content,
-  and emit `closed`.
+- Y and opacity both use a 120 ms `EASE_OUT_CUBIC`: y → rect.y + 8, opacity → 0. When
+  the ease finishes, hide the overlay, call `glass.close()`, clear the old view
+  content, and emit `closed`. Close ends with its fade; there is no invisible tail
+  waiting for a spring, and no invisible blur or clone work.
 - `SiftOverlay` gains a distinct `closing` state and a `closing` getter. `close()`
   is a no-op while closing. `open()` while closing cancels the close, re-pushes the
-  modal, restores reactivity, grabs key focus, and retargets the same springs.
+  modal, restores reactivity, grabs key focus, and eases y and opacity from their
+  **current** values to the open targets. It never resets opacity to 0 or 255 first.
 - `OverviewBlocker.toggle()` and `toggleApps()` check `closing`: a second Super
   reopens search, and a second Super+A reopens the grid, instead of treating the
   still-visible fading overlay as already open. This is a small change to
   `overview.js`; it changes close/reopen behavior, not the keybindings.
 - **Snap close.** Result activation and monitor changes use `close({immediate: true})`:
-  no spring or fade, hide and clean up at once. The grab is already gone, so the
+  no slide or fade, hide and clean up at once. The grab is already gone, so the
   launched app or file gets focus immediately.
 - With animations off, close immediately as today.
 
@@ -392,9 +406,12 @@ content opacity is run through a spring.
 
 - The compact bar (60 px) on open, the expanded search rect on the first keystroke,
   and the collapse on an emptied query all use the `MOVE` springs instead of jumping.
-- When the target rect is known, the content layer is resized once to that target and
-  left there for the spring. Results update immediately; the panel clip reveals them
-  as it grows. The content is not re-laid-out on intermediate frames.
+- When the target rect is known, the content layer is sized once to that target and
+  left there for the spring. On expansion this happens before the spring so the clip
+  can reveal the results; on collapse the content keeps its expanded size until the
+  spring finishes, then resizes, so nothing reflows while it is still visible.
+  Results update immediately and the content is not re-laid-out on intermediate
+  frames.
 - Changes to `search-height` use the same path while open. `max-results` does not
   change the panel rect today and does not start doing so: it only changes how many
   rows fit before the list scrolls, so result-count changes never retrigger geometry.
@@ -403,16 +420,20 @@ content opacity is run through a spring.
 
 - The geometry spring starts immediately on the toggle; the panel does not hold at
   the old rect first.
-- At the toggle, the content layer is resized once to the target view rect. The
-  outgoing content fades to 0 over 80 ms while the panel starts moving; it is not
-  re-allocated while it fades.
-- At the end of that fade the new view state is set, but its content stays invisible.
-- The content layer stays at the target size for the whole spring and is clipped by
-  the panel. Text and grid tiles never re-wrap per frame.
+- The content layer keeps the outgoing view's **current** size for the 80 ms fade.
+  It is not resized at the toggle, so the outgoing entry bar, results, or grid never
+  reflow at full opacity and the grid never re-paginates while visible.
+- At the end of that fade the new view state is set, the outgoing view is hidden, and
+  the content layer is resized once to the target view rect. Hiding first keeps the
+  outgoing entry bar, results, or grid from being re-laid-out; the incoming view stays
+  invisible while the layer resizes.
+- The content layer stays at the target size for the rest of the spring and is clipped
+  by the panel. Text and grid tiles never re-wrap per frame.
 - When the geometry spring reaches roughly the last fifth of its travel, the incoming
   view is shown and fades in over 120 ms while the spring settles.
-- The incoming grid is laid out once at the target size, not repaginated per frame.
-  Because the content layer is already target-sized, it needs no separate layout hold.
+- The incoming grid is laid out once at the target size, either as the layer resizes
+  or when the view is shown, not repaginated per frame. Because the content layer is
+  already target-sized, it needs no separate layout hold.
 - The middle of the morph shows empty glass over the desktop. That is the intended
   "the window grows over the desktop" moment, not a loading state.
 - The glass follows every frame through `setRect`; its copies are re-filtered against
@@ -473,11 +494,15 @@ Human, on the real session (the only valid judge of look and frame rate):
   when cleared, with results revealed by the panel clip rather than reflowing.
 - Search ↔ grid grows/shrinks without stretching or re-wrapping text and icons.
 - Close fades/slides out and releases input at once; Esc or click-outside never
-  swallows the next keystroke. Reopening during close is smooth.
+  swallows the next keystroke. It disappears when the 120 ms fade ends, and reopening
+  during close starts from the current opacity without a flash.
 - Brightness 0, 50, and 100 all look intentional; the scheme's text colour (white in
   dark, dark in light) stays readable over a white window at 100.
+- Light glass over a white window still shows a crisp panel edge; the dark rim is
+  visible at 0, 50, and 100.
 - Overlapping windows and a dialog behind the panel appear in the right order.
-- Moving a window while Sift is open updates the backdrop.
+- Moving a window while Sift is open updates the backdrop, with no clone pop at the
+  glass edge during view switches.
 - Open, typing, view switches, and close feel like constant 60 fps at 1.25 scale.
 - Light and dark system themes both look right.
 
@@ -500,18 +525,22 @@ These are implementation decisions, not things the user agreed to:
 - Open/close move the real panel by 8–12 px and fade it, rather than scaling it; view
   switches use full geometry springs.
 - View switches fade the outgoing content out, morph with empty glass, then fade the
-  incoming content in near the end; there is one content layer and no snapshot.
-- The content layer is target-sized once per transition and clipped by the panel; the
-  app grid is laid out once at that target size, not repaginated per frame.
+  incoming content in near the end; there is one content layer and no snapshot. The
+  layer keeps the outgoing size until that fade ends, then resizes once.
+- The content layer is target-sized and clipped by the panel; the app grid is laid out
+  once at that target size, not repaginated per frame.
 - A second Super or Super+A during the close fade reopens the requested view; result
   activation and monitor changes snap-close.
 - Close pops the modal grab and goes non-reactive at once, so the next app gets keys
-  immediately, including when the close still fades. Reopening re-pushes the modal.
-- Opacity and content fades use 80–120 ms timed eases; springs move geometry only.
+  immediately. Close ends at its 120 ms fade, with no invisible tail. Reopening
+  re-pushes the modal and eases from the current opacity and y.
+- Open y and view geometry use springs; close y, panel opacity, and content fades use
+  80–120 ms timed eases.
 - During a geometry spring the clone set covers the union of every frame since the
   last rest, so retargeting cannot create or destroy a clone mid-morph.
 - Brightness blends the two presets linearly, so the response is even and monotonic.
-- Light scheme has its own lifted tone band and light fill, not the dark structure.
+- Light scheme has its own lifted tone band, light fill, no additive sheen/glow, and a
+  dark rim so the edge survives a white backdrop.
 - No settings migration, no new preference beyond brightness, no fallback mode.
 
 ## 7. Left to the builder
@@ -520,6 +549,8 @@ These are implementation decisions, not things the user agreed to:
 - The exact fraction of the geometry spring at which the incoming view fades in.
 - File/class layout for `SpringDriver` and the AreaClone class.
 - Whether `AppGrid` needs any change at all once the content layer is target-sized.
+- The light scheme's exact dark-rim colour/strength, and whether it also needs a faint
+  outer shadow.
 - Test details and headless assertions.
 - How to express the long shader cleanly within the existing `glass.js` conventions.
 
@@ -535,9 +566,11 @@ These are implementation decisions, not things the user agreed to:
   is bounded by the union area and disappears at rest.
 - Spring tuning is subjective; the first numbers are a starting point.
 - High brightness over a white window depends on the `deep`/`knee` tone hold and the
-  text shadow. The dark scheme's white text at 100 stays around 3.2:1 contrast
-  before the shadow, and the light scheme's dark text stays above 4.7:1, so both need
-  visual checking.
+  text shadow. The test's raw-space floors pass with margin (dark luma 1 at 0.279 vs
+  ≤0.30; light luma 0 at 0.657 vs ≥0.60), but the screen result needs visual checking.
+- The light scheme's dark rim and zero sheen/glow are a tuning choice. If the edge is
+  still weak over a white window, the builder adds a faint outer shadow; that does not
+  change the brightness control.
 - The wallpaper uses the private `Main.layoutManager._backgroundGroup`, as Isle does.
   This is acceptable on Shell 51 but is a shell-internal dependency.
 - Removing the old settings keys resets those values. There are no public users yet.
