@@ -22,7 +22,7 @@
 
   The app grid sometimes renders with overlapping, compressed, or otherwise unusable app icons and labels.
 
-- [ ] **App grid does not snap to pages**
+- [x] **App grid does not snap to pages**
 
   Page navigation can stop partway through a page transition instead of settling on a complete page.
 
