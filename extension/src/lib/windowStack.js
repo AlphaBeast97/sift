@@ -5,17 +5,35 @@ export function intersects(a, b) {
         a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
-// Actors arrive in stacking order (bottom first); cloning them in this order
-// keeps the backdrop stack behind the panel.
-export function backdropWindows(actors, area, windowType) {
+export function unionRect(a, b) {
+    if (!a)
+        return b;
+    if (!b)
+        return a;
+
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    return {
+        x,
+        y,
+        width: Math.max(a.x + a.width, b.x + b.width) - x,
+        height: Math.max(a.y + a.height, b.y + b.height) - y,
+    };
+}
+
+// Every visible window, dialogs included, in stacking order (bottom first). The
+// glass filters these places against its moving frame; override-redirect menus
+// are not copied because their actor is not a normal window surface.
+export function windowPlaces(actors) {
     return actors.filter(actor => {
         const window = actor.meta_window;
-        if (!window || !actor.visible || window.minimized ||
-            window.get_window_type() !== windowType)
-            return false;
-
-        const [x, y] = actor.get_transformed_position();
-        const [width, height] = actor.get_transformed_size();
-        return intersects(area, {x, y, width, height});
-    });
+        return window && actor.visible && !window.minimized &&
+            !window.is_override_redirect();
+    }).map(actor => ({
+        actor,
+        x: actor.x,
+        y: actor.y,
+        width: actor.width,
+        height: actor.height,
+    }));
 }
