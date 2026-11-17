@@ -309,6 +309,8 @@ export async function run() {
     assert(!gridScroll.enable_mouse_scrolling &&
         !gridScroll.enable_touch_scrolling,
     'the grid disables native partial scrolling');
+    assert(gridScroll.has_actions(),
+        'the grid scroll view handles scrolls');
     if (api.appGrid._grid.nPages > 1) {
         const gridManager = api.appGrid._grid.layout_manager;
         const hadjustment = api.appGrid._grid.hadjustment;

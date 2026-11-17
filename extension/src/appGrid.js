@@ -83,7 +83,7 @@ export const AppGrid = GObject.registerClass(
             });
             scrollController.connect('scroll',
                 (_controller, _sprite, _source, dx, dy) => this._onScroll(dx, dy));
-            this.add_action(scrollController);
+            this._scroll.add_action(scrollController);
 
             this._indicators = new PageIndicators.PageIndicators(
                 Clutter.Orientation.HORIZONTAL);
