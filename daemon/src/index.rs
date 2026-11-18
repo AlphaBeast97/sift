@@ -163,6 +163,7 @@ impl Index {
         }
 
         let mut state = self.state.write().unwrap();
+        let was_truncated = state.truncated;
         for (path, kind, is_root, subtree, full) in walks {
             if full {
                 state.truncated = true;
@@ -182,6 +183,7 @@ impl Index {
                 changed |= insert_entry(&mut state, entry, config.max_entries);
             }
         }
+        changed |= state.truncated && !was_truncated;
 
         changed
     }
@@ -622,5 +624,31 @@ mod tests {
         assert!(index.has_path(&path));
         assert!(!index.apply_batch(&cfg, std::slice::from_ref(&path)));
         assert!(index.has_path(&path));
+    }
+
+    #[test]
+    fn reaching_the_cap_reports_a_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.txt");
+        let b = dir.path().join("b.txt");
+        std::fs::write(&a, b"x").unwrap();
+        std::fs::write(&b, b"x").unwrap();
+        let mut cfg = crate::config::default_config(dir.path());
+        cfg.max_entries = 1;
+        let index = Index::new(
+            vec![Entry {
+                path: a,
+                name_lower: "a.txt".to_owned(),
+                kind: EntryKind::File,
+            }],
+            false,
+        );
+
+        // The entry cannot be inserted at the cap, but flipping `truncated`
+        // must still refresh the status and schedule a cache write.
+        assert!(index.apply_batch(&cfg, std::slice::from_ref(&b)));
+        assert!(index.read().truncated);
+        assert_eq!(index.len(), 1);
+        assert!(!index.apply_batch(&cfg, std::slice::from_ref(&b)));
     }
 }
