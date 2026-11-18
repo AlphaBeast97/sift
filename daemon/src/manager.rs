@@ -132,8 +132,8 @@ impl Manager {
                                     // Events missed while the watcher was down
                                     // need a fresh scan to close the gap.
                                     self.start_scan();
+                                    continue;
                                 }
-                                continue;
                             }
                             let last = self.status.snapshot().last_reconcile;
                             if unix_now().saturating_sub(last) >= CACHE_REFRESH_SECS {
