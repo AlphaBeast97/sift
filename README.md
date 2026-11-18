@@ -8,9 +8,9 @@ Sift disables the GNOME Overview by default: **Super** opens Sift search and
 login overview do nothing. Turn off "Disable the GNOME overview" in the
 preferences to keep GNOME's overview: Super and Super+A go back to GNOME, and
 Sift opens with **Ctrl+Space** and **Alt+A**. A recorded shortcut replaces its
-default. The UI and glass run in GJS. File indexing, fuzzy matching, and
-calculations run in a small Rust daemon (`siftd`) so the shell process stays
-responsive.
+default. The UI and glass run in GJS, and application search uses GNOME's app
+system in the shell. File indexing, fuzzy matching, and calculations run in a
+small Rust daemon (`siftd`) so the shell process stays responsive.
 
 ## Requirements
 
@@ -79,8 +79,8 @@ make prefs
 gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
-The window exposes glass mode (Auto/Liquid/Frosted/Off), opacity, blur radius,
-tint, animations, panel height, maximum results, app-grid icon size, and a
+The window exposes glass brightness, animations, search panel height, maximum
+results, app-grid labels, the GNOME overview takeover, and both shortcuts, plus a
 **Files** page for the file index. The panel height is fixed while typing; extra
 results scroll. Changes apply live. Extension settings are ordinary GSettings
 under `org.gnome.shell.extensions.sift` and can be scripted with `gsettings`;
@@ -104,7 +104,8 @@ max_entries = 250000
   path. The built-in list covers Go/Rust/Java/Node caches, containers, Steam,
   and other app data; see `daemon/src/config.rs`.
 - Relative roots are resolved against `$HOME`.
-- `max_entries` caps how many entries are kept.
+- `max_entries` caps how many entries are kept (default 250,000, maximum
+  1,000,000). Reaching the cap is reported as `Search index truncated`.
 
 Edit these on the **Files** page in preferences; saving rewrites the TOML and
 asks the daemon to rebuild in place. To do it by hand, edit the file and call:
@@ -118,6 +119,26 @@ gdbus call --session --dest io.github.alphabeast97.Sift \
 The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. The footer shows
 `Indexing files…` while a scan runs and `Search index degraded`/`truncated`
 when the daemon cannot watch a root or hits `max_entries`.
+
+The daemon watches every included folder, so changes appear without a reindex.
+On very large trees the kernel's inotify watch limit can be exhausted; raise
+`fs.inotify.max_user_watches` if changes in deep folders take a while to show up.
+
+## Daemon interface
+
+The extension talks to `siftd` over the session bus at
+`io.github.alphabeast97.Sift` / `/io/github/alphabeast97/Sift`:
+
+- `Ping() -> s` returns `version+git-hash`.
+- `Query(text, limit) -> s` returns JSON with a `files` array and an optional
+  `calc` object. `text` is at most 128 bytes and `limit` is 1–50. File rows
+  carry `path`, `name`, and `kind` (`file` or `dir`).
+- `Reindex()` rereads the config and rebuilds the index.
+- `EnsureFresh()` asks for a reconcile scan when the last one is old.
+- `Quit()` flushes the cache and stops the daemon.
+- The `Status` property is JSON (`state`, `indexed`, `roots`, `truncated`,
+  `watcher`, `last_reconcile`); `StatusChanged` fires when it changes. The
+  `Config` property is JSON (`roots`, `exclude_dirs`, `max_entries`).
 
 ## Uninstall
 
@@ -166,9 +187,9 @@ when the owner pushes a `v*` tag.
 - **The extension is installed but does not open.** Confirm it is enabled with
   `gnome-extensions info sift@alphabeast97.github.io`; on Wayland, log out and
   back in after the first install.
-- **Glass looks flat or rectangular.** Try another glass mode in preferences;
-  `Off` disables blur and the shader. Blur my Shell can be enabled or disabled
-  independently.
+- **Glass looks flat or the text is hard to read.** Adjust **Brightness** in
+  preferences: lower values darken the glass, higher values show more of the
+  desktop. Blur my Shell can be enabled or disabled independently.
 - **Blur my Shell is installed.** Sift detects it only to pick a conservative
   default; it does not patch or depend on it.
 
