@@ -61,7 +61,6 @@ impl Index {
         self.state.read().unwrap().entries.len()
     }
 
-    #[allow(dead_code)] // specified interface; watcher tests are its only caller for now
     pub fn has_path(&self, path: &Path) -> bool {
         self.state
             .read()
@@ -151,7 +150,7 @@ fn lower_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn containing_root<'a>(roots: &'a [PathBuf], path: &Path) -> Option<&'a Path> {
+pub(crate) fn containing_root<'a>(roots: &'a [PathBuf], path: &Path) -> Option<&'a Path> {
     roots
         .iter()
         .filter(|root| path.starts_with(root))
@@ -159,7 +158,7 @@ fn containing_root<'a>(roots: &'a [PathBuf], path: &Path) -> Option<&'a Path> {
         .map(PathBuf::as_path)
 }
 
-fn is_indexable(config: &Config, root: &Path, path: &Path) -> bool {
+pub(crate) fn is_indexable(config: &Config, root: &Path, path: &Path) -> bool {
     let Ok(relative) = path.strip_prefix(root) else {
         return false;
     };
@@ -169,6 +168,13 @@ fn is_indexable(config: &Config, root: &Path, path: &Path) -> bool {
             .as_os_str()
             .to_str()
             .is_some_and(|name| name.starts_with('.'))
+    }) {
+        return false;
+    }
+
+    if config.exclude_dirs.iter().any(|pattern| {
+        let pattern = Path::new(pattern);
+        pattern.is_absolute() && path.starts_with(pattern)
     }) {
         return false;
     }
@@ -216,7 +222,7 @@ fn insert_entry(state: &mut IndexState, entry: Entry, cap: usize) -> bool {
 }
 
 fn walk_subtree(config: &Config, root: &Path, path: &Path, limit: usize) -> Vec<Entry> {
-    let patterns = config.exclude_dirs.clone();
+    let filter_config = config.clone();
     let filter_root = root.to_path_buf();
     let mut builder = WalkBuilder::new(path);
     builder
@@ -235,11 +241,7 @@ fn walk_subtree(config: &Config, root: &Path, path: &Path, limit: usize) -> Vec<
         if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
             return true;
         }
-        let relative = entry
-            .path()
-            .strip_prefix(&filter_root)
-            .unwrap_or(entry.path());
-        !is_excluded(relative, &patterns)
+        is_indexable(&filter_config, &filter_root, entry.path())
     });
 
     let mut entries = Vec::new();
@@ -295,7 +297,8 @@ pub fn scan(config: &Config, cancel: &AtomicBool, progress: &AtomicUsize) -> Sca
             .same_file_system(true)
             .threads(4);
 
-        let patterns = config.exclude_dirs.clone();
+        let filter_config = config.clone();
+        let filter_root = root.clone();
         builder.filter_entry(move |entry| {
             if entry.depth() == 0 {
                 return true;
@@ -303,8 +306,7 @@ pub fn scan(config: &Config, cancel: &AtomicBool, progress: &AtomicUsize) -> Sca
             if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
                 return true;
             }
-            let relative = entry.path().strip_prefix(&root).unwrap_or(entry.path());
-            !is_excluded(relative, &patterns)
+            is_indexable(&filter_config, &filter_root, entry.path())
         });
 
         builder.build_parallel().run(|| {
@@ -458,6 +460,31 @@ mod tests {
         ));
         assert!(is_excluded(Path::new("src/target/debug"), &patterns));
         assert!(!is_excluded(Path::new("src/main.rs"), &patterns));
+    }
+
+    #[test]
+    fn absolute_excludes_match_paths_under_a_root() {
+        let config = crate::config::Config::load_str(
+            "roots = [\"~/work\"]\nexclude_dirs = [\"~/work/private\", \"go/pkg/mod\"]\n",
+            Path::new("/home/alice"),
+        )
+        .unwrap();
+        let root = Path::new("/home/alice/work");
+        assert!(!is_indexable(
+            &config,
+            root,
+            Path::new("/home/alice/work/private/notes.txt")
+        ));
+        assert!(!is_indexable(
+            &config,
+            root,
+            Path::new("/home/alice/work/go/pkg/mod/cache.txt")
+        ));
+        assert!(is_indexable(
+            &config,
+            root,
+            Path::new("/home/alice/work/public/notes.txt")
+        ));
     }
 
     #[test]

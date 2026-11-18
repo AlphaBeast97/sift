@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use ignore::WalkBuilder;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
+
+use crate::config::Config;
+use crate::index;
 
 const DEBOUNCE: Duration = Duration::from_millis(500);
 
@@ -16,7 +20,7 @@ pub enum WatcherEvent {
 }
 
 pub fn spawn_watcher(
-    roots: &[PathBuf],
+    config: &Config,
     tx: mpsc::UnboundedSender<WatcherEvent>,
 ) -> notify::Result<RecommendedWatcher> {
     let (raw_tx, mut raw_rx) = mpsc::unbounded_channel::<notify::Result<Event>>();
@@ -24,8 +28,15 @@ pub fn spawn_watcher(
         let _ = raw_tx.send(event);
     })?;
 
-    for root in roots {
-        watcher.watch(root, RecursiveMode::Recursive)?;
+    let mut watched = 0;
+    for root in &config.roots {
+        watched += add_tree(&mut watcher, config, root);
+    }
+
+    // A configured root that cannot be watched at all is a real failure; a
+    // single unreadable subfolder is not. The scan skips both.
+    if !config.roots.is_empty() && watched == 0 {
+        return Err(notify::Error::generic("no indexed folder could be watched"));
     }
 
     tokio::spawn(async move {
@@ -65,15 +76,106 @@ pub fn spawn_watcher(
     Ok(watcher)
 }
 
+/// Watch every folder under `path` that the index would include. Recursive
+/// watches follow symlinks and fail as a whole when one folder is unreadable,
+/// so each folder gets its own non-recursive watch instead.
+pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) -> usize {
+    let Some(root) = index::containing_root(&config.roots, path) else {
+        return 0;
+    };
+    if !index::is_indexable(config, root, path) {
+        return 0;
+    }
+
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return 0;
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return 0;
+    }
+
+    let filter_config = config.clone();
+    let filter_root = root.to_path_buf();
+    let mut builder = WalkBuilder::new(path);
+    builder
+        .hidden(true)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .follow_links(false)
+        .same_file_system(true)
+        .threads(1);
+
+    builder.filter_entry(move |entry| {
+        if entry.depth() == 0 {
+            return true;
+        }
+        if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
+            return true;
+        }
+        index::is_indexable(&filter_config, &filter_root, entry.path())
+    });
+
+    let mut watched = 0;
+    for entry in builder.build().flatten() {
+        let Some(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() || !file_type.is_dir() {
+            continue;
+        }
+        if watcher
+            .watch(entry.path(), RecursiveMode::NonRecursive)
+            .is_ok()
+        {
+            watched += 1;
+        }
+    }
+
+    watched
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::default_config;
+
+    fn config_for(root: &Path) -> Config {
+        default_config(root)
+    }
+
+    fn notification_watcher() -> RecommendedWatcher {
+        notify::recommended_watcher(|_| {}).unwrap()
+    }
 
     #[tokio::test]
     async fn a_missing_root_fails_to_watch() {
         let dir = tempfile::tempdir().unwrap();
-        let missing = dir.path().join("gone");
+        let mut config = config_for(dir.path());
+        config.roots = vec![dir.path().join("gone")];
         let (tx, _rx) = mpsc::unbounded_channel();
-        assert!(spawn_watcher(&[missing], tx).is_err());
+        assert!(spawn_watcher(&config, tx).is_err());
+    }
+
+    #[tokio::test]
+    async fn skips_hidden_excluded_and_symlinked_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let visible = dir.path().join("visible");
+        let hidden = dir.path().join(".hidden");
+        let excluded = dir.path().join("node_modules");
+        std::fs::create_dir_all(&visible).unwrap();
+        std::fs::create_dir_all(&hidden).unwrap();
+        std::fs::create_dir_all(&excluded).unwrap();
+        std::os::unix::fs::symlink("/does/not/exist", visible.join("link")).unwrap();
+
+        let config = config_for(dir.path());
+        let mut watcher = notification_watcher();
+        assert_eq!(add_tree(&mut watcher, &config, &visible), 1);
+        assert_eq!(add_tree(&mut watcher, &config, &hidden), 0);
+        assert_eq!(add_tree(&mut watcher, &config, &excluded), 0);
+
+        let (tx, _rx) = mpsc::unbounded_channel();
+        assert!(spawn_watcher(&config, tx).is_ok());
     }
 }

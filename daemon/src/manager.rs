@@ -54,7 +54,7 @@ pub fn spawn_manager(
         scan_tx,
         watch_tx,
         watcher: None,
-        watcher_roots: Vec::new(),
+        watcher_config: None,
         watcher_ok: true,
         pending: Vec::new(),
         cache_deadline: None,
@@ -62,6 +62,7 @@ pub fn spawn_manager(
         progress: Arc::new(AtomicUsize::new(0)),
         dirty: false,
         scanning: false,
+        reindex_pending: false,
         quitting: false,
         quit_ack: None,
     };
@@ -80,7 +81,7 @@ struct Manager {
     scan_tx: mpsc::UnboundedSender<ScanOutcome>,
     watch_tx: mpsc::UnboundedSender<WatcherEvent>,
     watcher: Option<RecommendedWatcher>,
-    watcher_roots: Vec<PathBuf>,
+    watcher_config: Option<u64>,
     watcher_ok: bool,
     pending: Vec<PathBuf>,
     cache_deadline: Option<tokio::time::Instant>,
@@ -88,6 +89,7 @@ struct Manager {
     progress: Arc<AtomicUsize>,
     dirty: bool,
     scanning: bool,
+    reindex_pending: bool,
     quitting: bool,
     quit_ack: Option<oneshot::Sender<()>>,
 }
@@ -113,6 +115,7 @@ impl Manager {
                     match command {
                         Some(Command::Reindex) => {
                             if self.scanning {
+                                self.reindex_pending = true;
                                 continue;
                             }
                             self.reload_config();
@@ -168,6 +171,13 @@ impl Manager {
                         }
                     }
 
+                    if self.reindex_pending && !self.quitting {
+                        self.reindex_pending = false;
+                        self.reload_config();
+                        self.start_watcher();
+                        self.start_scan();
+                    }
+
                     if self.quitting {
                         self.finalize_quit().await;
                         return;
@@ -211,15 +221,16 @@ impl Manager {
     }
 
     fn start_watcher(&mut self) {
-        let roots = self.config.read().unwrap().roots.clone();
-        if self.watcher.is_some() && self.watcher_roots == roots {
+        let config = self.config.read().unwrap().clone();
+        let fingerprint = config.fingerprint();
+        if self.watcher.is_some() && self.watcher_config == Some(fingerprint) {
             return;
         }
 
         self.watcher = None;
-        self.watcher_roots = roots.clone();
+        self.watcher_config = Some(fingerprint);
 
-        match watcher::spawn_watcher(&roots, self.watch_tx.clone()) {
+        match watcher::spawn_watcher(&config, self.watch_tx.clone()) {
             Ok(watcher) => {
                 self.watcher = Some(watcher);
                 if !self.watcher_ok {
@@ -239,6 +250,7 @@ impl Manager {
 
     fn watcher_failed(&mut self) {
         self.watcher = None;
+        self.watcher_config = None;
         self.watcher_ok = false;
 
         let scanning = self.scanning;
@@ -252,6 +264,22 @@ impl Manager {
 
     fn apply_changes(&mut self, paths: &[PathBuf]) {
         let config = self.config.read().unwrap().clone();
+
+        // New folders need their own watches; existing ones already have them.
+        if let Some(watcher) = self.watcher.as_mut() {
+            for path in paths {
+                if self.index.has_path(path) {
+                    continue;
+                }
+                let Ok(metadata) = std::fs::symlink_metadata(path) else {
+                    continue;
+                };
+                if metadata.is_dir() && !metadata.file_type().is_symlink() {
+                    watcher::add_tree(watcher, &config, path);
+                }
+            }
+        }
+
         if !self.index.apply_batch(&config, paths) {
             return;
         }

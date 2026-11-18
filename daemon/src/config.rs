@@ -8,14 +8,34 @@ const CACHE_FORMAT: u64 = 1;
 const DEFAULT_MAX_ENTRIES: usize = 250_000;
 
 const DEFAULT_EXCLUDES: &[&str] = &[
-    ".cache",
-    ".local/share/Trash",
+    // Build and dependency folders that are usually huge and never searched.
     "node_modules",
-    ".git",
+    "bower_components",
     "target",
     "__pycache__",
-    ".venv",
     "venv",
+    "go/pkg/mod",
+    "go/pkg/sumdb",
+    "Android/Sdk",
+    "snap",
+    "Pods",
+    // Hidden caches. The index skips hidden folders already; keeping them here
+    // documents the intent and keeps the watcher from descending into them.
+    ".cache",
+    ".git",
+    ".venv",
+    ".cargo/registry",
+    ".cargo/git",
+    ".rustup/toolchains",
+    ".m2/repository",
+    ".gradle/caches",
+    ".npm/_cacache",
+    ".nuget/packages",
+    ".local/share/Trash",
+    ".local/share/Steam",
+    ".local/share/containers",
+    ".local/share/flatpak",
+    ".var/app",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,7 +115,10 @@ impl Config {
             roots,
             exclude_dirs: raw
                 .exclude_dirs
-                .unwrap_or_else(|| default_config(home).exclude_dirs),
+                .unwrap_or_else(|| default_config(home).exclude_dirs)
+                .into_iter()
+                .map(|pattern| expand_exclude(&pattern, home))
+                .collect(),
             max_entries: raw.max_entries.unwrap_or(DEFAULT_MAX_ENTRIES),
         })
     }
@@ -160,6 +183,18 @@ fn expand_root(root: &Path, home: &Path) -> PathBuf {
     }
 }
 
+fn expand_exclude(pattern: &str, home: &Path) -> String {
+    if pattern == "~" {
+        return home.to_string_lossy().into_owned();
+    }
+
+    if let Some(rest) = pattern.strip_prefix("~/") {
+        return home.join(rest).to_string_lossy().into_owned();
+    }
+
+    pattern.to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,9 +213,28 @@ mod tests {
             "__pycache__",
             ".venv",
             "venv",
+            "go/pkg/mod",
+            "go/pkg/sumdb",
+            "Android/Sdk",
+            "snap",
+            "Pods",
+            ".cargo/registry",
+            ".local/share/Steam",
         ] {
             assert!(config.exclude_dirs.contains(&exclude.to_owned()));
         }
+    }
+
+    #[test]
+    fn tilde_excludes_expand_against_home() {
+        let config = Config::load_str(
+            "exclude_dirs = [\"~/secret\", \"go/pkg/mod\", \"/data/raw\"]\n",
+            Path::new("/home/alice"),
+        )
+        .unwrap();
+        assert_eq!(config.exclude_dirs[0], "/home/alice/secret");
+        assert_eq!(config.exclude_dirs[1], "go/pkg/mod");
+        assert_eq!(config.exclude_dirs[2], "/data/raw");
     }
 
     #[test]
