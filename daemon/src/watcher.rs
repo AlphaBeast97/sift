@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ignore::WalkBuilder;
+use notify::event::EventKind;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -24,7 +25,12 @@ pub fn spawn_watcher(
     tx: mpsc::UnboundedSender<WatcherEvent>,
 ) -> notify::Result<RecommendedWatcher> {
     let (raw_tx, mut raw_rx) = mpsc::unbounded_channel::<notify::Result<Event>>();
-    let mut watcher = notify::recommended_watcher(move |event| {
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<Event>| {
+        // Opening folders is not a change. Forwarding opens made the scan and
+        // every subtree walk enqueue another walk of their own reads.
+        if matches!(&event, Ok(event) if matches!(&event.kind, EventKind::Access(_))) {
+            return;
+        }
         let _ = raw_tx.send(event);
     })?;
 
@@ -156,6 +162,31 @@ mod tests {
         config.roots = vec![dir.path().join("gone")];
         let (tx, _rx) = mpsc::unbounded_channel();
         assert!(spawn_watcher(&config, tx).is_err());
+    }
+
+    #[tokio::test]
+    async fn reads_do_not_report_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("file.txt"), b"x").unwrap();
+        let config = config_for(dir.path());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let _watcher = spawn_watcher(&config, tx).unwrap();
+
+        for entry in std::fs::read_dir(dir.path()).unwrap().flatten() {
+            let _ = std::fs::read(entry.path());
+        }
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        assert!(rx.try_recv().is_err(), "reads must not look like changes");
+
+        std::fs::write(dir.path().join("new.txt"), b"x").unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(3), rx.recv())
+            .await
+            .expect("a write must be reported")
+            .unwrap();
+        assert!(matches!(
+            event,
+            WatcherEvent::Changed(paths) if paths.iter().any(|path| path.ends_with("new.txt"))
+        ));
     }
 
     #[tokio::test]

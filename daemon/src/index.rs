@@ -116,6 +116,14 @@ impl Index {
                 continue;
             };
 
+            // Walking a folder again for every event that names it made each
+            // read of the tree enqueue another read of the tree.
+            let known = path == *root ||
+                state
+                    .entries
+                    .binary_search_by(|entry| entry.path.as_path().cmp(&path))
+                    .is_ok();
+
             if path != *root {
                 changed |= insert_entry(
                     &mut state,
@@ -128,7 +136,7 @@ impl Index {
                 );
             }
 
-            if kind == EntryKind::Dir {
+            if kind == EntryKind::Dir && !known {
                 let remaining = config.max_entries.saturating_sub(state.entries.len());
                 if remaining == 0 {
                     state.truncated = true;
