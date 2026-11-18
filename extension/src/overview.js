@@ -211,11 +211,11 @@ export class OverviewBlocker {
         hide.call(Main.overview);
     }
 
-    // Hiding the group as well makes the startup overview vanish instantly
-    // instead of animating out after it has already been visible.
+    // Hide it through the native path only: hiding the group directly stops
+    // the controls from allocating, which stalls the startup animation and
+    // leaves its full-screen input blocker in place.
     _dismiss() {
         this._hideNative();
-        Main.layoutManager.hideOverview();
     }
 
     // The native overview keeps its modal grab until its hide animation ends,
