@@ -69,7 +69,6 @@ pub fn version() -> String {
 pub struct SiftService {
     index: Arc<Index>,
     status: Arc<StatusModel>,
-    #[allow(dead_code)] // kept per the Task 15 interface; read once config affects queries
     config: Arc<RwLock<Config>>,
     commands: mpsc::UnboundedSender<Command>,
 }
@@ -157,6 +156,21 @@ impl SiftService {
         self.status.to_json()
     }
 
+    #[zbus(property, name = "Config")]
+    fn config_json(&self) -> String {
+        let config = self.config.read().unwrap();
+        serde_json::json!({
+            "roots": config
+                .roots
+                .iter()
+                .map(|root| root.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            "exclude_dirs": &config.exclude_dirs,
+            "max_entries": config.max_entries,
+        })
+        .to_string()
+    }
+
     #[zbus(signal, name = "StatusChanged")]
     pub async fn emit_status_changed(
         emitter: SignalEmitter<'_>,
@@ -204,5 +218,26 @@ mod tests {
             serde_json::from_str(&service.query("= 3*7".to_owned(), 10).unwrap()).unwrap();
         assert_eq!(calc["files"].as_array().unwrap().len(), 0);
         assert_eq!(calc["calc"]["result"], "21");
+    }
+
+    #[test]
+    fn config_property_reports_the_active_config() {
+        let index = Arc::new(Index::new(Vec::new(), false));
+        let status = StatusModel::new(vec!["/home/alice".to_owned()]);
+        let config = Arc::new(RwLock::new(crate::config::default_config(
+            std::path::Path::new("/home/alice"),
+        )));
+        let (commands, _receiver) = mpsc::unbounded_channel();
+        let service = SiftService::new(index, status, config, commands);
+
+        let config: serde_json::Value =
+            serde_json::from_str(&service.config_json()).unwrap();
+        assert_eq!(config["roots"][0], "/home/alice");
+        assert!(config["exclude_dirs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "go/pkg/mod"));
+        assert_eq!(config["max_entries"], 250_000);
     }
 }

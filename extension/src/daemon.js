@@ -23,6 +23,7 @@ const INTERFACE_XML = `
     <method name="EnsureFresh"/>
     <method name="Quit"/>
     <property name="Status" type="s" access="read"/>
+    <property name="Config" type="s" access="read"/>
     <signal name="StatusChanged">
       <arg type="s"/>
     </signal>

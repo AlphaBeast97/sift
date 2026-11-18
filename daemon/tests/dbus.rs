@@ -9,6 +9,9 @@ const BUS_NAME: &str = "io.github.alphabeast97.Sift";
 const OBJECT_PATH: &str = "/io/github/alphabeast97/Sift";
 const INTERFACE: &str = "io.github.alphabeast97.Sift";
 
+// Tests that use the shared session bus would fight over the daemon name.
+static SHARED_BUS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 struct Daemon(Child);
 
 impl Drop for Daemon {
@@ -92,6 +95,7 @@ async fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {
 
 #[tokio::test]
 async fn cold_start_query_reindex_quit_and_second_instance() {
+    let _shared = SHARED_BUS.lock().await;
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home");
     std::fs::create_dir_all(home.join("docs")).unwrap();
@@ -106,6 +110,9 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
 
     let ping: String = proxy.call("Ping", &()).await.unwrap();
     assert!(ping.starts_with("0.1.0"));
+
+    let config_json: String = proxy.get_property("Config").await.unwrap();
+    assert!(config_json.contains("\"max_entries\":250000"));
 
     let cold: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
     assert!(
@@ -160,6 +167,60 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
     assert!(
         wait_for_exit(&mut child.0, Duration::from_secs(2)).await,
         "Quit exits"
+    );
+}
+
+#[tokio::test]
+async fn reindex_during_a_scan_runs_after_it() {
+    let _shared = SHARED_BUS.lock().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join("docs")).unwrap();
+    std::fs::write(home.join("docs/report.pdf"), b"x").unwrap();
+    let config = tmp.path().join("config.toml");
+    std::fs::write(&config, format!("roots = [\"{}\"]\n", home.display())).unwrap();
+    let cache = tmp.path().join("cache.bin");
+
+    let mut child = spawn_daemon(&config, &cache, &["--scan-delay-ms", "1500"]);
+    let proxy = wait_for_proxy().await;
+    wait_for_status(&proxy, "\"state\":\"indexing\"").await;
+
+    // Change the config while the startup scan is still running.
+    std::fs::write(&config, "roots = []\n").unwrap();
+    let _: () = proxy.call("Reindex", &()).await.unwrap();
+
+    // The first scan still replaces the snapshot, then the queued reindex
+    // reloads the config and empties it.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+    loop {
+        let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+        if reply.contains("report.pdf") {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the first scan never indexed the report"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+    loop {
+        let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+        if reply.contains("\"files\":[]") {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the queued reindex never applied"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    let _: () = proxy.call("Quit", &()).await.unwrap();
+    assert!(
+        wait_for_exit(&mut child.0, Duration::from_secs(2)).await,
+        "Quit exits after the queued reindex"
     );
 }
 
