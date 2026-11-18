@@ -429,7 +429,11 @@ export async function run() {
     }
 
     api.overlay.handleKey('t', 0);
+    assert(api.overlay.animating && !api.overlay._gridView.visible,
+        'the search view appears before the grid morph ends');
     api.overlay.entry.set_text('t');
+    assert(api.overlay.animating && api.overlay._results.visible,
+        'the search results appear before the grid morph ends');
     await Scripting.waitLeisure();
     assert(api.overlay.view === 'search' && api.overlay.entry.text === 't',
         'typing returns to search');

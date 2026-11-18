@@ -1078,6 +1078,23 @@ export const SiftOverlay = GObject.registerClass({
         const target = this._targetRect(next);
         if (!target)
             return;
+
+        // Leaving the grid: install the search view now so results are visible
+        // while the panel springs, instead of after a content fade.
+        if (next === 'search') {
+            this._view = next;
+            this._rect = target;
+            this._revealPending = false;
+            this._content.remove_all_transitions();
+            this._content.opacity = 255;
+            this._content.set_position(0, 0);
+            this._sizeContent(target.width, target.height);
+            this._setViewState(next);
+            this._springTo(target);
+            this._finishOpening();
+            return;
+        }
+
         this._view = next;
         this._rect = target;
         this._revealPending = false;
