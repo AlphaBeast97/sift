@@ -2,6 +2,7 @@
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk?version=4.0';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk?version=4.0';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
@@ -290,6 +291,124 @@ function addIntRow(group, settings, key, title,
     group.add(row);
 }
 
+function daemonConfigPath() {
+    return GLib.build_filenamev([GLib.get_user_config_dir(), 'sift', 'config.toml']);
+}
+
+function readDaemonConfig() {
+    const reply = Gio.DBus.session.call_sync(
+        BUS_NAME, BUS_PATH, 'org.freedesktop.DBus.Properties', 'Get',
+        new GLib.Variant('(ss)', [BUS_IFACE, 'Config']),
+        null, Gio.DBusCallFlags.NONE, 3000, null);
+    const unpacked = reply.deepUnpack();
+    const value = Array.isArray(unpacked) ? unpacked[0] : unpacked;
+    const json = typeof value?.deepUnpack === 'function' ? value.deepUnpack() : value;
+    const parsed = JSON.parse(json);
+
+    return {
+        roots: Array.isArray(parsed.roots) ? parsed.roots : [],
+        ignores: Array.isArray(parsed.exclude_dirs) ? parsed.exclude_dirs : [],
+        maxEntries: Number.isInteger(parsed.max_entries) ? parsed.max_entries : 250000,
+    };
+}
+
+function tomlString(value) {
+    if (/[\r\n]/.test(value))
+        throw new Error('A value cannot contain a new line.');
+    return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
+
+function writeDaemonConfig(config) {
+    const text = `roots = [${config.roots.map(tomlString).join(', ')}]\n` +
+        `exclude_dirs = [${config.ignores.map(tomlString).join(', ')}]\n` +
+        `max_entries = ${Math.max(0, Math.round(config.maxEntries))}\n`;
+    const path = daemonConfigPath();
+    const file = Gio.File.new_for_path(path);
+    const parent = file.get_parent();
+
+    if (!parent.query_exists(null))
+        parent.make_directory_with_parents(null);
+
+    const [ok] = file.replace_contents(new TextEncoder().encode(text), null,
+        false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+    if (!ok)
+        throw new Error(`Could not save ${path}`);
+}
+
+function expandHomePath(path) {
+    if (path === '~')
+        return GLib.get_home_dir();
+    if (path.startsWith('~/'))
+        return GLib.build_filenamev([GLib.get_home_dir(), path.slice(2)]);
+    return path;
+}
+
+function displayHomePath(path) {
+    const home = GLib.get_home_dir();
+    if (path === home)
+        return '~';
+    if (path.startsWith(`${home}/`))
+        return `~${path.slice(home.length)}`;
+    return path;
+}
+
+function reindexDaemon(window) {
+    Gio.DBus.session.call(BUS_NAME, BUS_PATH, BUS_IFACE, 'Reindex',
+        null, null, Gio.DBusCallFlags.NONE, 1000, null,
+        (source, result) => {
+            try {
+                source.call_finish(result);
+            } catch (error) {
+                if (window.get_visible()) {
+                    window.add_toast(new Adw.Toast({
+                        title: `Index rebuild failed: ${error.message}`,
+                    }));
+                }
+            }
+        });
+}
+
+function setListRows(list, values, onRemove, emptyText) {
+    let child = list.get_first_child();
+    while (child) {
+        const next = child.get_next_sibling();
+        list.remove(child);
+        child = next;
+    }
+
+    if (values.length === 0) {
+        list.append(new Adw.ActionRow({title: emptyText, sensitive: false}));
+        return;
+    }
+
+    for (const value of values) {
+        const row = new Adw.ActionRow({title: displayHomePath(value)});
+        const remove = new Gtk.Button({
+            icon_name: 'user-trash-symbolic',
+            tooltip_text: `Remove ${displayHomePath(value)}`,
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        remove.connect('clicked', () => onRemove(value));
+        row.add_suffix(remove);
+        list.append(row);
+    }
+}
+
+function addEntryRow(group, title, onApply) {
+    const row = new Adw.EntryRow({title});
+    row.show_apply_button = true;
+    row.connect('apply', () => {
+        const value = row.text.trim();
+        if (!value)
+            return;
+        onApply(value);
+        row.text = '';
+    });
+    group.add(row);
+    return row;
+}
+
 export default class SiftPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
@@ -390,30 +509,124 @@ export default class SiftPreferences extends ExtensionPreferences {
             'App grid', 'Opens the Sift app grid.');
         behavior.add(shortcutGroup);
 
-        const indexGroup = new Adw.PreferencesGroup({title: 'File indexing'});
-        const indexRow = valueRow('Search home folder',
-            'File and directory names are indexed. File contents are never read.');
+        window.add(behavior);
+        window.add(this._filesPage(window));
+    }
+
+    _filesPage(window) {
+        const page = new Adw.PreferencesPage({
+            title: 'Files',
+            icon_name: 'folder-symbolic',
+        });
+
+        let config;
+        try {
+            config = readDaemonConfig();
+        } catch {
+            const group = new Adw.PreferencesGroup({title: 'File index'});
+            group.add(valueRow('Index service unavailable',
+                'The search service is not running. Start Sift, then reopen Preferences to change the index.'));
+            page.add(group);
+            return page;
+        }
+
+        let saveTimer = 0;
+        const save = () => {
+            if (saveTimer)
+                GLib.source_remove(saveTimer);
+            saveTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                saveTimer = 0;
+                try {
+                    writeDaemonConfig(config);
+                    reindexDaemon(window);
+                } catch (error) {
+                    window.add_toast(new Adw.Toast({
+                        title: `Could not save the index settings: ${error.message}`,
+                    }));
+                }
+                return GLib.SOURCE_REMOVE;
+            });
+        };
+
+        const rootsGroup = new Adw.PreferencesGroup({
+            title: 'Indexed folders',
+            description: 'File and folder names under these folders are indexed. File contents are never read.',
+        });
+        const rootsList = new Gtk.ListBox({
+            selection_mode: Gtk.SelectionMode.NONE,
+            css_classes: ['boxed-list'],
+        });
+        const syncRoots = () => setListRows(rootsList, config.roots, path => {
+            config.roots = config.roots.filter(root => root !== path);
+            syncRoots();
+            save();
+        }, 'No folders are indexed.');
+        rootsGroup.add(rootsList);
+        addEntryRow(rootsGroup, 'Add a folder', value => {
+            const path = expandHomePath(value);
+            if (config.roots.includes(path))
+                return;
+            config.roots.push(path);
+            syncRoots();
+            save();
+        });
+        syncRoots();
+        page.add(rootsGroup);
+
+        const ignoreGroup = new Adw.PreferencesGroup({
+            title: 'Ignored folders',
+            description: 'A name like node_modules matches any folder with that name. A path like ~/Videos/raw or /mnt/backup matches that exact folder.',
+        });
+        const ignoreList = new Gtk.ListBox({
+            selection_mode: Gtk.SelectionMode.NONE,
+            css_classes: ['boxed-list'],
+        });
+        const syncIgnores = () => setListRows(ignoreList, config.ignores, value => {
+            config.ignores = config.ignores.filter(ignore => ignore !== value);
+            syncIgnores();
+            save();
+        }, 'Only the built-in ignores apply.');
+        ignoreGroup.add(ignoreList);
+        addEntryRow(ignoreGroup, 'Ignore another folder', value => {
+            const path = expandHomePath(value);
+            if (config.ignores.includes(path))
+                return;
+            config.ignores.push(path);
+            syncIgnores();
+            save();
+        });
+        syncIgnores();
+        page.add(ignoreGroup);
+
+        const limitsGroup = new Adw.PreferencesGroup({title: 'Limits'});
+        const maxRow = new Adw.SpinRow({
+            title: 'Maximum indexed entries',
+            subtitle: 'Sift stops adding entries after this many.',
+            adjustment: new Gtk.Adjustment({
+                lower: 10000,
+                upper: 2000000,
+                step_increment: 10000,
+                page_increment: 100000,
+            }),
+            value: config.maxEntries,
+        });
+        maxRow.connect('notify::value', () => {
+            config.maxEntries = Math.round(maxRow.value);
+            save();
+        });
+        limitsGroup.add(maxRow);
+
+        const rebuildRow = valueRow('Rebuild the index',
+            'Changes rebuild automatically. Use this if the index looks stale.');
         const rebuild = new Gtk.Button({
-            label: 'Rebuild index',
+            label: 'Rebuild now',
             valign: Gtk.Align.CENTER,
         });
-        rebuild.connect('clicked', () => {
-            Gio.DBus.session.call(BUS_NAME, BUS_PATH, BUS_IFACE, 'Reindex',
-                null, null, Gio.DBusCallFlags.NONE, 1000, null,
-                (source, result) => {
-                    try {
-                        source.call_finish(result);
-                    } catch (error) {
-                        window.add_toast(new Adw.Toast({
-                            title: `Index rebuild failed: ${error.message}`,
-                        }));
-                    }
-                });
-        });
-        indexRow.add_suffix(rebuild);
-        indexGroup.add(indexRow);
-        behavior.add(indexGroup);
+        rebuild.connect('clicked', () => reindexDaemon(window));
+        rebuildRow.add_suffix(rebuild);
+        limitsGroup.add(rebuildRow);
+        page.add(limitsGroup);
 
-        window.add(behavior);
+        return page;
     }
 }

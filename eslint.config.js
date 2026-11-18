@@ -18,6 +18,7 @@ export default [
                 _: 'readonly',
                 N_: 'readonly',
                 C_: 'readonly',
+                TextEncoder: 'readonly',
             },
         },
         rules: {
