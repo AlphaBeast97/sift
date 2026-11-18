@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
@@ -35,7 +36,7 @@ pub fn query(entries: &[Entry], text: &str, limit: usize) -> Vec<Match> {
 
     let mut matcher = Matcher::default();
     let mut buffer = Vec::new();
-    let mut candidates = Vec::new();
+    let mut candidates: Vec<Candidate> = Vec::new();
 
     for entry in entries {
         if simple
@@ -55,17 +56,14 @@ pub fn query(entries: &[Entry], text: &str, limit: usize) -> Vec<Match> {
         candidates.push((score, entry.path.components().count(), entry));
     }
 
-    candidates.sort_unstable_by(|(score_a, depth_a, entry_a), (score_b, depth_b, entry_b)| {
-        score_b
-            .cmp(score_a)
-            .then_with(|| entry_a.name_lower.len().cmp(&entry_b.name_lower.len()))
-            .then_with(|| depth_a.cmp(depth_b))
-            .then_with(|| entry_a.path.cmp(&entry_b.path))
-    });
+    if candidates.len() > limit {
+        candidates.select_nth_unstable_by(limit - 1, compare_candidates);
+        candidates.truncate(limit);
+    }
+    candidates.sort_unstable_by(compare_candidates);
 
     candidates
         .into_iter()
-        .take(limit)
         .map(|(score, _, entry)| Match {
             path: entry.path.clone(),
             name: display_name(&entry.path),
@@ -73,6 +71,19 @@ pub fn query(entries: &[Entry], text: &str, limit: usize) -> Vec<Match> {
             score,
         })
         .collect()
+}
+
+type Candidate<'a> = (u32, usize, &'a Entry);
+
+fn compare_candidates(
+    (score_a, depth_a, entry_a): &Candidate<'_>,
+    (score_b, depth_b, entry_b): &Candidate<'_>,
+) -> Ordering {
+    score_b
+        .cmp(score_a)
+        .then_with(|| entry_a.name_lower.len().cmp(&entry_b.name_lower.len()))
+        .then_with(|| depth_a.cmp(depth_b))
+        .then_with(|| entry_a.path.cmp(&entry_b.path))
 }
 
 fn is_subsequence(needle: &str, haystack: &str) -> bool {
@@ -143,6 +154,23 @@ mod tests {
         let got = query(&entries, "file-249999", 10);
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].name, "file-249999.txt");
+    }
+
+    #[test]
+    fn keeps_only_the_best_of_many_matches() {
+        let entries: Vec<Entry> = (0..1_000)
+            .map(|index| {
+                entry(
+                    &format!("/h/dir-{index:03}/match-{index:03}.txt"),
+                    EntryKind::File,
+                )
+            })
+            .collect();
+
+        let got = query(&entries, "match", 5);
+        assert_eq!(got.len(), 5);
+        assert_eq!(got[0].name, "match-000.txt");
+        assert_eq!(got[4].name, "match-004.txt");
     }
 
     #[test]

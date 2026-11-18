@@ -195,6 +195,34 @@ fn lower_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
+/// The shared walker settings: skip hidden and excluded folders, symlinks, and
+/// other filesystems. Callers only tune the thread count.
+pub(crate) fn walk_builder(config: &Config, root: &Path, path: &Path) -> WalkBuilder {
+    let filter_config = config.clone();
+    let filter_root = root.to_path_buf();
+    let mut builder = WalkBuilder::new(path);
+    builder
+        .hidden(true)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .follow_links(false)
+        .same_file_system(true);
+
+    builder.filter_entry(move |entry| {
+        if entry.depth() == 0 {
+            return true;
+        }
+        if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
+            return true;
+        }
+        is_indexable(&filter_config, &filter_root, entry.path(), true)
+    });
+
+    builder
+}
+
 pub(crate) fn containing_root<'a>(roots: &'a [PathBuf], path: &Path) -> Option<&'a Path> {
     roots
         .iter()
@@ -275,27 +303,7 @@ fn insert_entry(state: &mut IndexState, entry: Entry, cap: usize) -> bool {
 }
 
 fn walk_subtree(config: &Config, root: &Path, path: &Path, limit: usize) -> Vec<Entry> {
-    let filter_config = config.clone();
-    let filter_root = root.to_path_buf();
-    let mut builder = WalkBuilder::new(path);
-    builder
-        .hidden(true)
-        .ignore(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
-        .follow_links(false)
-        .same_file_system(true);
-
-    builder.filter_entry(move |entry| {
-        if entry.depth() == 0 {
-            return true;
-        }
-        if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
-            return true;
-        }
-        is_indexable(&filter_config, &filter_root, entry.path(), true)
-    });
+    let builder = walk_builder(config, root, path);
 
     let mut entries = Vec::new();
     for result in builder.build() {
@@ -339,28 +347,8 @@ pub fn scan(config: &Config, cancel: &AtomicBool, progress: &AtomicUsize) -> Sca
         }
 
         let root = config_root.clone();
-        let mut builder = WalkBuilder::new(&root);
-        builder
-            .hidden(true)
-            .ignore(false)
-            .git_ignore(false)
-            .git_global(false)
-            .git_exclude(false)
-            .follow_links(false)
-            .same_file_system(true)
-            .threads(4);
-
-        let filter_config = config.clone();
-        let filter_root = root.clone();
-        builder.filter_entry(move |entry| {
-            if entry.depth() == 0 {
-                return true;
-            }
-            if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
-                return true;
-            }
-            is_indexable(&filter_config, &filter_root, entry.path(), true)
-        });
+        let mut builder = walk_builder(config, &root, &root);
+        builder.threads(4);
 
         builder.build_parallel().run(|| {
             Box::new(|result| {

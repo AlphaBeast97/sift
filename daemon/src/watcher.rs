@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use ignore::WalkBuilder;
 use notify::event::EventKind;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
@@ -120,28 +119,8 @@ pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) 
         return (0, 0);
     }
 
-    let filter_config = config.clone();
-    let filter_root = root.to_path_buf();
-    let mut builder = WalkBuilder::new(path);
-    builder
-        .hidden(true)
-        .ignore(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
-        .follow_links(false)
-        .same_file_system(true)
-        .threads(1);
-
-    builder.filter_entry(move |entry| {
-        if entry.depth() == 0 {
-            return true;
-        }
-        if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
-            return true;
-        }
-        index::is_indexable(&filter_config, &filter_root, entry.path(), true)
-    });
+    let mut builder = index::walk_builder(config, root, path);
+    builder.threads(1);
 
     let mut watched = 0;
     let mut failed = 0;
@@ -254,8 +233,8 @@ mod tests {
         assert!(absorb(overflow, &mut pending));
         assert!(pending.is_empty());
 
-        let changed = Event::new(EventKind::Create(CreateKind::File))
-            .add_path(PathBuf::from("/tmp/new.txt"));
+        let changed =
+            Event::new(EventKind::Create(CreateKind::File)).add_path(PathBuf::from("/tmp/new.txt"));
         assert!(!absorb(changed, &mut pending));
         assert!(pending.contains(Path::new("/tmp/new.txt")));
     }

@@ -19,7 +19,7 @@ use crate::watcher::{self, WatcherEvent};
 // cannot see, so a degraded watch is refreshed more often.
 const REFRESH_WATCHED_SECS: u64 = 3600;
 const REFRESH_DEGRADED_SECS: u64 = 600;
-const CACHE_WRITE_DELAY: Duration = Duration::from_secs(30);
+const CACHE_WRITE_DELAY: Duration = Duration::from_secs(600);
 const TICK_MS: u64 = 500;
 
 enum ScanOutcome {

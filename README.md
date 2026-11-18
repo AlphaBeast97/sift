@@ -116,10 +116,11 @@ gdbus call --session --dest io.github.alphabeast97.Sift \
     --method io.github.alphabeast97.Sift.Reindex
 ```
 
-The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. The footer shows
-`Indexing files…` while a scan runs and `Search index degraded`/`truncated`
-when the daemon cannot watch a root, watches only part of it, or hits
-`max_entries`.
+The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. A completed scan
+writes it immediately; watcher changes are batched and flushed within ten
+minutes or on quit. The footer shows `Indexing files…` while a scan runs and
+`Search index degraded`/`truncated` when the daemon cannot watch a root, watches
+only part of it, or hits `max_entries`.
 
 The daemon watches every included folder, so changes appear without a reindex.
 If the kernel's inotify watch limit is exhausted, `Status.watcher` becomes
