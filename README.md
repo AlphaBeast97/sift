@@ -80,39 +80,44 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes glass mode (Auto/Liquid/Frosted/Off), opacity, blur radius,
-tint, animations, panel height, maximum results, app-grid icon size, and an
-index rebuild button. The panel height is fixed while typing; extra results
-scroll. Changes apply live. Settings are ordinary GSettings under
-`org.gnome.shell.extensions.sift` and can be scripted with `gsettings`.
+tint, animations, panel height, maximum results, app-grid icon size, and a
+**Files** page for the file index. The panel height is fixed while typing; extra
+results scroll. Changes apply live. Extension settings are ordinary GSettings
+under `org.gnome.shell.extensions.sift` and can be scripted with `gsettings`;
+index settings are stored in the daemon's TOML file described below.
 
 ## File index
 
-The daemon indexes `$HOME` by default, skipping hidden entries, symlinks, and
-common build/cache directories. Its configuration is
-`${XDG_CONFIG_HOME:-~/.config}/sift/config.toml`:
+The daemon indexes `$HOME` by default, skipping hidden entries, symlinks,
+unreadable folders, and common build, dependency, and cache directories. Its
+configuration is `${XDG_CONFIG_HOME:-~/.config}/sift/config.toml`:
 
 ```toml
 roots = ["~", "/data/projects"]
-exclude_dirs = [".cache", "node_modules", ".git", "target"]
+exclude_dirs = ["node_modules", "go/pkg/mod", ".cargo/registry", "~/Videos/raw"]
 max_entries = 250000
 ```
 
 - `roots` are expanded against `$HOME`. `roots = []` disables file search.
-- `exclude_dirs` removes a directory name anywhere under a root.
+- `exclude_dirs` accepts a folder name (matches anywhere, such as
+  `node_modules`), a relative path from the root, an absolute path, or a `~/`
+  path. The built-in list covers Go/Rust/Java/Node caches, containers, Steam,
+  and other app data; see `daemon/src/config.rs`.
 - Relative roots are resolved against `$HOME`.
+- `max_entries` caps how many entries are kept.
 
-The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. After editing the
-config, stop the daemon (it starts again on the next query):
+Edit these on the **Files** page in preferences; saving rewrites the TOML and
+asks the daemon to rebuild in place. To do it by hand, edit the file and call:
 
 ```bash
 gdbus call --session --dest io.github.alphabeast97.Sift \
     --object-path /io/github/alphabeast97/Sift \
-    --method io.github.alphabeast97.Sift.Quit
+    --method io.github.alphabeast97.Sift.Reindex
 ```
 
-The footer shows `Indexing files…` while a scan runs and
-`Search index degraded`/`truncated` when the daemon cannot watch a root or hits
-`max_entries`.
+The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. The footer shows
+`Indexing files…` while a scan runs and `Search index degraded`/`truncated`
+when the daemon cannot watch a root or hits `max_entries`.
 
 ## Uninstall
 
