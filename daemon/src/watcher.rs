@@ -23,7 +23,7 @@ pub enum WatcherEvent {
 pub fn spawn_watcher(
     config: &Config,
     tx: mpsc::UnboundedSender<WatcherEvent>,
-) -> notify::Result<RecommendedWatcher> {
+) -> notify::Result<(RecommendedWatcher, bool)> {
     let (raw_tx, mut raw_rx) = mpsc::unbounded_channel::<notify::Result<Event>>();
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<Event>| {
         // Opening folders is not a change. Forwarding opens made the scan and
@@ -35,8 +35,11 @@ pub fn spawn_watcher(
     })?;
 
     let mut watched = 0;
+    let mut failed = 0;
     for root in &config.roots {
-        watched += add_tree(&mut watcher, config, root);
+        let (root_watched, root_failed) = add_tree(&mut watcher, config, root);
+        watched += root_watched;
+        failed += root_failed;
     }
 
     // A configured root that cannot be watched at all is a real failure; a
@@ -79,25 +82,26 @@ pub fn spawn_watcher(
         }
     });
 
-    Ok(watcher)
+    Ok((watcher, failed > 0))
 }
 
 /// Watch every folder under `path` that the index would include. Recursive
 /// watches follow symlinks and fail as a whole when one folder is unreadable,
-/// so each folder gets its own non-recursive watch instead.
-pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) -> usize {
+/// so each folder gets its own non-recursive watch instead. Returns the number
+/// of folders watched and the number that could not be watched.
+pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) -> (usize, usize) {
     let Some(root) = index::containing_root(&config.roots, path) else {
-        return 0;
+        return (0, 0);
     };
     if !index::is_indexable(config, root, path, true) {
-        return 0;
+        return (0, 0);
     }
 
     let Ok(metadata) = std::fs::symlink_metadata(path) else {
-        return 0;
+        return (0, 0);
     };
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return 0;
+        return (0, 0);
     }
 
     let filter_config = config.clone();
@@ -124,6 +128,7 @@ pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) 
     });
 
     let mut watched = 0;
+    let mut failed = 0;
     for entry in builder.build().flatten() {
         let Some(file_type) = entry.file_type() else {
             continue;
@@ -131,15 +136,18 @@ pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) 
         if file_type.is_symlink() || !file_type.is_dir() {
             continue;
         }
-        if watcher
-            .watch(entry.path(), RecursiveMode::NonRecursive)
-            .is_ok()
-        {
+        if watch_folder(watcher, entry.path()) {
             watched += 1;
+        } else {
+            failed += 1;
         }
     }
 
-    watched
+    (watched, failed)
+}
+
+fn watch_folder(watcher: &mut RecommendedWatcher, path: &Path) -> bool {
+    watcher.watch(path, RecursiveMode::NonRecursive).is_ok()
 }
 
 #[cfg(test)]
@@ -202,11 +210,22 @@ mod tests {
 
         let config = config_for(dir.path());
         let mut watcher = notification_watcher();
-        assert_eq!(add_tree(&mut watcher, &config, &visible), 1);
-        assert_eq!(add_tree(&mut watcher, &config, &hidden), 0);
-        assert_eq!(add_tree(&mut watcher, &config, &excluded), 0);
+        assert_eq!(add_tree(&mut watcher, &config, &visible), (1, 0));
+        assert_eq!(add_tree(&mut watcher, &config, &hidden), (0, 0));
+        assert_eq!(add_tree(&mut watcher, &config, &excluded), (0, 0));
 
         let (tx, _rx) = mpsc::unbounded_channel();
-        assert!(spawn_watcher(&config, tx).is_ok());
+        let (_, partial) = spawn_watcher(&config, tx).unwrap();
+        assert!(!partial, "a readable tree is watched in full");
+    }
+
+    #[test]
+    fn failed_watches_are_counted() {
+        let mut watcher = notification_watcher();
+        assert!(watch_folder(&mut watcher, Path::new("/")));
+        assert!(!watch_folder(
+            &mut watcher,
+            &PathBuf::from("/").join("x".repeat(5000))
+        ));
     }
 }

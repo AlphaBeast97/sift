@@ -343,7 +343,8 @@ export const SiftOverlay = GObject.registerClass({
             return 'Search service unavailable';
 
         const status = this._daemon?.status;
-        if (status?.state === 'degraded' || status?.watcher === 'unavailable')
+        if (status?.state === 'degraded' || status?.watcher === 'unavailable' ||
+            status?.watcher === 'partial')
             return 'Search index degraded';
         if (status?.truncated)
             return 'Search index truncated';

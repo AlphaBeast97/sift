@@ -118,11 +118,13 @@ gdbus call --session --dest io.github.alphabeast97.Sift \
 
 The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. The footer shows
 `Indexing files…` while a scan runs and `Search index degraded`/`truncated`
-when the daemon cannot watch a root or hits `max_entries`.
+when the daemon cannot watch a root, watches only part of it, or hits
+`max_entries`.
 
 The daemon watches every included folder, so changes appear without a reindex.
-On very large trees the kernel's inotify watch limit can be exhausted; raise
-`fs.inotify.max_user_watches` if changes in deep folders take a while to show up.
+If the kernel's inotify watch limit is exhausted, `Status.watcher` becomes
+`partial`; changes in unwatched folders appear on the next reconcile scan. Raise
+`fs.inotify.max_user_watches` to watch everything.
 
 ## Daemon interface
 
@@ -137,8 +139,9 @@ The extension talks to `siftd` over the session bus at
 - `EnsureFresh()` asks for a reconcile scan when the last one is old.
 - `Quit()` flushes the cache and stops the daemon.
 - The `Status` property is JSON (`state`, `indexed`, `roots`, `truncated`,
-  `watcher`, `last_reconcile`); `StatusChanged` fires when it changes. The
-  `Config` property is JSON (`roots`, `exclude_dirs`, `max_entries`).
+  `watcher`, `last_reconcile`); `watcher` is `ok`, `partial`, or `unavailable`;
+  `StatusChanged` fires when it changes. The `Config` property is JSON
+  (`roots`, `exclude_dirs`, `max_entries`).
 
 ## Uninstall
 

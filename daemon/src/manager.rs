@@ -56,6 +56,7 @@ pub fn spawn_manager(
         watcher: None,
         watcher_config: None,
         watcher_ok: true,
+        watcher_partial: false,
         pending: Vec::new(),
         cache_deadline: None,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -83,6 +84,7 @@ struct Manager {
     watcher: Option<RecommendedWatcher>,
     watcher_config: Option<u64>,
     watcher_ok: bool,
+    watcher_partial: bool,
     pending: Vec<PathBuf>,
     cache_deadline: Option<tokio::time::Instant>,
     cancel: Arc<AtomicBool>,
@@ -166,7 +168,11 @@ impl Manager {
                                 self.schedule_cache_write();
                             }
 
-                            let state = if self.watcher_ok { "ready" } else { "degraded" };
+                            let state = if self.watcher_ok && !self.watcher_partial {
+                                "ready"
+                            } else {
+                                "degraded"
+                            };
                             self.status.update(|status| status.state = state.to_owned());
 
                             // Changes seen during the scan are not part of its snapshot.
@@ -232,7 +238,10 @@ impl Manager {
     fn start_watcher(&mut self) {
         let config = self.config.read().unwrap().clone();
         let fingerprint = config.fingerprint();
-        if self.watcher.is_some() && self.watcher_config == Some(fingerprint) {
+        if self.watcher.is_some()
+            && self.watcher_config == Some(fingerprint)
+            && !self.watcher_partial
+        {
             return;
         }
 
@@ -240,13 +249,13 @@ impl Manager {
         self.watcher_config = Some(fingerprint);
 
         match watcher::spawn_watcher(&config, self.watch_tx.clone()) {
-            Ok(watcher) => {
+            Ok((watcher, partial)) => {
                 self.watcher = Some(watcher);
-                if !self.watcher_ok {
-                    self.watcher_ok = true;
-                    self.status
-                        .update(|status| status.watcher = "ok".to_owned());
-                }
+                self.watcher_ok = true;
+                self.watcher_partial = partial;
+                let state = if partial { "partial" } else { "ok" };
+                self.status
+                    .update(|status| status.watcher = state.to_owned());
             }
             Err(error) => {
                 if self.watcher_ok {
@@ -261,6 +270,7 @@ impl Manager {
         self.watcher = None;
         self.watcher_config = None;
         self.watcher_ok = false;
+        self.watcher_partial = false;
 
         let scanning = self.scanning;
         self.status.update(|status| {
@@ -275,6 +285,7 @@ impl Manager {
         let config = self.config.read().unwrap().clone();
 
         // New folders need their own watches; existing ones already have them.
+        let mut failed = 0;
         if let Some(watcher) = self.watcher.as_mut() {
             for path in paths {
                 if self.index.has_path(path) {
@@ -284,9 +295,14 @@ impl Manager {
                     continue;
                 };
                 if metadata.is_dir() && !metadata.file_type().is_symlink() {
-                    watcher::add_tree(watcher, &config, path);
+                    failed += watcher::add_tree(watcher, &config, path).1;
                 }
             }
+        }
+        if failed > 0 && !self.watcher_partial {
+            self.watcher_partial = true;
+            self.status
+                .update(|status| status.watcher = "partial".to_owned());
         }
 
         if !self.index.apply_batch(&config, paths) {
