@@ -189,6 +189,16 @@ export async function run() {
         'hidden desktop entries do not appear in search');
     }
 
+    // File-type helpers ("Open in …") have MIME types but no categories.
+    const handlers = installed.filter(a => a.should_show() &&
+        (a.get_categories?.() ?? '') === '' &&
+        (a.get_supported_types?.() ?? []).length > 0);
+    if (handlers.length) {
+        const ids = new Set(api.apps.gridApps().map(record => record.id));
+        assert(handlers.every(a => !ids.has(a.get_id())),
+            'file-type helpers do not appear as apps');
+    }
+
     if (GLib.getenv('SIFT_E2E') !== '1') {
         api.overlay.entry.set_text(target.get_name());
         await Scripting.waitLeisure();

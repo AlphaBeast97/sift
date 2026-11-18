@@ -25,6 +25,21 @@ export function normalizeApp(app) {
     };
 }
 
+function isVisible(app) {
+    const info = app.get_app_info();
+    if (!info)
+        return true;
+    if (!info.should_show())
+        return false;
+    if (!(info instanceof GioUnix.DesktopAppInfo))
+        return true;
+
+    // "Open in …" helpers advertise file types but no categories: they are
+    // context-menu verbs, not apps anyone launches on their own.
+    return (info.get_categories() ?? '') !== '' ||
+        (info.get_supported_types() ?? []).length === 0;
+}
+
 export class Apps {
     constructor(appSystem = Shell.AppSystem.get_default()) {
         this._appSystem = appSystem;
@@ -76,8 +91,8 @@ export class Apps {
             for (const app of this._appSystem.get_running())
                 apps.set(app.get_id(), app);
             this._records = [...apps.values()]
-                .map(normalizeApp)
-                .filter(record => record.app.get_app_info()?.should_show() ?? true);
+                .filter(isVisible)
+                .map(normalizeApp);
         }
         return this._records;
     }
