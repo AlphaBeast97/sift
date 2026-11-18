@@ -166,8 +166,9 @@ export async function run() {
         'focusSearch focuses the entry text');
 
     const installed = Shell.AppSystem.get_default().get_installed();
-    const target = installed.find(a => a.get_name().length >= 4 &&
-        installed.filter(b => b.get_name() === a.get_name()).length === 1);
+    const shown = installed.filter(a => a.should_show());
+    const target = shown.find(a => a.get_name().length >= 4 &&
+        shown.filter(b => b.get_name() === a.get_name()).length === 1);
     assert(target !== undefined, 'installed apps available');
     api.overlay.entry.set_text(target.get_name());
     await Scripting.waitLeisure();
@@ -178,6 +179,15 @@ export async function run() {
     assert(api.overlay.rows[0].title === target.get_name(), 'exact app name ranks first');
     assert(api.glass.rect.height === 404,
         'typing expands the panel to its fixed height');
+
+    const hidden = installed.find(a => !a.should_show());
+    if (hidden) {
+        api.overlay.entry.set_text(hidden.get_name());
+        await Scripting.waitLeisure();
+        assert(!api.overlay.rows.some(row =>
+            row.kind === 'app' && row.title === hidden.get_name()),
+        'hidden desktop entries do not appear in search');
+    }
 
     if (GLib.getenv('SIFT_E2E') !== '1') {
         api.overlay.entry.set_text(target.get_name());

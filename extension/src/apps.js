@@ -62,7 +62,6 @@ export class Apps {
 
     gridApps() {
         return this._getRecords()
-            .filter(record => record.app.get_app_info()?.should_show() ?? true)
             .sort((a, b) => a.name.localeCompare(b.name));
     }
 
@@ -76,7 +75,9 @@ export class Apps {
             }
             for (const app of this._appSystem.get_running())
                 apps.set(app.get_id(), app);
-            this._records = [...apps.values()].map(normalizeApp);
+            this._records = [...apps.values()]
+                .map(normalizeApp)
+                .filter(record => record.app.get_app_info()?.should_show() ?? true);
         }
         return this._records;
     }
