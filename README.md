@@ -124,7 +124,8 @@ when the daemon cannot watch a root, watches only part of it, or hits
 The daemon watches every included folder, so changes appear without a reindex.
 If the kernel's inotify watch limit is exhausted, `Status.watcher` becomes
 `partial`; changes in unwatched folders appear on the next reconcile scan. Raise
-`fs.inotify.max_user_watches` to watch everything.
+`fs.inotify.max_user_watches` to watch everything. If the kernel's event queue
+overflows, the daemon rebuilds its watches and rescans automatically.
 
 ## Daemon interface
 

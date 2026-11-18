@@ -64,6 +64,7 @@ pub fn spawn_manager(
         dirty: false,
         scanning: false,
         reindex_pending: false,
+        rescan_pending: false,
         quitting: false,
         quit_ack: None,
     };
@@ -92,6 +93,7 @@ struct Manager {
     dirty: bool,
     scanning: bool,
     reindex_pending: bool,
+    rescan_pending: bool,
     quitting: bool,
     quit_ack: Option<oneshot::Sender<()>>,
 }
@@ -188,8 +190,12 @@ impl Manager {
 
                     if self.reindex_pending && !self.quitting {
                         self.reindex_pending = false;
+                        self.rescan_pending = false;
                         self.reload_config();
                         self.start_watcher();
+                        self.start_scan();
+                    } else if self.rescan_pending && !self.quitting {
+                        self.rescan_pending = false;
                         self.start_scan();
                     }
 
@@ -205,6 +211,17 @@ impl Manager {
                                 self.pending.extend(paths);
                             } else {
                                 self.apply_changes(&paths);
+                            }
+                        }
+                        Some(WatcherEvent::Rescan) => {
+                            eprintln!("siftd: file watcher overflowed; rebuilding and rescanning");
+                            self.watcher = None;
+                            self.watcher_config = None;
+                            self.start_watcher();
+                            if self.scanning {
+                                self.rescan_pending = true;
+                            } else {
+                                self.start_scan();
                             }
                         }
                         Some(WatcherEvent::Failed) | None => {

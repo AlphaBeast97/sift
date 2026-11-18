@@ -17,6 +17,7 @@ const DEBOUNCE: Duration = Duration::from_millis(500);
 #[derive(Debug)]
 pub enum WatcherEvent {
     Changed(Vec<PathBuf>),
+    Rescan,
     Failed,
 }
 
@@ -52,19 +53,19 @@ pub fn spawn_watcher(
         let mut pending = HashSet::new();
 
         while let Some(first) = raw_rx.recv().await {
-            match first {
-                Ok(event) => pending.extend(event.paths),
+            let mut rescan = match first {
+                Ok(event) => absorb(event, &mut pending),
                 Err(_) => {
                     let _ = tx.send(WatcherEvent::Failed);
-                    continue;
+                    false
                 }
-            }
+            };
 
             tokio::time::sleep(DEBOUNCE).await;
 
             loop {
                 match raw_rx.try_recv() {
-                    Ok(Ok(event)) => pending.extend(event.paths),
+                    Ok(Ok(event)) => rescan |= absorb(event, &mut pending),
                     Ok(Err(_)) => {
                         let _ = tx.send(WatcherEvent::Failed);
                     }
@@ -72,7 +73,13 @@ pub fn spawn_watcher(
                 }
             }
 
-            if !pending.is_empty() {
+            if rescan {
+                // A rescan makes the individual paths irrelevant.
+                pending.clear();
+                if tx.send(WatcherEvent::Rescan).is_err() {
+                    break;
+                }
+            } else if !pending.is_empty() {
                 let mut paths: Vec<_> = pending.drain().collect();
                 paths.sort();
                 if tx.send(WatcherEvent::Changed(paths)).is_err() {
@@ -83,6 +90,15 @@ pub fn spawn_watcher(
     });
 
     Ok((watcher, failed > 0))
+}
+
+/// Returns true when events may have been lost and the tree must be rescanned.
+fn absorb(event: Event, pending: &mut HashSet<PathBuf>) -> bool {
+    if event.need_rescan() {
+        return true;
+    }
+    pending.extend(event.paths);
+    false
 }
 
 /// Watch every folder under `path` that the index would include. Recursive
@@ -227,5 +243,20 @@ mod tests {
             &mut watcher,
             &PathBuf::from("/").join("x".repeat(5000))
         ));
+    }
+
+    #[test]
+    fn overflow_events_request_a_rescan() {
+        use notify::event::{CreateKind, Flag};
+
+        let mut pending = HashSet::new();
+        let overflow = Event::new(EventKind::Other).set_flag(Flag::Rescan);
+        assert!(absorb(overflow, &mut pending));
+        assert!(pending.is_empty());
+
+        let changed = Event::new(EventKind::Create(CreateKind::File))
+            .add_path(PathBuf::from("/tmp/new.txt"));
+        assert!(!absorb(changed, &mut pending));
+        assert!(pending.contains(Path::new("/tmp/new.txt")));
     }
 }
