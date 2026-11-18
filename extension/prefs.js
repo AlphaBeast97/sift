@@ -603,7 +603,7 @@ export default class SiftPreferences extends ExtensionPreferences {
             title: 'Maximum indexed entries',
             subtitle: 'Sift stops adding entries after this many.',
             adjustment: new Gtk.Adjustment({
-                lower: 10000,
+                lower: 1000,
                 upper: 2000000,
                 step_increment: 10000,
                 page_increment: 100000,
