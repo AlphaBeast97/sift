@@ -2,6 +2,7 @@
 
 const SCORE = {
     exact: 1000,
+    wordPrefix: 900,
     prefix: 800,
     word: 600,
     substring: 400,
@@ -14,6 +15,10 @@ function isWordStart(text, index) {
     if (index === 0)
         return true;
     return /[\s\-_.]/u.test(text[index - 1]);
+}
+
+function endsWord(text, index) {
+    return index >= text.length || /[\s\-_.]/u.test(text[index]);
 }
 
 function isSubsequence(query, text) {
@@ -31,8 +36,11 @@ function score(record, query) {
     if (record.lowerName === query)
         return SCORE.exact;
 
-    if (record.lowerName.startsWith(query))
-        return SCORE.prefix;
+    if (record.lowerName.startsWith(query)) {
+        return endsWord(record.lowerName, query.length)
+            ? SCORE.wordPrefix
+            : SCORE.prefix;
+    }
 
     const at = record.lowerName.indexOf(query);
     if (at >= 0)

@@ -33,6 +33,12 @@ export function run() {
         'zeta', 2);
     equal(tie[0].id, 'short.desktop');
 
+    const wordPrefix = rankApps([
+        app('zenith.desktop', 'Zenith'),
+        app('zen.desktop', 'Zen Browser'),
+    ], 'zen', 2);
+    equal(wordPrefix[0].id, 'zen.desktop');
+
     const running = rankApps([
         app('note.desktop', 'Note'),
         app('notes.desktop', 'Notes', {running: true}),
