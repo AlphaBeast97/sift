@@ -89,7 +89,9 @@ if (rim > 0.0 && inner >= 0.0 && inner < rimWidth * 8.0) {
     vec2 light = normalize(vec2(-1.0, -1.25));
     float lit = pow(max(dot(facing, light), 0.0), 1.6) +
         0.6 * pow(max(dot(facing, -light), 0.0), 1.6);
-    float strength = clamp(rim * (0.22 + lit) *
+    // The base keeps the long side edges visible on tall panels; the lit term
+    // still gathers light at the top-left corner.
+    float strength = clamp(rim * (0.5 + 0.6 * lit) *
         (exp(-inner / rimWidth) + 0.3 * exp(-inner / (rimWidth * 3.5))),
         0.0, 1.0);
     rgb = mix(rgb, rimColour, strength);
