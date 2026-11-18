@@ -112,35 +112,38 @@
     height: 28px;
 }
 
-/* A tile hover reads like a small pane of the panel: light gathers at the
-   top and fades out behind the label, so the label never sits on a cut edge. */
+/* Hover is a flat tint, not a gradient plus a blurred inset shadow: the tile
+   repaints its own background and the grid stays cheap. */
+.sift-app-grid .overview-tile {
+    transition-duration: 100ms;
+}
+
 .sift-app-grid .overview-tile:hover,
 .sift-app-grid .overview-tile:focus {
     color: #ffffff;
-    background-color: transparent;
-    background-gradient-direction: vertical;
-    background-gradient-start: rgba(255, 255, 255, 0.18);
-    background-gradient-end: rgba(255, 255, 255, 0.00);
-    box-shadow: inset 0 1px 14px rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sift-app-grid .overview-tile:highlighted {
+    background-color: rgba(255, 255, 255, 0.14);
 }
 
 .sift-app-grid .overview-tile:active {
-    background-gradient-start: rgba(255, 255, 255, 0.24);
-    background-gradient-end: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .sift-light .sift-app-grid .overview-tile:hover,
 .sift-light .sift-app-grid .overview-tile:focus {
     color: rgba(0, 0, 0, 0.9);
-    background-color: transparent;
-    background-gradient-start: rgba(255, 255, 255, 0.65);
-    background-gradient-end: rgba(255, 255, 255, 0.10);
-    box-shadow: inset 0 1px 14px rgba(255, 255, 255, 0.55);
+    background-color: rgba(255, 255, 255, 0.45);
+}
+
+.sift-light .sift-app-grid .overview-tile:highlighted {
+    background-color: rgba(255, 255, 255, 0.58);
 }
 
 .sift-light .sift-app-grid .overview-tile:active {
-    background-gradient-start: rgba(255, 255, 255, 0.78);
-    background-gradient-end: rgba(255, 255, 255, 0.25);
+    background-color: rgba(255, 255, 255, 0.65);
 }
 
 .sift-app-grid .overview-icon.overview-icon-with-label StLabel {
