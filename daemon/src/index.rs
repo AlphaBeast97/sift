@@ -79,72 +79,107 @@ impl Index {
         paths.sort();
         paths.dedup();
 
-        let mut state = self.state.write().unwrap();
-        let mut changed = false;
+        // Enumerate new folders before taking the write lock: dropping a large
+        // tree into a watched root must not freeze queries while it is walked.
+        let mut removals = Vec::new();
         let mut additions = Vec::new();
-
-        // Remove first so a rename frees its slots before the new subtree is added.
-        for path in &paths {
-            if path.exists() {
-                additions.push(path.clone());
-            } else {
-                changed |= remove_subtree(&mut state.entries, path);
-            }
-        }
-
-        for path in additions {
+        for path in paths {
             let Some(root) = containing_root(&config.roots, &path) else {
-                changed |= remove_subtree(&mut state.entries, &path);
+                removals.push(path);
                 continue;
             };
 
             let Ok(metadata) = std::fs::symlink_metadata(&path) else {
-                changed |= remove_subtree(&mut state.entries, &path);
+                removals.push(path);
                 continue;
             };
-            if metadata.file_type().is_symlink() || !is_indexable(config, root, &path) {
-                changed |= remove_subtree(&mut state.entries, &path);
-                continue;
-            }
-
             let kind = if metadata.is_dir() {
                 EntryKind::Dir
             } else if metadata.is_file() {
                 EntryKind::File
             } else {
-                changed |= remove_subtree(&mut state.entries, &path);
+                removals.push(path);
                 continue;
             };
+            if metadata.file_type().is_symlink()
+                || !is_indexable(config, root, &path, kind == EntryKind::Dir)
+            {
+                removals.push(path);
+                continue;
+            }
 
-            // Walking a folder again for every event that names it made each
-            // read of the tree enqueue another read of the tree.
-            let known = path == *root ||
-                state
-                    .entries
-                    .binary_search_by(|entry| entry.path.as_path().cmp(&path))
-                    .is_ok();
+            let is_root = path == root;
+            additions.push((path, root.to_path_buf(), kind, is_root));
+        }
 
-            if path != *root {
+        let mut changed = false;
+
+        // Remove first so a rename frees its slots before the new subtree is added.
+        {
+            let mut state = self.state.write().unwrap();
+            for path in &removals {
+                changed |= remove_subtree(&mut state.entries, path);
+            }
+        }
+
+        // Walking a folder again for every event that names it made each read
+        // of the tree enqueue another read of the tree.
+        let (known, length) = {
+            let state = self.state.read().unwrap();
+            let known = additions
+                .iter()
+                .map(|(path, _, _, is_root)| {
+                    *is_root
+                        || state
+                            .entries
+                            .binary_search_by(|entry| entry.path.as_path().cmp(path))
+                            .is_ok()
+                })
+                .collect::<Vec<_>>();
+            (known, state.entries.len())
+        };
+
+        let mut planned = length;
+        let mut walks = Vec::with_capacity(additions.len());
+        for ((path, root, kind, is_root), known) in additions.into_iter().zip(known) {
+            let mut subtree = Vec::new();
+            let mut full = false;
+
+            if !is_root && !known {
+                planned += 1;
+            }
+
+            if kind == EntryKind::Dir && !known {
+                let remaining = config.max_entries.saturating_sub(planned);
+                if remaining == 0 {
+                    full = true;
+                } else {
+                    subtree = walk_subtree(config, &root, &path, remaining);
+                    planned += subtree.len();
+                }
+            }
+
+            walks.push((path, kind, is_root, subtree, full));
+        }
+
+        let mut state = self.state.write().unwrap();
+        for (path, kind, is_root, subtree, full) in walks {
+            if full {
+                state.truncated = true;
+            }
+            if !is_root {
                 changed |= insert_entry(
                     &mut state,
                     Entry {
                         name_lower: lower_name(&path),
-                        path: path.clone(),
+                        path,
                         kind,
                     },
                     config.max_entries,
                 );
             }
-
-            if kind == EntryKind::Dir && !known {
-                let remaining = config.max_entries.saturating_sub(state.entries.len());
-                if remaining == 0 {
-                    state.truncated = true;
-                    continue;
-                }
-                for entry in walk_subtree(config, root, &path, remaining) {
-                    changed |= insert_entry(&mut state, entry, config.max_entries);
-                }
+            for entry in subtree {
+                changed |= insert_entry(&mut state, entry, config.max_entries);
             }
         }
 
@@ -166,7 +201,7 @@ pub(crate) fn containing_root<'a>(roots: &'a [PathBuf], path: &Path) -> Option<&
         .map(PathBuf::as_path)
 }
 
-pub(crate) fn is_indexable(config: &Config, root: &Path, path: &Path) -> bool {
+pub(crate) fn is_indexable(config: &Config, root: &Path, path: &Path, is_dir: bool) -> bool {
     let Ok(relative) = path.strip_prefix(root) else {
         return false;
     };
@@ -187,7 +222,15 @@ pub(crate) fn is_indexable(config: &Config, root: &Path, path: &Path) -> bool {
         return false;
     }
 
-    !is_excluded(relative, &config.exclude_dirs)
+    // The scan filters folders only, so a file called "target" is still a file;
+    // a file inside an excluded folder still goes with that folder.
+    if is_dir {
+        !is_excluded(relative, &config.exclude_dirs)
+    } else {
+        relative
+            .parent()
+            .is_none_or(|parent| !is_excluded(parent, &config.exclude_dirs))
+    }
 }
 
 fn remove_subtree(entries: &mut Vec<Entry>, path: &Path) -> bool {
@@ -249,7 +292,7 @@ fn walk_subtree(config: &Config, root: &Path, path: &Path, limit: usize) -> Vec<
         if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
             return true;
         }
-        is_indexable(&filter_config, &filter_root, entry.path())
+        is_indexable(&filter_config, &filter_root, entry.path(), true)
     });
 
     let mut entries = Vec::new();
@@ -314,7 +357,7 @@ pub fn scan(config: &Config, cancel: &AtomicBool, progress: &AtomicUsize) -> Sca
             if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
                 return true;
             }
-            is_indexable(&filter_config, &filter_root, entry.path())
+            is_indexable(&filter_config, &filter_root, entry.path(), true)
         });
 
         builder.build_parallel().run(|| {
@@ -414,6 +457,7 @@ mod tests {
     fn skips_hidden_excluded_symlinks_and_caps() {
         let dir = tempfile::tempdir().unwrap();
         write(dir.path().join("visible.txt"));
+        write(dir.path().join("target"));
         write(dir.path().join(".hidden"));
         write(dir.path().join("node_modules/pkg.js"));
         write(dir.path().join("deep/.git/config"));
@@ -428,6 +472,7 @@ mod tests {
             .map(|entry| entry.name_lower.as_str())
             .collect();
         assert!(names.contains(&"visible.txt"));
+        assert!(names.contains(&"target"));
         assert!(!names.contains(&".hidden"));
         assert!(!names.contains(&"pkg.js"));
         assert!(!names.contains(&"config"));
@@ -481,17 +526,32 @@ mod tests {
         assert!(!is_indexable(
             &config,
             root,
-            Path::new("/home/alice/work/private/notes.txt")
+            Path::new("/home/alice/work/private"),
+            true
         ));
         assert!(!is_indexable(
             &config,
             root,
-            Path::new("/home/alice/work/go/pkg/mod/cache.txt")
+            Path::new("/home/alice/work/go/pkg/mod"),
+            true
         ));
         assert!(is_indexable(
             &config,
             root,
-            Path::new("/home/alice/work/public/notes.txt")
+            Path::new("/home/alice/work/public"),
+            true
+        ));
+        assert!(is_indexable(
+            &config,
+            root,
+            Path::new("/home/alice/work/target"),
+            false
+        ));
+        assert!(!is_indexable(
+            &config,
+            root,
+            Path::new("/home/alice/work/go/pkg/mod/cache.txt"),
+            false
         ));
     }
 
@@ -548,5 +608,19 @@ mod tests {
         assert!(!index.apply_batch(&cfg, &[dir.path().join("ok.txt")]));
         index.apply_batch(&cfg, &[dir.path().join(".secret")]);
         assert_eq!(index.len(), 1);
+    }
+
+    #[test]
+    fn apply_batch_keeps_files_named_like_excluded_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("target");
+        std::fs::write(&path, b"x").unwrap();
+        let cfg = crate::config::default_config(dir.path());
+        let index = Index::new(vec![], false);
+
+        assert!(index.apply_batch(&cfg, std::slice::from_ref(&path)));
+        assert!(index.has_path(&path));
+        assert!(!index.apply_batch(&cfg, std::slice::from_ref(&path)));
+        assert!(index.has_path(&path));
     }
 }

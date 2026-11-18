@@ -6,6 +6,9 @@ use serde::Deserialize;
 
 const CACHE_FORMAT: u64 = 1;
 const DEFAULT_MAX_ENTRIES: usize = 250_000;
+// A query scans the whole index; without a ceiling a hand-edited config can
+// make every keystroke take seconds.
+const MAX_ENTRIES: usize = 1_000_000;
 
 const DEFAULT_EXCLUDES: &[&str] = &[
     // Build and dependency folders that are usually huge and never searched.
@@ -119,7 +122,10 @@ impl Config {
                 .into_iter()
                 .map(|pattern| expand_exclude(&pattern, home))
                 .collect(),
-            max_entries: raw.max_entries.unwrap_or(DEFAULT_MAX_ENTRIES),
+            max_entries: raw
+                .max_entries
+                .unwrap_or(DEFAULT_MAX_ENTRIES)
+                .min(MAX_ENTRIES),
         })
     }
 
@@ -269,6 +275,13 @@ mod tests {
     fn empty_roots_disables_the_file_index() {
         let config = Config::load_str("roots = []\n", Path::new("/home/alice")).unwrap();
         assert!(config.roots.is_empty());
+    }
+
+    #[test]
+    fn entry_cap_is_bounded() {
+        let config = Config::load_str("max_entries = 50000000\n", Path::new("/home/alice"))
+            .unwrap();
+        assert_eq!(config.max_entries, 1_000_000);
     }
 
     #[test]

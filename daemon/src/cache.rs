@@ -33,12 +33,12 @@ pub fn load(path: &Path, fingerprint: u64) -> Option<CachedIndex> {
     parse(&bytes, fingerprint)
 }
 
+#[cfg(test)]
 pub fn store(path: &Path, fingerprint: u64, entries: &[Entry], truncated: bool) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
-    }
+    write_atomic(path, &encode(fingerprint, entries, truncated))
+}
 
+pub fn encode(fingerprint: u64, entries: &[Entry], truncated: bool) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(29 + entries.len() * 64);
     bytes.extend_from_slice(MAGIC);
     bytes.extend_from_slice(&VERSION.to_le_bytes());
@@ -56,6 +56,15 @@ pub fn store(path: &Path, fingerprint: u64, entries: &[Entry], truncated: bool) 
         bytes.extend_from_slice(path);
     }
 
+    bytes
+}
+
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
+    }
+
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(".tmp");
     let temporary = PathBuf::from(temporary);
@@ -66,7 +75,7 @@ pub fn store(path: &Path, fingerprint: u64, entries: &[Entry], truncated: bool) 
         .mode(0o600)
         .open(&temporary)?;
     file.set_permissions(fs::Permissions::from_mode(0o600))?;
-    file.write_all(&bytes)?;
+    file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
 
@@ -123,6 +132,11 @@ fn parse(bytes: &[u8], fingerprint: u64) -> Option<CachedIndex> {
     }
 
     if reader.remaining() != 0 {
+        return None;
+    }
+
+    // Lookups binary-search these paths, so an out-of-order cache is unusable.
+    if entries.windows(2).any(|pair| pair[0].path >= pair[1].path) {
         return None;
     }
 
@@ -225,6 +239,19 @@ mod tests {
         let mut bytes = fs::read(&path).unwrap();
         bytes.push(0);
         fs::write(&path, bytes).unwrap();
+        assert!(load(&path, 1).is_none());
+    }
+
+    #[test]
+    fn unsorted_cache_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("index-v1.bin");
+        let entries = vec![
+            entry("/home/a/b.txt", EntryKind::File),
+            entry("/home/a/a.txt", EntryKind::File),
+        ];
+
+        store(&path, 1, &entries, false).unwrap();
         assert!(load(&path, 1).is_none());
     }
 

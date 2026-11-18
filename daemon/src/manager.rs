@@ -50,7 +50,7 @@ pub fn spawn_manager(
         cache_path,
         index,
         status,
-        scan_delay,
+        scan_delay: (scan_delay != Duration::ZERO).then_some(scan_delay),
         scan_tx,
         watch_tx,
         watcher: None,
@@ -77,7 +77,7 @@ struct Manager {
     cache_path: PathBuf,
     index: Arc<Index>,
     status: Arc<StatusModel>,
-    scan_delay: Duration,
+    scan_delay: Option<Duration>,
     scan_tx: mpsc::UnboundedSender<ScanOutcome>,
     watch_tx: mpsc::UnboundedSender<WatcherEvent>,
     watcher: Option<RecommendedWatcher>,
@@ -124,6 +124,15 @@ impl Manager {
                         }
                         Some(Command::EnsureFresh) => {
                             if self.scanning {
+                                continue;
+                            }
+                            if !self.watcher_ok {
+                                self.start_watcher();
+                                if self.watcher_ok {
+                                    // Events missed while the watcher was down
+                                    // need a fresh scan to close the gap.
+                                    self.start_scan();
+                                }
                                 continue;
                             }
                             let last = self.status.snapshot().last_reconcile;
@@ -312,7 +321,8 @@ impl Manager {
         let cancel = self.cancel.clone();
         let progress = self.progress.clone();
         let scan_tx = self.scan_tx.clone();
-        let scan_delay = self.scan_delay;
+        // Startup smoothing only: a later reindex must not wait again.
+        let scan_delay = self.scan_delay.take().unwrap_or(Duration::ZERO);
 
         let (count, truncated) = {
             let state = index.read();
@@ -413,8 +423,13 @@ impl Manager {
 }
 
 fn store_cache(cache_path: &Path, fingerprint: u64, index: &Index) -> std::io::Result<()> {
-    let state = index.read();
-    cache::store(cache_path, fingerprint, &state.entries, state.truncated)
+    // Encode under the read lock, then write outside it: fsync and rename must
+    // not stall queries behind a writer waiting for the lock.
+    let bytes = {
+        let state = index.read();
+        cache::encode(fingerprint, &state.entries, state.truncated)
+    };
+    cache::write_atomic(cache_path, &bytes)
 }
 
 fn unix_now() -> u64 {

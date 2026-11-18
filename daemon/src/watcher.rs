@@ -89,7 +89,7 @@ pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) 
     let Some(root) = index::containing_root(&config.roots, path) else {
         return 0;
     };
-    if !index::is_indexable(config, root, path) {
+    if !index::is_indexable(config, root, path, true) {
         return 0;
     }
 
@@ -120,7 +120,7 @@ pub fn add_tree(watcher: &mut RecommendedWatcher, config: &Config, path: &Path) 
         if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
             return true;
         }
-        index::is_indexable(&filter_config, &filter_root, entry.path())
+        index::is_indexable(&filter_config, &filter_root, entry.path(), true)
     });
 
     let mut watched = 0;

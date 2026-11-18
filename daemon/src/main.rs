@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::{mpsc, oneshot};
 
 mod cache;
@@ -44,6 +45,9 @@ async fn main() {
     });
 
     let cached = cache::load(&options.cache, config.fingerprint());
+    if cached.is_none() && options.cache.exists() {
+        eprintln!("siftd: cached index is stale or unreadable; scanning from scratch");
+    }
     let (entries, truncated) = match cached {
         Some(cached) => (cached.entries, cached.truncated),
         None => (Vec::new(), false),
@@ -126,6 +130,11 @@ async fn main() {
         options.scan_delay,
     );
 
+    let mut terminate =
+        signal(SignalKind::terminate()).expect("cannot install the SIGTERM handler");
+    let mut interrupt =
+        signal(SignalKind::interrupt()).expect("cannot install the SIGINT handler");
+
     tokio::select! {
         result = &mut manager => {
             if let Err(error) = result {
@@ -135,14 +144,28 @@ async fn main() {
         () = connection.closed() => {
             // A daemon whose session bus is gone can never serve a client
             // again. Exit instead of lingering across logout or test buses.
-            let (ack, _done) = oneshot::channel();
-            let _ = shutdown.send(dbus::Command::Quit(ack));
-            let _ = manager.await;
+            stop(&shutdown, &mut manager).await;
+        }
+        _ = terminate.recv() => {
+            // Logout and systemctl stop send SIGTERM; flush before leaving.
+            stop(&shutdown, &mut manager).await;
+        }
+        _ = interrupt.recv() => {
+            stop(&shutdown, &mut manager).await;
         }
     }
 
     signal_task.abort();
     drop(connection);
+}
+
+async fn stop(
+    shutdown: &mpsc::UnboundedSender<dbus::Command>,
+    manager: &mut tokio::task::JoinHandle<()>,
+) {
+    let (ack, _done) = oneshot::channel();
+    let _ = shutdown.send(dbus::Command::Quit(ack));
+    let _ = manager.await;
 }
 
 fn parse_args() -> Result<Option<Options>, String> {

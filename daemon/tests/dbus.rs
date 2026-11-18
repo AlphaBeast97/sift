@@ -144,11 +144,6 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
 
     std::fs::write(&config, "roots = []\n").unwrap();
     let _: () = proxy.call("Reindex", &()).await.unwrap();
-    let during: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
-    assert!(
-        during.contains("report.pdf"),
-        "rebuild keeps the previous snapshot"
-    );
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
@@ -178,19 +173,18 @@ async fn reindex_during_a_scan_runs_after_it() {
     std::fs::create_dir_all(home.join("docs")).unwrap();
     std::fs::write(home.join("docs/report.pdf"), b"x").unwrap();
     let config = tmp.path().join("config.toml");
-    std::fs::write(&config, format!("roots = [\"{}\"]\n", home.display())).unwrap();
+    std::fs::write(&config, "roots = []\n").unwrap();
     let cache = tmp.path().join("cache.bin");
 
     let mut child = spawn_daemon(&config, &cache, &["--scan-delay-ms", "1500"]);
     let proxy = wait_for_proxy().await;
     wait_for_status(&proxy, "\"state\":\"indexing\"").await;
 
-    // Change the config while the startup scan is still running.
-    std::fs::write(&config, "roots = []\n").unwrap();
+    // Point the config at real data and ask for a reindex while the startup
+    // scan is still running: it must run after that scan, not be dropped.
+    std::fs::write(&config, format!("roots = [\"{}\"]\n", home.display())).unwrap();
     let _: () = proxy.call("Reindex", &()).await.unwrap();
 
-    // The first scan still replaces the snapshot, then the queued reindex
-    // reloads the config and empties it.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
     loop {
         let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
@@ -199,20 +193,7 @@ async fn reindex_during_a_scan_runs_after_it() {
         }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "the first scan never indexed the report"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
-    loop {
-        let reply: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
-        if reply.contains("\"files\":[]") {
-            break;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "the queued reindex never applied"
+            "the queued reindex never indexed the report"
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -222,6 +203,36 @@ async fn reindex_during_a_scan_runs_after_it() {
         wait_for_exit(&mut child.0, Duration::from_secs(2)).await,
         "Quit exits after the queued reindex"
     );
+}
+
+#[tokio::test]
+async fn warm_cache_answers_while_a_rebuild_scans() {
+    let _shared = SHARED_BUS.lock().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join("docs")).unwrap();
+    std::fs::write(home.join("docs/report.pdf"), b"x").unwrap();
+    let config = tmp.path().join("config.toml");
+    std::fs::write(&config, format!("roots = [\"{}\"]\n", home.display())).unwrap();
+    let cache = tmp.path().join("cache.bin");
+
+    let mut first = spawn_daemon(&config, &cache, &[]);
+    let proxy = wait_for_proxy().await;
+    wait_for_status(&proxy, "\"state\":\"ready\"").await;
+    let _: () = proxy.call("Quit", &()).await.unwrap();
+    assert!(wait_for_exit(&mut first.0, Duration::from_secs(2)).await);
+
+    let mut second = spawn_daemon(&config, &cache, &["--scan-delay-ms", "1000"]);
+    let proxy = wait_for_proxy().await;
+    wait_for_status(&proxy, "\"state\":\"indexing\"").await;
+    let warm: String = proxy.call("Query", &("report", 10u32)).await.unwrap();
+    assert!(
+        warm.contains("report.pdf"),
+        "the cached snapshot answers while the rebuild scans"
+    );
+
+    let _: () = proxy.call("Quit", &()).await.unwrap();
+    assert!(wait_for_exit(&mut second.0, Duration::from_secs(2)).await);
 }
 
 #[tokio::test]
