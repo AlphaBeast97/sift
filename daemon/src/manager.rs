@@ -15,7 +15,10 @@ use crate::index::{self, Index, ScanResult};
 use crate::status::StatusModel;
 use crate::watcher::{self, WatcherEvent};
 
-const CACHE_REFRESH_SECS: u64 = 600;
+// A healthy watcher keeps the index current; these scans only close gaps it
+// cannot see, so a degraded watch is refreshed more often.
+const REFRESH_WATCHED_SECS: u64 = 3600;
+const REFRESH_DEGRADED_SECS: u64 = 600;
 const CACHE_WRITE_DELAY: Duration = Duration::from_secs(30);
 const TICK_MS: u64 = 500;
 
@@ -140,7 +143,7 @@ impl Manager {
                                 }
                             }
                             let last = self.status.snapshot().last_reconcile;
-                            if unix_now().saturating_sub(last) >= CACHE_REFRESH_SECS {
+                            if unix_now().saturating_sub(last) >= self.refresh_secs() {
                                 self.start_scan();
                             }
                         }
@@ -296,6 +299,14 @@ impl Manager {
                 status.state = "degraded".to_owned();
             }
         });
+    }
+
+    fn refresh_secs(&self) -> u64 {
+        if self.watcher_ok && !self.watcher_partial {
+            REFRESH_WATCHED_SECS
+        } else {
+            REFRESH_DEGRADED_SECS
+        }
     }
 
     fn apply_changes(&mut self, paths: &[PathBuf]) {

@@ -137,7 +137,8 @@ The extension talks to `siftd` over the session bus at
   `calc` object. `text` is at most 128 bytes and `limit` is 1–50. File rows
   carry `path`, `name`, and `kind` (`file` or `dir`).
 - `Reindex()` rereads the config and rebuilds the index.
-- `EnsureFresh()` asks for a reconcile scan when the last one is old.
+- `EnsureFresh()` asks for a reconcile scan when the last one is over an hour
+  old, or ten minutes old while watching is degraded or unavailable.
 - `Quit()` flushes the cache and stops the daemon.
 - The `Status` property is JSON (`state`, `indexed`, `roots`, `truncated`,
   `watcher`, `last_reconcile`); `watcher` is `ok`, `partial`, or `unavailable`;
