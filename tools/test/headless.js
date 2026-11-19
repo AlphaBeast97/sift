@@ -134,6 +134,16 @@ export async function run() {
     global.display.emit('overlay-key');
     await waitFor(() => !api.overlay.visible, 'Super closes Sift search', 2000);
 
+    // The idle prewarm must learn the real page size. Otherwise the first
+    // open repages every tile in the middle of the animation.
+    api.overlay._prewarmGrid();
+    await waitFor(() => !api.appGrid._chunkId &&
+        api.appGrid._tiles.length === api.appGrid.itemCount,
+    'the hidden grid prewarms', 3000);
+    assert(api.appGrid.itemCount > 0, 'the prewarmed grid has apps');
+    assert(api.appGrid._grid.layout_manager.pageWidth > 0,
+        'the prewarmed grid learns its page size');
+
     Main.overview.show(OverviewControls.ControlsState.APP_GRID);
     await waitFor(() => api.overlay.visible && api.overlay.view === 'grid',
         'Super+A opens the Sift app grid', 2000);

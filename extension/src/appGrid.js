@@ -10,7 +10,7 @@ import * as PageIndicators from 'resource:///org/gnome/shell/ui/pageIndicators.j
 
 import {gridLayout, moveSelection, pageSelection} from './lib/gridMath.js';
 
-const CHUNK_SIZE = 30;
+const CHUNK_SIZE = 4;
 const SCROLL_TIMEOUT = 150;
 const SPACING = 8;
 const INDICATOR_HEIGHT = 28;
@@ -169,14 +169,20 @@ export const AppGrid = GObject.registerClass(
             this._dirty = true;
         }
 
-        // Builds tiles while the overlay is hidden; layout waits for the real
-        // allocation, so only the creation cost moves out of the first open.
+        // Builds and lays out tiles while the overlay is hidden. The overlay
+        // sizes this widget first, so the icon grid learns its real page size
+        // and the first open does not have to repage every tile.
         prewarm() {
             if (this._destroyed || this._chunkId)
                 return;
 
             if (!this._dirty && this._tiles.length > 0)
                 return;
+
+            if (this.width > 0 && this.height > INDICATOR_HEIGHT) {
+                this._grid.layout_manager.adaptToSize(
+                    this.width, this.height - INDICATOR_HEIGHT);
+            }
 
             this.setApps(this._apps ? this._apps.gridApps() : []);
             this._dirty = false;
@@ -420,15 +426,25 @@ export const AppGrid = GObject.registerClass(
         }
 
         // The icon grid sizes cells from the whole tile (icon plus label), not
-        // from the icon alone, so capacity has to measure the tiles.
+        // from the icon alone, so capacity has to measure the tiles. Before the
+        // first allocation the icon texture has no preferred size yet, so
+        // estimate from the icon size and the label height; the next _layout()
+        // after allocation replaces the estimate with the real tile size.
         _cellSize() {
-            let cell = 0;
+            let cell = this._iconSize;
+            const label = this._tiles[0]?.icon.label;
+            if (this._showLabels && label) {
+                const height = label.get_preferred_height(-1)[0];
+                if (height > 0)
+                    cell += height + 1;
+            }
+
             for (const tile of this._tiles) {
                 cell = Math.max(cell,
                     tile.get_preferred_width(-1)[0],
                     tile.get_preferred_height(-1)[0]);
             }
-            return cell > 0 ? cell : this._iconSize;
+            return cell;
         }
 
         // Changing the page capacity leaves existing pages at the old size,

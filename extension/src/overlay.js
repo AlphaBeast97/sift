@@ -415,7 +415,7 @@ export const SiftOverlay = GObject.registerClass({
         this._grid?.invalidate();
         this.refreshApps();
         if (!this.visible)
-            this._grid?.prewarm();
+            this._prewarmGrid();
     }
 
     onDaemonChanged() {
@@ -532,9 +532,18 @@ export const SiftOverlay = GObject.registerClass({
                 return GLib.SOURCE_REMOVE;
             }
 
-            this._grid?.prewarm();
+            this._prewarmGrid();
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    // The grid needs its final size before it can lay out hidden; without it
+    // the first open repages every tile in the middle of the animation.
+    _prewarmGrid() {
+        const rect = this._targetRect('grid');
+        if (rect)
+            this._sizeContent(rect.width, rect.height);
+        this._grid?.prewarm();
     }
 
     _syncTheme() {
