@@ -20,6 +20,7 @@ export const ResultsView = GObject.registerClass(
             this._rows = [];
             this._selected = -1;
             this._onActivate = null;
+            this._onSelectionChanged = null;
             this._rowActors = [];
 
             for (let i = 0; i < 12; i++)
@@ -88,6 +89,10 @@ export const ResultsView = GObject.registerClass(
             this._onActivate = callback;
         }
 
+        set onSelectionChanged(callback) {
+            this._onSelectionChanged = callback;
+        }
+
         get rows() {
             return this._rows;
         }
@@ -147,6 +152,7 @@ export const ResultsView = GObject.registerClass(
                 this._selected = count > 0 ? 0 : -1;
 
             this._syncSelection();
+            this._onSelectionChanged?.(this._selected);
         }
 
         setMaxRows(maxRows) {
@@ -164,6 +170,7 @@ export const ResultsView = GObject.registerClass(
 
             this._selected = next;
             this._syncSelection();
+            this._onSelectionChanged?.(next);
         }
 
         move(delta) {

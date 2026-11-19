@@ -13,9 +13,9 @@ const BUS_NAME = 'io.github.alphabeast97.Sift';
 const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
-    'glass-brightness', 'animations', 'max-results', 'search-height',
-    'grid-labels', 'disable-overview', 'sift-search-shortcut',
-    'sift-apps-shortcut',
+    'glass-brightness', 'animations', 'show-pet', 'max-results',
+    'search-height', 'grid-labels', 'disable-overview',
+    'sift-search-shortcut', 'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -446,6 +446,14 @@ export default class SiftPreferences extends ExtensionPreferences {
         settings.bind('animations', animationsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         appearanceGroup.add(animationsRow);
+
+        const petRow = new Adw.SwitchRow({
+            title: 'Pet',
+            subtitle: 'A small cat sits under the panel corner.',
+        });
+        settings.bind('show-pet', petRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        appearanceGroup.add(petRow);
 
         addIntRow(appearanceGroup, settings, 'glass-brightness', 'Brightness', {
             lower: 0,

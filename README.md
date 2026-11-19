@@ -66,6 +66,9 @@ gnome-extensions enable sift@alphabeast97.github.io
 - **Ctrl+Enter**: open a new app window, or reveal a file in the file manager.
 - **Ctrl+C**: copy the selected calculation result.
 - **Escape**: close the panel.
+- A small cat sits under the panel's lower-right corner. It blinks when it
+  appears and looks toward the selected result; with animations off it stays
+  still. Turn it off under **Pet** in the preferences.
 - In the app grid, arrows and paging keys move between tiles; an icon opens on
   Enter; typing switches back to search.
 
@@ -79,11 +82,12 @@ make prefs
 gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
-The window exposes glass brightness, animations, search panel height, maximum
-results, app-grid labels, the GNOME overview takeover, and both shortcuts, plus a
-**Files** page for the file index and a **How to use** page covering shortcuts,
-navigation, calculator examples, the app grid, privacy, and current limits. The
-panel height is fixed while typing; extra results scroll. Changes apply live.
+The window exposes glass brightness, animations, the pet, search panel height,
+maximum results, app-grid labels, the GNOME overview takeover, and both
+shortcuts, plus a **Files** page for the file index and a **How to use** page
+covering shortcuts, navigation, calculator examples, the app grid, privacy, and
+current limits. The panel height is fixed while typing; extra results scroll.
+Changes apply live.
 Extension settings are ordinary GSettings under
 `org.gnome.shell.extensions.sift` and can be scripted with `gsettings`; index
 settings are stored in the daemon's TOML file described below.
