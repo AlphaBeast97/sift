@@ -381,8 +381,8 @@ export class GlassPanel {
         return glassParams({
             brightness: this._settings
                 ? this._settings.get_int('glass-brightness') : 50,
-            dark: St.Settings.get().color_scheme !==
-                St.SystemColorScheme.PREFER_LIGHT,
+            dark: St.Settings.get().color_scheme ===
+                St.SystemColorScheme.PREFER_DARK,
         });
     }
 

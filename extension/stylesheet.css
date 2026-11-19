@@ -11,6 +11,10 @@
     border-radius: 18px;
 }
 
+.sift-light .sift-panel.sift-glass-fallback {
+    background-color: rgba(246, 248, 251, 0.94);
+}
+
 .sift-entry-bar {
     height: 60px;
     padding: 0 16px;

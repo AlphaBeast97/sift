@@ -518,8 +518,8 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _syncTheme() {
-        const dark = St.Settings.get().color_scheme !==
-            St.SystemColorScheme.PREFER_LIGHT;
+        const dark = St.Settings.get().color_scheme ===
+            St.SystemColorScheme.PREFER_DARK;
         for (const name of ['sift-dark', 'sift-light'])
             this.remove_style_class_name(name);
         this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
