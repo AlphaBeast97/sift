@@ -3,3 +3,5 @@ dist/
 target/
 *.shell-extension.zip
 extension/schemas/gschemas.compiled
+review/
+ROADMAP.md
