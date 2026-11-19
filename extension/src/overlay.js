@@ -16,7 +16,6 @@ import {MOVE, Spring} from './lib/spring.js';
 import {AppGrid} from './appGrid.js';
 import {loadFileIcon, openFile, revealFile} from './files.js';
 import {EaseDriver, SpringDriver} from './motion.js';
-import {Pet} from './pet.js';
 import {ResultsView} from './results.js';
 
 const OPEN_FADE_MS = 120;
@@ -74,8 +73,6 @@ export const SiftOverlay = GObject.registerClass({
         this._prewarmId = 0;
         this._afterClose = null;
         this._themeId = 0;
-        this._pet = null;
-        this._petSettingsId = 0;
 
         this._syncTheme();
         this._themeId = St.Settings.get().connect('notify::color-scheme', () => {
@@ -93,14 +90,6 @@ export const SiftOverlay = GObject.registerClass({
 
         this._glass = new GlassPanel({settings: this._settings});
         this._glass.attach(this._panel);
-
-        this._pet = new Pet({
-            dark: St.Settings.get().color_scheme ===
-                St.SystemColorScheme.PREFER_DARK,
-        });
-        this._pet.setAnimations(this._animationsEnabled());
-        this._pet.setEnabled(settings.get_boolean('show-pet'));
-        this.add_child(this._pet);
 
         this._content = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
@@ -148,9 +137,6 @@ export const SiftOverlay = GObject.registerClass({
 
         this._results = new ResultsView({maxRows: this._maxRows});
         this._results.onActivate = (row, options) => this._activateRow(row, options);
-        this._results.onSelectionChanged = () => {
-            this._pet?.lookAt(this._results.selectedIndex, this._results.rowCount);
-        };
 
         this._scroll = new St.ScrollView({
             style_class: 'sift-scroll',
@@ -290,11 +276,6 @@ export const SiftOverlay = GObject.registerClass({
             if (GLASS_KEYS.has(key))
                 this.applySettings();
         });
-        this._petSettingsId = settings.connect('changed::show-pet', () => {
-            this._pet?.setEnabled(settings.get_boolean('show-pet'));
-            if (this.visible && this._state !== 'closing')
-                this._syncPet(true);
-        });
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => {
             if (!this.visible)
                 return;
@@ -339,7 +320,6 @@ export const SiftOverlay = GObject.registerClass({
 
     applySettings() {
         this._glass?.applySettings();
-        this._pet?.setAnimations(this._animationsEnabled());
     }
 
     get rows() {
@@ -552,24 +532,6 @@ export const SiftOverlay = GObject.registerClass({
         for (const name of ['sift-dark', 'sift-light'])
             this.remove_style_class_name(name);
         this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
-        this._pet?.setDark(dark);
-    }
-
-    _syncPet(activate = false, rect = this._panelRect()) {
-        const pet = this._pet;
-        if (!pet)
-            return;
-
-        const monitor = Main.layoutManager.monitors[this._monitorIndex] ??
-            Main.layoutManager.primaryMonitor;
-        if (!monitor)
-            return;
-
-        pet.follow(rect, monitor);
-        if (activate) {
-            pet.activate();
-            pet.lookAt(this._results.selectedIndex, this._results.rowCount);
-        }
     }
 
     _syncEmptyState() {
@@ -691,7 +653,6 @@ export const SiftOverlay = GObject.registerClass({
         this._entry.clutter_text.grab_key_focus();
         this._daemon?.ensureFresh();
         this._syncFooter();
-        this._syncPet(true, target);
     }
 
     close({immediate = false, then = null} = {}) {
@@ -714,7 +675,6 @@ export const SiftOverlay = GObject.registerClass({
         this._latestQuery = null;
         this._daemonCalc = null;
         this._daemonFiles = [];
-        this._pet?.deactivate();
 
         if (immediate || !this._animationsEnabled()) {
             this._finishClose();
@@ -753,7 +713,6 @@ export const SiftOverlay = GObject.registerClass({
         this._state = 'closed';
         this.visible = false;
         this._glass?.close();
-        this._pet?.hide();
         this._grid?.close();
         this._entry.text = '';
         this._results.setRows([]);
@@ -817,7 +776,6 @@ export const SiftOverlay = GObject.registerClass({
         });
 
         this._entry.clutter_text.grab_key_focus();
-        this._syncPet(true, target);
     }
 
     hide() {
@@ -935,10 +893,6 @@ export const SiftOverlay = GObject.registerClass({
             this._settings.disconnect(this._glassSettingsId);
             this._glassSettingsId = 0;
         }
-        if (this._petSettingsId) {
-            this._settings.disconnect(this._petSettingsId);
-            this._petSettingsId = 0;
-        }
         if (this._themeId) {
             St.Settings.get().disconnect(this._themeId);
             this._themeId = 0;
@@ -946,8 +900,6 @@ export const SiftOverlay = GObject.registerClass({
 
         this._grid?.destroy();
         this._grid = null;
-        this._pet?.destroy();
-        this._pet = null;
         this._glass?.destroy();
         this._glass = null;
         Main.layoutManager.removeChrome(this);
@@ -1326,9 +1278,6 @@ export const SiftOverlay = GObject.registerClass({
         this._panel.set_size(rect.width, rect.height);
         this._glass?.setRect(rect);
 
-        if (this._pet?.active)
-            this._syncPet(false, rect);
-
         if (this._revealPending &&
             this._travelLeft() <= Math.max(1, this._geometryTravel * 0.2))
             this._reveal(this._viewToken);
@@ -1386,9 +1335,6 @@ export const SiftOverlay = GObject.registerClass({
         this._seedSprings(rect);
         this._glass?.setRect(rect);
         this._glass?.settle();
-
-        if (this._pet?.active)
-            this._syncPet(false, rect);
     }
 
     _syncFullscreen() {
