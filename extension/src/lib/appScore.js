@@ -11,6 +11,10 @@ const SCORE = {
     running: 20,
 };
 
+// Two consistent choices are enough to promote a result; one click is noise.
+export const LEARNED_THRESHOLD = 2;
+const LEARNED_BOOST = 1200;
+
 function isWordStart(text, index) {
     if (index === 0)
         return true;
@@ -69,7 +73,7 @@ function compare(a, b) {
     return a.record.name.localeCompare(b.record.name);
 }
 
-export function rankApps(records, query, limit = 4) {
+export function rankApps(records, query, limit = 4, learned = null) {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle || limit <= 0)
         return [];
@@ -77,8 +81,15 @@ export function rankApps(records, query, limit = 4) {
     const matches = [];
     for (const record of records) {
         const value = score(record, needle);
-        if (value > 0)
-            matches.push({record, score: value + (record.running ? SCORE.running : 0)});
+        if (value === 0)
+            continue;
+
+        const count = learned?.get(record.id) ?? 0;
+        const boost = count >= LEARNED_THRESHOLD ? LEARNED_BOOST + count : 0;
+        matches.push({
+            record,
+            score: value + boost + (record.running ? SCORE.running : 0),
+        });
     }
 
     matches.sort(compare);

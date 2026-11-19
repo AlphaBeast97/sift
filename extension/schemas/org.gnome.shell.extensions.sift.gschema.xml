@@ -14,6 +14,18 @@
       <description>Whether Sift fades and scales in and out.</description>
     </key>
 
+    <key name="app-order" type="s">
+      <choices>
+        <choice value="az"/>
+        <choice value="recent"/>
+        <choice value="most-used"/>
+        <choice value="smart"/>
+      </choices>
+      <default>'az'</default>
+      <summary>App grid order</summary>
+      <description>How the app grid sorts applications: A-Z, recent use, most used, or a smart blend of frequency and recency.</description>
+    </key>
+
     <key name="max-results" type="i">
       <range min="4" max="12"/>
       <default>6</default>

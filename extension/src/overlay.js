@@ -193,6 +193,7 @@ export const SiftOverlay = GObject.registerClass({
         this._grid = new AppGrid({
             apps,
             showLabels: settings.get_boolean('grid-labels'),
+            order: settings.get_string('app-order'),
             settings,
             onActivate: (record, options) => this._activateRow(appRow(record), options),
             onClose: () => this.close(),
@@ -266,6 +267,11 @@ export const SiftOverlay = GObject.registerClass({
         });
         this._gridLabelsId = settings.connect('changed::grid-labels', () => {
             this._grid?.setShowLabels(settings.get_boolean('grid-labels'));
+        });
+        this._orderId = settings.connect('changed::app-order', () => {
+            this._grid?.setOrder(settings.get_string('app-order'));
+            if (!this.visible)
+                this._prewarmGrid();
         });
         this._searchHeightId = settings.connect('changed::search-height', () => {
             this._searchHeight = settings.get_int('search-height');
@@ -885,6 +891,10 @@ export const SiftOverlay = GObject.registerClass({
             this._settings.disconnect(this._gridLabelsId);
             this._gridLabelsId = 0;
         }
+        if (this._orderId) {
+            this._settings.disconnect(this._orderId);
+            this._orderId = 0;
+        }
         if (this._searchHeightId) {
             this._settings.disconnect(this._searchHeightId);
             this._searchHeightId = 0;
@@ -1009,6 +1019,18 @@ export const SiftOverlay = GObject.registerClass({
 
         // Launch after the fade: a window that takes focus or covers the
         // screen must not cut the close animation short.
+        if (row.kind === 'app' && row.app) {
+            const id = row.app.get_id();
+            this._apps?.recordLaunch(id);
+            if (this._settings.get_string('app-order') !== 'az')
+                this._grid?.invalidate();
+            if (this._view === 'search') {
+                const index = this._results.rows.indexOf(row);
+                if (index > 0)
+                    this._apps?.recordSelection(this._entry.text, id);
+            }
+        }
+
         const activate = () => {
             if (row.kind === 'app' && row.app) {
                 if (newWindow && row.app.can_open_new_window())

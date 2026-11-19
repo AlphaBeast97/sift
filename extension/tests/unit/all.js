@@ -8,6 +8,7 @@ import {run as merge} from './merge.test.js';
 import {run as shortcuts} from './shortcuts.test.js';
 import {run as spring} from './spring.test.js';
 import {run as stats} from './stats.test.js';
+import {run as usage} from './usage.test.js';
 import {run as windowStack} from './windowStack.test.js';
 
 const tests = [
@@ -21,6 +22,7 @@ const tests = [
     ['shortcuts', shortcuts],
     ['spring', spring],
     ['gridMath', gridMath],
+    ['usage', usage],
     ['windowStack', windowStack],
 ];
 

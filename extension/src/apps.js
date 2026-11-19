@@ -3,6 +3,8 @@ import GioUnix from 'gi://GioUnix';
 import Shell from 'gi://Shell';
 
 import {rankApps} from './lib/appScore.js';
+import {sortApps} from './lib/usage.js';
+import {UsageStore} from './usage.js';
 
 export function normalizeApp(app) {
     const info = app.get_app_info();
@@ -41,8 +43,9 @@ function isVisible(app) {
 }
 
 export class Apps {
-    constructor(appSystem = Shell.AppSystem.get_default()) {
+    constructor(appSystem = Shell.AppSystem.get_default(), usage = new UsageStore()) {
         this._appSystem = appSystem;
+        this._usage = usage;
         this._records = null;
         this._onChanged = null;
         this._installedId = 0;
@@ -69,15 +72,25 @@ export class Apps {
         this._stateId = 0;
         this._onChanged = null;
         this._records = null;
+        this._usage?.destroy();
+        this._usage = null;
     }
 
     search(query, limit = 4) {
-        return rankApps(this._getRecords(), query, limit);
+        return rankApps(this._getRecords(), query, limit,
+            this._usage?.learned(query) ?? null);
     }
 
-    gridApps() {
-        return this._getRecords()
-            .sort((a, b) => a.name.localeCompare(b.name));
+    gridApps(mode = 'az') {
+        return sortApps(this._getRecords(), mode, this._usage?.snapshot() ?? null);
+    }
+
+    recordLaunch(id) {
+        this._usage?.recordLaunch(id);
+    }
+
+    recordSelection(query, id) {
+        this._usage?.recordSelection(query, id);
     }
 
     _getRecords() {

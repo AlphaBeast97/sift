@@ -8,7 +8,12 @@ export SIFT_ZIP="$root/dist/$uuid.shell-extension.zip"
 export SIFT_SCRIPT="$root/tools/test/headless.js"
 export SIFT_E2E="${SIFT_E2E:-0}"
 
-exec dbus-run-session -- bash -c '
+# Keep learned usage out of the real user state directory.
+state=$(mktemp -d)
+trap 'rm -rf "$state"' EXIT
+export XDG_STATE_HOME="$state"
+
+dbus-run-session -- bash -c '
 set -euo pipefail
 # Containers have no system bus; a private session bus satisfies the shell.
 if [ ! -S /run/dbus/system_bus_socket ]; then

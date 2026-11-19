@@ -494,6 +494,15 @@ export async function run() {
     assert(api.appGrid.iconSize === offIcon,
         'labels do not change the icon size');
 
+    // A changed order re-sorts the open grid, not only the next one.
+    const lastRecord = api.appGrid._records[api.appGrid._records.length - 1];
+    for (let i = 0; i < 3; i++)
+        api.apps.recordLaunch(lastRecord.id);
+    api.settings.set_string('app-order', 'most-used');
+    await waitFor(() => api.appGrid._records[0]?.id === lastRecord.id,
+        'most-used order applies to the open grid', 2000);
+    api.settings.set_string('app-order', 'az');
+
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');
     assert(api.glass.cloneCount === 0, 'clones removed on close');

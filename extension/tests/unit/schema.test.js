@@ -13,6 +13,7 @@ export function run() {
 
     equal(settings.get_int('glass-brightness'), 50);
     equal(settings.get_boolean('animations'), true);
+    equal(settings.get_string('app-order'), 'az');
     equal(settings.get_int('max-results'), 6);
     equal(settings.get_int('search-height'), 404);
     equal(settings.get_boolean('grid-labels'), true);
@@ -27,5 +28,5 @@ export function run() {
     equal(range('search-height').join(','), '144,716');
 
     equal(schema.list_keys().sort().join(','),
-        'animations,disable-overview,glass-brightness,grid-labels,max-results,search-height,sift-apps-shortcut,sift-search-shortcut');
+        'animations,app-order,disable-overview,glass-brightness,grid-labels,max-results,search-height,sift-apps-shortcut,sift-search-shortcut');
 }

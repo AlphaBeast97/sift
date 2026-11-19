@@ -67,9 +67,16 @@ gnome-extensions enable sift@alphabeast97.github.io
 - **Ctrl+C**: copy the selected calculation result.
 - **Escape**: close the panel.
 - In the app grid, arrows and paging keys move between tiles; an icon opens on
-  Enter; typing switches back to search.
+  Enter; typing switches back to search. The grid is A-Z by default; **Order
+  apps** under Search → App grid can sort by recent use, most used, or a smart
+  blend of frequency and recency.
 
 File search reads names only. File contents are never indexed or read.
+
+App launches and repeated search choices stay in
+`~/.local/state/sift/usage.json` and never leave the machine. Picking a
+non-first search result twice for the same query promotes it for that query.
+Clear the counts with **Clear learned ranking** in preferences.
 
 ## Preferences
 
@@ -80,11 +87,11 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes glass brightness, animations, search panel height, maximum
-results, app-grid labels, the GNOME overview takeover, and both shortcuts, plus
-a **Files** page for the file index and a **How to use** page covering
-shortcuts, navigation, calculator examples, the app grid, privacy, and current
-limits. The panel height is fixed while typing; extra results scroll. Changes
-apply live.
+results, app-grid labels and order, learned-ranking clearing, the GNOME
+overview takeover, and both shortcuts, plus a **Files** page for the file index
+and a **How to use** page covering shortcuts, navigation, calculator examples,
+the app grid, privacy, and current limits. The panel height is fixed while
+typing; extra results scroll. Changes apply live.
 Extension settings are ordinary GSettings under
 `org.gnome.shell.extensions.sift` and can be scripted with `gsettings`; index
 settings are stored in the daemon's TOML file described below.

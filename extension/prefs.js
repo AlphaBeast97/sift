@@ -8,14 +8,15 @@ import Gtk from 'gi://Gtk?version=4.0';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {findShortcutConflict, shortcutFromKey} from './src/lib/shortcuts.js';
+import {usagePath} from './src/usage.js';
 
 const BUS_NAME = 'io.github.alphabeast97.Sift';
 const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
-    'glass-brightness', 'animations', 'max-results', 'search-height',
-    'grid-labels', 'disable-overview', 'sift-search-shortcut',
-    'sift-apps-shortcut',
+    'glass-brightness', 'animations', 'app-order', 'max-results',
+    'search-height', 'grid-labels', 'disable-overview',
+    'sift-search-shortcut', 'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -265,6 +266,37 @@ function addGuideShortcutRow(group, settings, key, title, action) {
     group.add(row);
 }
 
+const ORDER_MODES = [
+    ['az', 'A-Z'],
+    ['recent', 'Recent'],
+    ['most-used', 'Most used'],
+    ['smart', 'Smart'],
+];
+
+function addOrderRow(group, settings) {
+    const row = new Adw.ComboRow({
+        title: 'Order apps',
+        subtitle: 'Smart puts frequently and recently used apps first.',
+        model: new Gtk.StringList({
+            strings: ORDER_MODES.map(([, label]) => label),
+        }),
+    });
+    const sync = () => {
+        const index = ORDER_MODES.findIndex(([value]) =>
+            value === settings.get_string('app-order'));
+        row.selected = Math.max(0, index);
+    };
+    row.connect('notify::selected', () => {
+        const mode = ORDER_MODES[row.selected]?.[0];
+        if (mode && mode !== settings.get_string('app-order'))
+            settings.set_string('app-order', mode);
+    });
+    settings.connect('changed::app-order', sync);
+    sync();
+    group.add(row);
+    return row;
+}
+
 function addIntRow(group, settings, key, title,
     {lower, upper, step, subtitle = value => String(value)} = {}) {
     const row = valueRow(title);
@@ -503,7 +535,38 @@ export default class SiftPreferences extends ExtensionPreferences {
         settings.bind('grid-labels', labelsRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         gridGroup.add(labelsRow);
+        addOrderRow(gridGroup, settings);
         behavior.add(gridGroup);
+
+        const learningGroup = new Adw.PreferencesGroup({
+            title: 'Learning',
+            description: 'Usage counts and repeated search choices stay on this machine.',
+        });
+        const clearRow = valueRow('Clear learned ranking',
+            'Remove usage counts and search choices.');
+        const clearButton = new Gtk.Button({
+            label: 'Clear',
+            valign: Gtk.Align.CENTER,
+        });
+        let clearToast = null;
+        clearButton.connect('clicked', () => {
+            try {
+                Gio.File.new_for_path(usagePath()).delete(null);
+            } catch {
+                // Already gone.
+            }
+
+            if (clearToast)
+                return;
+            clearToast = new Adw.Toast({title: 'Learned ranking cleared'});
+            clearToast.connect('dismissed', () => {
+                clearToast = null;
+            });
+            window.add_toast(clearToast);
+        });
+        clearRow.add_suffix(clearButton);
+        learningGroup.add(clearRow);
+        behavior.add(learningGroup);
 
         const shortcutGroup = new Adw.PreferencesGroup({
             title: 'Shortcuts',
@@ -678,6 +741,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Start typing in the grid to return to search with that text.'));
         gridGroup.add(valueRow('Open or manage an app',
             'Enter opens the app. Ctrl+Enter or middle-click opens a new window when supported. Right-click for app actions.'));
+        gridGroup.add(valueRow('Order apps',
+            'A-Z is the default. Recent, Most used and Smart use local launch counts; change the order under Search → App grid.'));
         page.add(gridGroup);
 
         const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});
@@ -687,6 +752,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Hidden entries, symlinks, unreadable folders, other filesystems, and common build, dependency and cache folders are skipped.'));
         filesGroup.add(valueRow('Stays on this computer',
             'The index is stored locally and searches are not sent anywhere.'));
+        filesGroup.add(valueRow('Usage stays local',
+            'App launch counts and repeated search choices are stored in ~/.local/state/sift/usage.json. Clear them under Search → App grid.'));
         page.add(filesGroup);
 
         const limitsGroup = new Adw.PreferencesGroup({

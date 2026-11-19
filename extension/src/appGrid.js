@@ -17,8 +17,8 @@ const INDICATOR_HEIGHT = 28;
 
 export const AppGrid = GObject.registerClass(
     class AppGrid extends St.BoxLayout {
-        _init({apps = null, iconSize = 96, showLabels = true, settings = null,
-            onActivate = null, onClose = null} = {}) {
+        _init({apps = null, iconSize = 96, showLabels = true, order = 'az',
+            settings = null, onActivate = null, onClose = null} = {}) {
             super._init({
                 orientation: Clutter.Orientation.VERTICAL,
                 style_class: 'sift-app-grid',
@@ -33,6 +33,7 @@ export const AppGrid = GObject.registerClass(
             this._onClose = onClose;
             this._iconSize = iconSize;
             this._showLabels = showLabels;
+            this._order = order;
             this._syncLabelStyle();
             this._records = [];
             this._tiles = [];
@@ -142,6 +143,17 @@ export const AppGrid = GObject.registerClass(
                 this._build();
         }
 
+        setOrder(order) {
+            if (order === this._order)
+                return;
+
+            this._order = order;
+            this.setApps(this._apps ? this._apps.gridApps(order) : []);
+            // While hidden, leave the grid dirty so the next prewarm refetches
+            // and rebuilds the tiles in the new order.
+            this._dirty = !this.mapped;
+        }
+
         setShowLabels(show) {
             if (show === this._showLabels)
                 return;
@@ -184,14 +196,14 @@ export const AppGrid = GObject.registerClass(
                     this.width, this.height - INDICATOR_HEIGHT);
             }
 
-            this.setApps(this._apps ? this._apps.gridApps() : []);
+            this.setApps(this._apps ? this._apps.gridApps(this._order) : []);
             this._dirty = false;
             this._build();
         }
 
         open() {
             if (this._dirty) {
-                this.setApps(this._apps ? this._apps.gridApps() : []);
+                this.setApps(this._apps ? this._apps.gridApps(this._order) : []);
                 this._dirty = false;
             }
 
