@@ -81,10 +81,12 @@ gnome-extensions prefs sift@alphabeast97.github.io
 
 The window exposes glass brightness, animations, search panel height, maximum
 results, app-grid labels, the GNOME overview takeover, and both shortcuts, plus a
-**Files** page for the file index. The panel height is fixed while typing; extra
-results scroll. Changes apply live. Extension settings are ordinary GSettings
-under `org.gnome.shell.extensions.sift` and can be scripted with `gsettings`;
-index settings are stored in the daemon's TOML file described below.
+**Files** page for the file index and a **How to use** page covering shortcuts,
+navigation, calculator examples, the app grid, privacy, and current limits. The
+panel height is fixed while typing; extra results scroll. Changes apply live.
+Extension settings are ordinary GSettings under
+`org.gnome.shell.extensions.sift` and can be scripted with `gsettings`; index
+settings are stored in the daemon's TOML file described below.
 
 ## File index
 

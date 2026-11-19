@@ -252,6 +252,19 @@ function addShortcutRow(group, window, settings, key, title, subtitle) {
     group.add(row);
 }
 
+function addGuideShortcutRow(group, settings, key, title, action) {
+    const row = valueRow(title);
+    const sync = () => {
+        row.subtitle = shortcutAccel(settings, key)
+            ? `Press ${shortcutText(settings, key)} to ${action}.`
+            : `No shortcut is set; add one under Search → Shortcuts to ${action}.`;
+    };
+    settings.connect(`changed::${key}`, sync);
+    settings.connect('changed::disable-overview', sync);
+    sync();
+    group.add(row);
+}
+
 function addIntRow(group, settings, key, title,
     {lower, upper, step, subtitle = value => String(value)} = {}) {
     const row = valueRow(title);
@@ -511,6 +524,7 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         window.add(behavior);
         window.add(this._filesPage(window));
+        window.add(this._howToPage(settings));
     }
 
     _filesPage(window) {
@@ -625,6 +639,66 @@ export default class SiftPreferences extends ExtensionPreferences {
         rebuild.connect('clicked', () => reindexDaemon(window));
         rebuildRow.add_suffix(rebuild);
         limitsGroup.add(rebuildRow);
+        page.add(limitsGroup);
+
+        return page;
+    }
+
+    _howToPage(settings) {
+        const page = new Adw.PreferencesPage({
+            title: 'How to use',
+            icon_name: 'help-about-symbolic',
+        });
+
+        const openGroup = new Adw.PreferencesGroup({
+            title: 'Opening Sift',
+            description: 'The shortcuts work from any app and can be changed under Search → Shortcuts.',
+        });
+        addGuideShortcutRow(openGroup, settings, 'sift-search-shortcut',
+            'Search', 'open search');
+        addGuideShortcutRow(openGroup, settings, 'sift-apps-shortcut',
+            'App grid', 'open the app grid');
+        page.add(openGroup);
+
+        const searchGroup = new Adw.PreferencesGroup({title: 'Search'});
+        searchGroup.add(valueRow('Start typing',
+            'Search needs at least two characters and matches app, file and folder names.'));
+        searchGroup.add(valueRow('Move around',
+            '↑/↓ or Tab/Shift+Tab move, Page Up/Page Down jump, and Home/End go to the first or last result.'));
+        searchGroup.add(valueRow('Open a result',
+            'Enter opens the selected app or file. Ctrl+Enter opens apps in a new window and reveals files in the file manager. Esc closes Sift.'));
+        searchGroup.add(valueRow('Calculator',
+            'Try 2+2*3, 15% of 80, 1 km to m or 2 hours in minutes. Enter or Ctrl+C copies the result.'));
+        page.add(searchGroup);
+
+        const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});
+        gridGroup.add(valueRow('Navigate apps',
+            'Arrow keys move between apps, Page Up/Page Down change pages, and Home/End jump to the first or last app.'));
+        gridGroup.add(valueRow('Type to search',
+            'Start typing in the grid to return to search with that text.'));
+        gridGroup.add(valueRow('Open or manage an app',
+            'Enter opens the app. Ctrl+Enter or middle-click opens a new window when supported. Right-click for app actions.'));
+        page.add(gridGroup);
+
+        const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});
+        filesGroup.add(valueRow('Names only',
+            'Sift indexes file and folder names, never their contents.'));
+        filesGroup.add(valueRow('What is skipped',
+            'Hidden entries, symlinks, unreadable folders, other filesystems, and common build, dependency and cache folders are skipped.'));
+        filesGroup.add(valueRow('Stays on this computer',
+            'The index is stored locally and searches are not sent anywhere.'));
+        page.add(filesGroup);
+
+        const limitsGroup = new Adw.PreferencesGroup({
+            title: 'Limits',
+            description: 'What Sift does not do yet.',
+        });
+        limitsGroup.add(valueRow('No content search',
+            'Search does not look inside documents or files.'));
+        limitsGroup.add(valueRow('No windows or workspaces',
+            'Sift does not list open windows or workspaces, and windows cannot be dragged onto it. Turn off Disable the GNOME overview on the Search page to use GNOME\'s overview for those.'));
+        limitsGroup.add(valueRow('Index size cap',
+            'Sift stops adding entries at the maximum set on the Files page (250,000 by default).'));
         page.add(limitsGroup);
 
         return page;
