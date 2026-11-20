@@ -80,8 +80,8 @@ File search reads names only. File contents are never indexed or read.
 
 App launches and repeated search choices stay in
 `~/.local/state/sift/usage.json` and never leave the machine. Picking a
-non-first search result twice for the same query promotes it for that query.
-Clear the counts with **Clear learned ranking** in preferences.
+non-first app or settings result twice promotes it for that query and its
+prefixes. Clear the counts with **Clear learned ranking** in preferences.
 
 ## Preferences
 

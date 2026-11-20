@@ -260,6 +260,18 @@ export async function run() {
         'multi-word settings queries fall back to words', 4000);
     assert(api.overlay.rows.find(row => row.kind === 'setting').title ===
         'Displays', 'multi-word settings query finds Displays');
+    assert(api.overlay.rows[api.overlay.selectedIndex].kind !== 'web',
+        'the web row does not keep the selection when settings arrive');
+
+    api.overlay.entry.set_text('display');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'setting'),
+        'settings panels appear again', 4000);
+    api.apps.recordSelection('display', 'setting:display');
+    api.apps.recordSelection('display', 'setting:display');
+    api.overlay.refreshApps();
+    assert(api.overlay.rows[0].key === 'setting:display',
+        'a learned settings panel ranks first');
 
     const hidden = installed.find(a => !a.should_show());
     if (hidden) {

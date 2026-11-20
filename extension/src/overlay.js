@@ -12,6 +12,7 @@ import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
+import {LEARNED_THRESHOLD} from './lib/appScore.js';
 import {SettingsSearch} from './lib/settingsSearch.js';
 import {MOVE, Spring} from './lib/spring.js';
 import {webRow} from './lib/webSearch.js';
@@ -392,13 +393,18 @@ export const SiftOverlay = GObject.registerClass({
 
         this._results.setMaxRows(this._maxRows);
         const previous = this._results.selectedRow?.key ?? null;
+        const learned = this._apps?.learned(this._entry.text) ?? null;
+        const count = row => learned?.get(row.key) ?? 0;
+        const settings = [...this._settingsRows]
+            .sort((a, b) => count(b) - count(a));
+        const promoted = settings.filter(row => count(row) >= LEARNED_THRESHOLD);
         const records = this._apps
             ? this._apps.search(this._entry.text, Math.min(4, this._maxRows))
             : [];
         const rows = mergeRows({
             calc: this._daemonCalc,
-            apps: records.map(appRow),
-            settings: this._settingsRows,
+            apps: [...promoted, ...records.map(appRow)],
+            settings: settings.filter(row => count(row) < LEARNED_THRESHOLD),
             files: this._daemonFiles
                 .map(file => fileRow(file, this._home))
                 .filter(Boolean),
@@ -410,7 +416,11 @@ export const SiftOverlay = GObject.registerClass({
         }, this._maxRows);
 
         this._results.setRows(rows);
-        this._results.select(selectionAfter(rows, previous));
+        // A learned or slower local row must not leave the web row selected
+        // when new results appear above it.
+        this._results.select(previous === 'web' && rows.length > 1
+            ? 0
+            : selectionAfter(rows, previous));
         this._syncEmptyState();
 
         if (this.visible && this._view === 'search')
@@ -1080,6 +1090,12 @@ export const SiftOverlay = GObject.registerClass({
                 if (index > 0)
                     this._apps?.recordSelection(this._entry.text, id);
             }
+        }
+
+        if (row.kind === 'setting' && this._view === 'search') {
+            const index = this._results.rows.indexOf(row);
+            if (index > 0)
+                this._apps?.recordSelection(this._entry.text, row.key);
         }
 
         const activate = () => {
