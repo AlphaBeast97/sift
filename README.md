@@ -207,6 +207,35 @@ or unlabeled pull requests. Dispatch `CI`, `CI image`, or `Shell smoke` from the
 Actions tab, or add the `ci` label to a PR to run `CI` there. `Release` runs only
 when the owner pushes a `v*` tag.
 
+## Performance
+
+Measured with `make perf` on an Intel i5-8365U and GNOME Shell 51.1. The
+daemon numbers are the median of 100 queries over a synthetic 250,000-entry
+index. The shell numbers come from the headless harness at 1280x720 with 90
+installed apps. Re-run the command on your machine; these are measurements,
+not estimates.
+
+| Daemon query | p50 | p95 |
+| --- | --- | --- |
+| Exact file name | 7.5ms | 8.9ms |
+| Broad prefix (`file-24`, nearly every entry matches) | 21.7ms | 23.2ms |
+| Fuzzy | 6.0ms | 7.3ms |
+| Multi-word | 9.5ms | 10.2ms |
+
+| Extension path | Time |
+| --- | --- |
+| Enable (disable to active) | 36.3ms |
+| First app snapshot, 90 apps | 2.9ms |
+| Cached app snapshot | 0.2ms |
+| App search, exact name | 0.1ms |
+| Warm search open | 2.7ms |
+| Typing an exact app name | 0.6ms |
+| Prewarmed app-grid open | 24.3ms |
+
+`make perf` rebuilds the extension zip, runs the release Rust benchmark, and
+runs the headless shell benchmark; it prints both tables. Grid details and the
+one-time first-tile allocation are in `docs/perf/app-grid.md`.
+
 ## Troubleshooting
 
 - **No file results, footer says the index is degraded.** Check whether the

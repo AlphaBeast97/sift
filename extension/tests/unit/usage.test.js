@@ -143,6 +143,10 @@ export function run() {
     store.recordSelection('Term', 'setting:display', NOW);
     store.flush();
 
+    const mode = file.query_info('unix::mode', Gio.FileQueryInfoFlags.NONE,
+        null).get_attribute_uint32('unix::mode') & 0o777;
+    equal(mode, 0o600, 'the usage file is private');
+
     const loaded = new UsageStore(path);
     equal(loaded.snapshot().apps['a.desktop'].count, 1);
     equal(loaded.learned(' term ').get('b.desktop'), 1);

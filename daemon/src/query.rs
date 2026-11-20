@@ -157,6 +157,46 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "performance benchmark; run with make perf"]
+    fn benchmark_query_latency() {
+        use std::time::Instant;
+
+        // The default cap is 250k entries, so measure the worst realistic size.
+        let entries: Vec<Entry> = (0..250_000)
+            .map(|index| {
+                entry(
+                    &format!("/h/project-{:04}/file-{index:06}.txt", index % 2000),
+                    EntryKind::File,
+                )
+            })
+            .collect();
+
+        for (label, text) in [
+            ("exact", "file-249999"),
+            ("prefix", "file-24"),
+            ("fuzzy", "projfile"),
+            ("multi-word", "project 0421 file"),
+        ] {
+            query(&entries, text, 20);
+            let runs = 100;
+            let mut times = Vec::with_capacity(runs);
+            for _ in 0..runs {
+                let start = Instant::now();
+                let _ = query(&entries, text, 20);
+                times.push(start.elapsed().as_secs_f64() * 1000.0);
+            }
+            times.sort_by(|left, right| left.total_cmp(right));
+            let mean = times.iter().sum::<f64>() / runs as f64;
+            println!(
+                "query {label:<10} p50 {:>6.2}ms p95 {:>6.2}ms mean {:>6.2}ms",
+                times[runs / 2],
+                times[(runs * 95 / 100).min(runs - 1)],
+                mean
+            );
+        }
+    }
+
+    #[test]
     fn keeps_only_the_best_of_many_matches() {
         let entries: Vec<Entry> = (0..1_000)
             .map(|index| {

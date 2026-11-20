@@ -5,7 +5,7 @@ uuid=sift@alphabeast97.github.io
 
 export SIFT_ROOT="$root"
 export SIFT_ZIP="$root/dist/$uuid.shell-extension.zip"
-export SIFT_SCRIPT="$root/tools/test/headless.js"
+export SIFT_SCRIPT="${SIFT_SCRIPT:-$root/tools/test/headless.js}"
 export SIFT_E2E="${SIFT_E2E:-0}"
 
 # Keep learned usage out of the real user state directory.

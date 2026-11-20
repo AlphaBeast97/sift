@@ -2,7 +2,7 @@ UUID := sift@alphabeast97.github.io
 SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
 PREFIX ?= $(HOME)/.local
 
-.PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension
+.PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension perf
 
 test-gjs:
 	gjs -m extension/tests/unit/all.js
@@ -30,6 +30,11 @@ extension:
 
 test-shell: build
 	tools/test/run-shell-test.sh
+
+# Regenerates the numbers in the README Performance section.
+perf: extension
+	cargo test --release --manifest-path daemon/Cargo.toml benchmark_query_latency -- --ignored --nocapture
+	SIFT_SCRIPT="$(CURDIR)/tools/perf/shell.js" tools/test/run-shell-test.sh
 
 ci-image:
 	docker build -t sift-gnome51:local tools/ci/gnome51

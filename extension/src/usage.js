@@ -95,8 +95,14 @@ export class UsageStore {
         this._refresh();
         pruneUsage(this._data);
         try {
-            GLib.mkdir_with_parents(GLib.path_get_dirname(this._path), 0o755);
-            GLib.file_set_contents(this._path, JSON.stringify(this._data));
+            const directory = GLib.path_get_dirname(this._path);
+            GLib.mkdir_with_parents(directory, 0o700);
+            GLib.file_set_contents_full(this._path, JSON.stringify(this._data),
+                GLib.FileSetContentsFlags.CONSISTENT |
+                GLib.FileSetContentsFlags.DURABLE, 0o600);
+            // The mode flag only applies to a newly created file; an install
+            // from an older version already has the default 0644.
+            GLib.chmod(this._path, 0o600);
             this._fileExists = true;
         } catch (error) {
             logError(error, 'sift: failed to save usage');
