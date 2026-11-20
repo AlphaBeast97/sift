@@ -393,6 +393,7 @@ export const SiftOverlay = GObject.registerClass({
 
         this._results.setMaxRows(this._maxRows);
         const previous = this._results.selectedRow?.key ?? null;
+        const previousIndex = this._results.selectedIndex;
         const learned = this._apps?.learned(this._entry.text) ?? null;
         const count = row => learned?.get(row.key) ?? 0;
         const settings = [...this._settingsRows]
@@ -416,11 +417,14 @@ export const SiftOverlay = GObject.registerClass({
         }, this._maxRows);
 
         this._results.setRows(rows);
-        // A learned or slower local row must not leave the web row selected
-        // when new results appear above it.
-        this._results.select(previous === 'web' && rows.length > 1
-            ? 0
-            : selectionAfter(rows, previous));
+        // A promoted settings row takes the default selection; slower rows
+        // arriving below keep the row the user was already on.
+        let next = selectionAfter(rows, previous);
+        if (previous === 'web' && rows.length > 1)
+            next = 0;
+        else if (previousIndex === 0 && next > 0 && rows[0] === promoted[0])
+            next = 0;
+        this._results.select(next);
         this._syncEmptyState();
 
         if (this.visible && this._view === 'search')

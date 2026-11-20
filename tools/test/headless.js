@@ -272,6 +272,8 @@ export async function run() {
     api.overlay.refreshApps();
     assert(api.overlay.rows[0].key === 'setting:display',
         'a learned settings panel ranks first');
+    assert(api.overlay.selectedIndex === 0,
+        'the promoted settings panel keeps the default selection');
 
     const hidden = installed.find(a => !a.should_show());
     if (hidden) {
