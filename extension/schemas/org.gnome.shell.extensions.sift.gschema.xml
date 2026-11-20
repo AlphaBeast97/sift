@@ -33,6 +33,24 @@
       <description>Largest number of result rows kept for the search view; extras scroll.</description>
     </key>
 
+    <key name="web-search" type="b">
+      <default>true</default>
+      <summary>Search the web</summary>
+      <description>Show a last, low-priority row that searches the web or opens a typed address in the default browser. It only appears when local results leave room, and Sift never contacts the network by itself.</description>
+    </key>
+
+    <key name="web-search-engine" type="s">
+      <choices>
+        <choice value="duckduckgo"/>
+        <choice value="google"/>
+        <choice value="bing"/>
+        <choice value="startpage"/>
+      </choices>
+      <default>'duckduckgo'</default>
+      <summary>Web search engine</summary>
+      <description>Search engine used by the web row. Opening a typed address uses the default browser directly.</description>
+    </key>
+
     <key name="search-height" type="i">
       <range min="144" max="716"/>
       <default>404</default>

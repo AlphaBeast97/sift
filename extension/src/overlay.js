@@ -13,6 +13,7 @@ import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
 import {MOVE, Spring} from './lib/spring.js';
+import {webRow} from './lib/webSearch.js';
 import {AppGrid} from './appGrid.js';
 import {loadFileIcon, openFile, revealFile} from './files.js';
 import {EaseDriver, SpringDriver} from './motion.js';
@@ -64,6 +65,8 @@ export const SiftOverlay = GObject.registerClass({
         this._daemonCalc = null;
         this._daemonFiles = [];
         this._home = GLib.get_home_dir();
+        this._browserName =
+            Gio.AppInfo.get_default_for_uri_scheme('https')?.get_name() ?? '';
         this._serviceUnavailable = false;
         this._queryTimer = 0;
         this._queryGeneration = 0;
@@ -282,6 +285,10 @@ export const SiftOverlay = GObject.registerClass({
             if (GLASS_KEYS.has(key))
                 this.applySettings();
         });
+        this._webId = settings.connect('changed', (_settings, key) => {
+            if (key === 'web-search' || key === 'web-search-engine')
+                this.refreshApps();
+        });
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => {
             if (!this.visible)
                 return;
@@ -378,6 +385,11 @@ export const SiftOverlay = GObject.registerClass({
             files: this._daemonFiles
                 .map(file => fileRow(file, this._home))
                 .filter(Boolean),
+            web: this._settings.get_boolean('web-search')
+                ? webRow(this._entry.text,
+                    this._settings.get_string('web-search-engine'),
+                    this._browserName)
+                : null,
         }, this._maxRows);
 
         this._results.setRows(rows);
@@ -911,6 +923,10 @@ export const SiftOverlay = GObject.registerClass({
             this._settings.disconnect(this._glassSettingsId);
             this._glassSettingsId = 0;
         }
+        if (this._webId) {
+            this._settings.disconnect(this._webId);
+            this._webId = 0;
+        }
         if (this._themeId) {
             St.Settings.get().disconnect(this._themeId);
             this._themeId = 0;
@@ -1052,6 +1068,12 @@ export const SiftOverlay = GObject.registerClass({
                     openFile(row.path);
             } else if (row.kind === 'calc') {
                 this._copySelected();
+            } else if (row.kind === 'web') {
+                try {
+                    Gio.AppInfo.launch_default_for_uri(row.uri, null);
+                } catch (error) {
+                    console.error(`Sift: cannot open ${row.uri}: ${error.message}`);
+                }
             }
 
             this._onActivate?.(row, {newWindow});

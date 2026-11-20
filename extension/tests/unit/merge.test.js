@@ -9,6 +9,14 @@ export function run() {
     equal(rows.map(r => r.key).join(','), 'calc,app:a.desktop,file:/tmp/a.txt');
     equal(mergeRows({calc, apps, files}, 2).length, 2);
     equal(mergeRows({}, 6).length, 0);
+
+    const web = {kind: 'web', key: 'web', title: 'Search the web for “x”'};
+    equal(mergeRows({apps, web}, 6).map(r => r.key).join(','),
+        'app:a.desktop,web');
+    equal(mergeRows({apps, web}, 1).map(r => r.key).join(','),
+        'app:a.desktop');
+    equal(mergeRows({calc, web}, 2).map(r => r.key).join(','), 'calc,web');
+    equal(mergeRows({calc, web}, 1).map(r => r.key).join(','), 'calc');
     equal(selectionAfter(rows, 'app:a.desktop'), 1);
     equal(selectionAfter(rows, 'file:gone'), 0);
 

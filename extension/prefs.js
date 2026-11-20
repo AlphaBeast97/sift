@@ -15,8 +15,8 @@ const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-brightness', 'animations', 'app-order', 'max-results',
-    'search-height', 'grid-labels', 'disable-overview',
-    'sift-search-shortcut', 'sift-apps-shortcut',
+    'search-height', 'web-search', 'web-search-engine', 'grid-labels',
+    'disable-overview', 'sift-search-shortcut', 'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -297,6 +297,38 @@ function addOrderRow(group, settings) {
     return row;
 }
 
+const ENGINE_MODES = [
+    ['duckduckgo', 'DuckDuckGo'],
+    ['google', 'Google'],
+    ['bing', 'Bing'],
+    ['startpage', 'Startpage'],
+];
+
+function addEngineRow(group, settings) {
+    const row = new Adw.ComboRow({
+        title: 'Search engine',
+        subtitle: 'Used for the web row; typed addresses open directly.',
+        model: new Gtk.StringList({
+            strings: ENGINE_MODES.map(([, label]) => label),
+        }),
+    });
+    const sync = () => {
+        const index = ENGINE_MODES.findIndex(([value]) =>
+            value === settings.get_string('web-search-engine'));
+        row.selected = Math.max(0, index);
+    };
+    row.connect('notify::selected', () => {
+        const engine = ENGINE_MODES[row.selected]?.[0];
+        if (engine && engine !== settings.get_string('web-search-engine'))
+            settings.set_string('web-search-engine', engine);
+    });
+    settings.connect('changed::web-search-engine', sync);
+    settings.bind('web-search', row, 'sensitive', Gio.SettingsBindFlags.GET);
+    sync();
+    group.add(row);
+    return row;
+}
+
 function addIntRow(group, settings, key, title,
     {lower, upper, step, subtitle = value => String(value)} = {}) {
     const row = valueRow(title);
@@ -527,6 +559,20 @@ export default class SiftPreferences extends ExtensionPreferences {
             {lower: 4, upper: 12, step: 1});
         behavior.add(resultsGroup);
 
+        const webGroup = new Adw.PreferencesGroup({
+            title: 'Web',
+            description: 'The web row sits below local results and only appears when there is room. Nothing is sent to the network until you open it.',
+        });
+        const webRow = new Adw.SwitchRow({
+            title: 'Search the web',
+            subtitle: 'Offer a last row that searches, or opens a typed address in the default browser.',
+        });
+        settings.bind('web-search', webRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        webGroup.add(webRow);
+        addEngineRow(webGroup, settings);
+        behavior.add(webGroup);
+
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});
         const labelsRow = new Adw.SwitchRow({
             title: 'Show app labels',
@@ -732,6 +778,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Enter opens the selected app or file. Ctrl+Enter opens apps in a new window and reveals files in the file manager. Esc closes Sift.'));
         searchGroup.add(valueRow('Calculator',
             'Try 2+2*3, 15% of 80, 1 km to m or 2 hours in minutes. Enter or Ctrl+C copies the result.'));
+        searchGroup.add(valueRow('Web results',
+            'Type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself.'));
         page.add(searchGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});

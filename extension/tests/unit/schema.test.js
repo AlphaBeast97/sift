@@ -16,6 +16,8 @@ export function run() {
     equal(settings.get_string('app-order'), 'az');
     equal(settings.get_int('max-results'), 6);
     equal(settings.get_int('search-height'), 404);
+    equal(settings.get_boolean('web-search'), true);
+    equal(settings.get_string('web-search-engine'), 'duckduckgo');
     equal(settings.get_boolean('grid-labels'), true);
     equal(settings.get_boolean('disable-overview'), true);
     equal(settings.get_strv('sift-search-shortcut').join(','), '<Control>space');
@@ -28,5 +30,5 @@ export function run() {
     equal(range('search-height').join(','), '144,716');
 
     equal(schema.list_keys().sort().join(','),
-        'animations,app-order,disable-overview,glass-brightness,grid-labels,max-results,search-height,sift-apps-shortcut,sift-search-shortcut');
+        'animations,app-order,disable-overview,glass-brightness,grid-labels,max-results,search-height,sift-apps-shortcut,sift-search-shortcut,web-search,web-search-engine');
 }

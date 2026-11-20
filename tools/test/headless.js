@@ -190,6 +190,39 @@ export async function run() {
     assert(api.glass.rect.height === 404,
         'typing expands the panel to its fixed height');
 
+    // The web row is a last resort and never displaces a local result.
+    api.overlay.entry.set_text('sift-no-such-app-or-file-zzz');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rowCount > 0, 'the web row renders', 2000);
+    const weakRows = api.overlay.rows;
+    assert(weakRows[weakRows.length - 1].kind === 'web',
+        'a weak query ends with the web row');
+    assert(weakRows[weakRows.length - 1].title.startsWith('Search the web'),
+        'the web row names the action');
+
+    api.overlay.entry.set_text('example.com');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'web'),
+        'an address offers to open', 2000);
+    const address = api.overlay.rows.find(row => row.kind === 'web');
+    assert(address.title === 'Open example.com',
+        'an address offers to open the host');
+    assert(address.uri === 'https://example.com',
+        'an address opens with https');
+
+    api.overlay.entry.set_text(target.get_name());
+    await Scripting.waitLeisure();
+    assert(api.overlay.rows[0].kind === 'app' &&
+        api.overlay.rows[0].title === target.get_name(),
+    'the web row does not displace an exact app');
+
+    api.settings.set_boolean('web-search', false);
+    await Scripting.waitLeisure();
+    assert(!api.overlay.rows.some(row => row.kind === 'web'),
+        'turning web search off hides the row');
+    api.settings.set_boolean('web-search', true);
+    await Scripting.waitLeisure();
+
     const hidden = installed.find(a => !a.should_show());
     if (hidden) {
         api.overlay.entry.set_text(hidden.get_name());
@@ -255,6 +288,7 @@ export async function run() {
         'calc row merges', 2000);
     assert(api.overlay.rows[0].kind === 'calc', 'calc ranks before apps');
 
+    api.overlay.handleKey('Home', 0);
     api.overlay.handleKey('Down', 0);
     const selectedKey = api.overlay.rows[api.overlay.selectedIndex].key;
     assert(api.overlay.rows[api.overlay.selectedIndex].kind === 'app',

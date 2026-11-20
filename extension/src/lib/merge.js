@@ -40,11 +40,17 @@ export function fileRow(file, home) {
     };
 }
 
-export function mergeRows({calc = null, apps = [], files = []} = {}, maxRows) {
+export function mergeRows({calc = null, apps = [], files = [], web = null} = {},
+    maxRows) {
     const rows = [];
     if (calc)
         rows.push(calcRow(calc));
     rows.push(...apps, ...files);
+
+    // The web row is a last resort; it never pushes a local result out.
+    if (web && rows.length < maxRows)
+        rows.push(web);
+
     return rows.slice(0, Math.max(0, maxRows));
 }
 
