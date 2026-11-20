@@ -69,11 +69,20 @@ export function smartScore(usage, id, now) {
 }
 
 export function learnedCounts(usage, query) {
-    const entries = usage?.queries?.[normalizeQuery(query)];
-    if (!entries)
+    const key = normalizeQuery(query);
+    if (!key)
         return null;
-    return new Map(Object.entries(entries)
-        .map(([id, entry]) => [id, entry.count]));
+
+    // A choice made while narrowing a query should keep working when the user
+    // types more or less of the same prefix, not only at the exact length.
+    const counts = new Map();
+    for (const [stored, entries] of Object.entries(usage?.queries ?? {})) {
+        if (!stored.startsWith(key) && !key.startsWith(stored))
+            continue;
+        for (const [id, entry] of Object.entries(entries))
+            counts.set(id, (counts.get(id) ?? 0) + entry.count);
+    }
+    return counts.size > 0 ? counts : null;
 }
 
 export function recordAppLaunch(usage, id, now) {

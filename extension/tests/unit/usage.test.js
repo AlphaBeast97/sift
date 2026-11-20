@@ -96,6 +96,20 @@ export function run() {
     equal(ids(rankApps(records(), 'a', 4, learnedCounts(learned, 'a'))),
         'b.desktop,g.desktop,a.desktop');
 
+    const prefixed = emptyUsage();
+    recordSelection(prefixed, 'fi', 'g.desktop', NOW);
+    equal(learnedCounts(prefixed, 'f').get('g.desktop'), 1);
+    equal(learnedCounts(prefixed, 'fil').get('g.desktop'), 1);
+    equal(learnedCounts(prefixed, 'file manager').get('g.desktop'), 1);
+    assert(learnedCounts(prefixed, 'x') === null, 'unrelated queries stay cold');
+
+    recordSelection(prefixed, 'file manager', 'g.desktop', NOW);
+    equal(learnedCounts(prefixed, 'file').get('g.desktop'), 2);
+    recordSelection(prefixed, 'al', 'g.desktop', NOW);
+    recordSelection(prefixed, 'al', 'g.desktop', NOW);
+    equal(ids(rankApps(records(), 'a', 4, learnedCounts(prefixed, 'a'))),
+        'g.desktop,a.desktop,b.desktop');
+
     const parsed = parseUsage(JSON.stringify({
         version: 1,
         apps: {'a.desktop': {count: 2, last: NOW}},
