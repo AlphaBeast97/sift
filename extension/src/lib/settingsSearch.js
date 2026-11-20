@@ -92,7 +92,7 @@ export class SettingsSearch {
 
             // The provider matches phrases and single words, not token sets;
             // retry word by word so "gnome display settings" still finds Displays.
-            const words = text.split(/\s+/u).filter(Boolean);
+            const words = text.split(/\s+/u).filter(Boolean).slice(0, 4);
             if (ids.length === 0 && words.length > 1) {
                 ids = [];
                 for (const word of words)
