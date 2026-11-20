@@ -40,12 +40,12 @@ export function fileRow(file, home) {
     };
 }
 
-export function mergeRows({calc = null, apps = [], files = [], web = null} = {},
-    maxRows) {
+export function mergeRows({calc = null, apps = [], settings = [], files = [],
+    web = null} = {}, maxRows) {
     const rows = [];
     if (calc)
         rows.push(calcRow(calc));
-    rows.push(...apps, ...files);
+    rows.push(...apps, ...settings, ...files);
 
     // The web row is a last resort; it never pushes a local result out.
     if (web && rows.length < maxRows)

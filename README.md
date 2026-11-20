@@ -1,7 +1,7 @@
 # Sift
 
-Spotlight-style search for GNOME Shell 51: applications, files, a calculator, the
-web, an app grid, and liquid glass.
+Spotlight-style search for GNOME Shell 51: applications, files, settings
+panels, a calculator, the web, an app grid, and liquid glass.
 
 Sift disables the GNOME Overview by default: **Super** opens Sift search and
 **Super+A** opens its app grid, while Activities, the hot corner, swipe and the
@@ -64,6 +64,8 @@ gnome-extensions enable sift@alphabeast97.github.io
 - Type a web address such as `example.com` to open it in your browser,
   or a phrase to get a last **Search the web** row. The row only appears when
   local results leave room; Sift never contacts the network by itself.
+- Type part of a settings panel name such as `display` or `wifi` to open that
+  GNOME Settings panel directly. Multi-word queries try each word when needed.
 - **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.
 - **Enter**: open an app or file; on a calculation, copy the result and close.
 - **Ctrl+Enter**: open a new app window, or reveal a file in the file manager.
@@ -93,8 +95,8 @@ The window exposes glass brightness, animations, search panel height, maximum
 results, web search with its engine and browser, app-grid labels and order,
 learned-ranking clearing, the GNOME overview takeover, and both shortcuts,
 plus a **Files** page for the file index and a **How to use** page covering
-shortcuts, navigation, calculator examples, the app grid, privacy, and current
-limits.
+shortcuts, navigation, calculator examples, the app grid, settings panels,
+privacy, and current limits.
 The panel height is fixed while typing; extra results scroll. Changes apply
 live.
 Extension settings are ordinary GSettings under

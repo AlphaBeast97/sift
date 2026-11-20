@@ -17,6 +17,13 @@ export function run() {
         'app:a.desktop');
     equal(mergeRows({calc, web}, 2).map(r => r.key).join(','), 'calc,web');
     equal(mergeRows({calc, web}, 1).map(r => r.key).join(','), 'calc');
+
+    const setting = {kind: 'setting', key: 'setting:display'};
+    equal(mergeRows({apps, settings: [setting], files}, 6)
+        .map(r => r.key).join(','),
+    'app:a.desktop,setting:display,file:/tmp/a.txt');
+    equal(mergeRows({apps, settings: [setting]}, 1)
+        .map(r => r.key).join(','), 'app:a.desktop');
     equal(selectionAfter(rows, 'app:a.desktop'), 1);
     equal(selectionAfter(rows, 'file:gone'), 0);
 

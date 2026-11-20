@@ -817,6 +817,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Try 2+2*3, 15% of 80, 1 km to m or 2 hours in minutes. Enter or Ctrl+C copies the result.'));
         searchGroup.add(valueRow('Web results',
             'Type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself. Pick Default or an installed browser under Search → Web.'));
+        searchGroup.add(valueRow('Settings panels',
+            'Type a panel name such as display, sound or wifi to open it directly. Multi-word queries try each word when the panel search needs it.'));
         page.add(searchGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});

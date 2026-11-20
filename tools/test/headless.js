@@ -246,6 +246,21 @@ export async function run() {
     api.settings.set_string('web-browser', '');
     await Scripting.waitLeisure();
 
+    api.overlay.entry.set_text('display');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'setting'),
+        'settings panels appear', 4000);
+    const panel = api.overlay.rows.find(row => row.kind === 'setting');
+    assert(panel.title === 'Displays', 'settings search finds Displays');
+    assert(panel.key === 'setting:display', 'the settings row is stable');
+
+    api.overlay.entry.set_text('gnome display settings');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'setting'),
+        'multi-word settings queries fall back to words', 4000);
+    assert(api.overlay.rows.find(row => row.kind === 'setting').title ===
+        'Displays', 'multi-word settings query finds Displays');
+
     const hidden = installed.find(a => !a.should_show());
     if (hidden) {
         api.overlay.entry.set_text(hidden.get_name());

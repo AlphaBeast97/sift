@@ -12,6 +12,7 @@ import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
+import {SettingsSearch} from './lib/settingsSearch.js';
 import {MOVE, Spring} from './lib/spring.js';
 import {webRow} from './lib/webSearch.js';
 import {AppGrid} from './appGrid.js';
@@ -66,6 +67,8 @@ export const SiftOverlay = GObject.registerClass({
         this._daemonFiles = [];
         this._home = GLib.get_home_dir();
         this._browserName = this._resolveBrowser()?.get_name() ?? '';
+        this._settingsSearch = new SettingsSearch();
+        this._settingsRows = [];
         this._serviceUnavailable = false;
         this._queryTimer = 0;
         this._queryGeneration = 0;
@@ -395,6 +398,7 @@ export const SiftOverlay = GObject.registerClass({
         const rows = mergeRows({
             calc: this._daemonCalc,
             apps: records.map(appRow),
+            settings: this._settingsRows,
             files: this._daemonFiles
                 .map(file => fileRow(file, this._home))
                 .filter(Boolean),
@@ -454,6 +458,7 @@ export const SiftOverlay = GObject.registerClass({
         this._cancelQueryTimer();
         this._daemonCalc = null;
         this._daemonFiles = [];
+        this._settingsRows = [];
         this.refreshApps();
         this._results.select(0);
         this._scroll.vadjustment.value = 0;
@@ -461,7 +466,7 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _scheduleQuery() {
-        if (!this._daemon || this._view !== 'search')
+        if (this._view !== 'search')
             return;
 
         const text = this._entry.text.trim();
@@ -471,12 +476,21 @@ export const SiftOverlay = GObject.registerClass({
         const generation = this._queryGeneration;
         this._queryTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, QUERY_DEBOUNCE_MS, () => {
             this._queryTimer = 0;
+            this._settingsSearch.search(text).then(rows => {
+                if (generation !== this._queryGeneration)
+                    return;
+                this._settingsRows = rows;
+                this.refreshApps();
+            });
             this._enqueueQuery(text, generation);
             return GLib.SOURCE_REMOVE;
         });
     }
 
     _enqueueQuery(text, generation) {
+        if (!this._daemon)
+            return;
+
         this._latestQuery = {text, generation};
         if (!this._queryBusy)
             this._sendQuery();
@@ -1091,6 +1105,8 @@ export const SiftOverlay = GObject.registerClass({
                 } catch (error) {
                     console.error(`Sift: cannot open ${row.uri}: ${error.message}`);
                 }
+            } else if (row.kind === 'setting') {
+                this._settingsSearch.activate(row, global.get_current_time());
             }
 
             this._onActivate?.(row, {newWindow});
