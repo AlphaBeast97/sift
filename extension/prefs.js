@@ -16,8 +16,8 @@ const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-brightness', 'animations', 'app-order', 'max-results',
     'search-height', 'web-search', 'web-search-engine', 'web-browser',
-    'grid-labels', 'disable-overview', 'sift-search-shortcut',
-    'sift-apps-shortcut',
+    'settings-search', 'grid-labels', 'disable-overview',
+    'sift-search-shortcut', 'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -593,6 +593,13 @@ export default class SiftPreferences extends ExtensionPreferences {
             {lower: 144, upper: 716, step: 52});
         addIntRow(resultsGroup, settings, 'max-results', 'Maximum results',
             {lower: 4, upper: 12, step: 1});
+        const settingsRow = new Adw.SwitchRow({
+            title: 'Search settings panels',
+            subtitle: 'Include GNOME Settings results such as Displays and Wi-Fi.',
+        });
+        settings.bind('settings-search', settingsRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        resultsGroup.add(settingsRow);
         behavior.add(resultsGroup);
 
         const webGroup = new Adw.PreferencesGroup({
@@ -818,7 +825,7 @@ export default class SiftPreferences extends ExtensionPreferences {
         searchGroup.add(valueRow('Web results',
             'Type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself. Pick Default or an installed browser under Search → Web.'));
         searchGroup.add(valueRow('Settings panels',
-            'Type a panel name such as display, sound or wifi to open it directly. Multi-word queries try each word when the panel search needs it.'));
+            'Type a panel name such as display, sound or wifi to open it directly. Multi-word queries try the meaningful words when needed. Turn panel results off with Search → Search settings panels.'));
         page.add(searchGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});

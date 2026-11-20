@@ -139,11 +139,15 @@ export function run() {
     const store = new UsageStore(path);
     store.recordLaunch('a.desktop', NOW);
     store.recordSelection('Term', 'b.desktop', NOW);
+    store.recordSelection('Term', 'setting:display', NOW);
+    store.recordSelection('Term', 'setting:display', NOW);
     store.flush();
 
     const loaded = new UsageStore(path);
     equal(loaded.snapshot().apps['a.desktop'].count, 1);
     equal(loaded.learned(' term ').get('b.desktop'), 1);
+    equal(loaded.settingCount('setting:display'), 2);
+    equal(loaded.settingCount('c.desktop'), 0);
     loaded.destroy();
 
     file.delete(null);

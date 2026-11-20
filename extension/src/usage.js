@@ -52,6 +52,14 @@ export class UsageStore {
         return learnedCounts(this._data, query);
     }
 
+    settingCount(id) {
+        this._refresh();
+        let count = this._data.apps[id]?.count ?? 0;
+        for (const entries of Object.values(this._data.queries))
+            count = Math.max(count, entries[id]?.count ?? 0);
+        return count;
+    }
+
     snapshot() {
         this._refresh();
         return this._data;

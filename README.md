@@ -65,7 +65,8 @@ gnome-extensions enable sift@alphabeast97.github.io
   or a phrase to get a last **Search the web** row. The row only appears when
   local results leave room; Sift never contacts the network by itself.
 - Type part of a settings panel name such as `display` or `wifi` to open that
-  GNOME Settings panel directly. Multi-word queries try each word when needed.
+  GNOME Settings panel directly. Multi-word queries try the meaningful words
+  when needed; turn panel results off under Search → Search settings panels.
 - **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.
 - **Enter**: open an app or file; on a calculation, copy the result and close.
 - **Ctrl+Enter**: open a new app window, or reveal a file in the file manager.
@@ -80,8 +81,9 @@ File search reads names only. File contents are never indexed or read.
 
 App launches and repeated search choices stay in
 `~/.local/state/sift/usage.json` and never leave the machine. Picking a
-non-first app or settings result twice promotes it for that query and its
-prefixes. Clear the counts with **Clear learned ranking** in preferences.
+non-first app result twice promotes it for that query and its prefixes. A
+settings panel selected twice is favored whenever it appears in later searches.
+Clear the counts with **Clear learned ranking** in preferences.
 
 ## Preferences
 
@@ -92,11 +94,11 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes glass brightness, animations, search panel height, maximum
-results, web search with its engine and browser, app-grid labels and order,
-learned-ranking clearing, the GNOME overview takeover, and both shortcuts,
-plus a **Files** page for the file index and a **How to use** page covering
-shortcuts, navigation, calculator examples, the app grid, settings panels,
-privacy, and current limits.
+results, web search with its engine and browser, settings panel search,
+app-grid labels and order, learned-ranking clearing, the GNOME overview
+takeover, and both shortcuts, plus a **Files** page for the file index and a
+**How to use** page covering shortcuts, navigation, calculator examples, the
+app grid, settings panels, privacy, and current limits.
 The panel height is fixed while typing; extra results scroll. Changes apply
 live.
 Extension settings are ordinary GSettings under

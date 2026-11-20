@@ -7,6 +7,27 @@ const OBJECT_PATH = '/org/gnome/Settings/SearchProvider';
 const INTERFACE = 'org.gnome.Shell.SearchProvider2';
 export const DEFAULT_ICON = 'org.gnome.Settings-symbolic';
 
+// Provider matching is fuzzy; question words pull unrelated panels into
+// natural-language queries ("what" alone matches Notifications).
+const STOPWORDS = new Set([
+    'a', 'an', 'and', 'are', 'can', 'do', 'does', 'for', 'how', 'i', 'in',
+    'is', 'me', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when',
+    'where', 'who', 'why', 'with', 'you',
+]);
+
+function wordKey(word) {
+    return word.replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase();
+}
+
+export function fallbackWords(text) {
+    const words = text.split(/\s+/u)
+        .filter(Boolean)
+        .slice(0, 4)
+        .map(word => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+        .filter(word => word.length >= 3 && !STOPWORDS.has(wordKey(word)));
+    return [...new Set(words)];
+}
+
 function call(proxy, method, parameters) {
     return new Promise((resolve, reject) => {
         proxy.call(method, parameters, Gio.DBusCallFlags.NONE, -1, null,
@@ -85,18 +106,24 @@ export class SettingsSearch {
         return reply.deepUnpack()[0];
     }
 
-    async search(text, limit = 2) {
+    async search(text, limit = 4) {
+        if (!text || STOPWORDS.has(wordKey(text)))
+            return [];
+
         try {
             const proxy = await this._connect();
             let ids = await this._ids(proxy, [text]);
 
             // The provider matches phrases and single words, not token sets;
-            // retry word by word so "gnome display settings" still finds Displays.
-            const words = text.split(/\s+/u).filter(Boolean).slice(0, 4);
-            if (ids.length === 0 && words.length > 1) {
+            // retry meaningful words so "gnome display settings" finds Displays
+            // without turning "what is ..." into unrelated panels.
+            const words = fallbackWords(text);
+            if (ids.length === 0 && text.includes(' ') && words.length > 0) {
                 ids = [];
-                for (const word of words)
-                    ids.push(...await this._ids(proxy, [word]));
+                for (const word of words) {
+                    const found = await this._ids(proxy, [word]);
+                    ids.push(...found);
+                }
                 ids = [...new Set(ids)];
             }
 

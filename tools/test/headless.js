@@ -275,6 +275,29 @@ export async function run() {
     assert(api.overlay.selectedIndex === 0,
         'the promoted settings panel keeps the default selection');
 
+    api.apps.recordLaunch('setting:display');
+    api.apps.recordLaunch('setting:display');
+    api.overlay.entry.set_text('screen');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.key === 'setting:display'),
+        'a visited panel appears for another query', 4000);
+    assert(api.overlay.rows[0].key === 'setting:display',
+        'a visited settings panel ranks first across queries');
+
+    api.settings.set_boolean('settings-search', false);
+    await Scripting.waitLeisure();
+    assert(!api.overlay.rows.some(row => row.kind === 'setting'),
+        'turning settings search off hides panels');
+    api.settings.set_boolean('settings-search', true);
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'setting'),
+        'turning settings search on brings panels back', 4000);
+
+    api.overlay.entry.set_text('what is weather tomorrow?');
+    await Scripting.waitLeisure();
+    await Scripting.sleep(600);
+    assert(!api.overlay.rows.some(row => row.kind === 'setting'),
+        'question words do not pull settings panels');
+
     const hidden = installed.find(a => !a.should_show());
     if (hidden) {
         api.overlay.entry.set_text(hidden.get_name());

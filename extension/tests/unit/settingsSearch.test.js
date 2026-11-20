@@ -4,12 +4,21 @@ import GLib from 'gi://GLib';
 import {assert, equal} from './assert.js';
 import {
     DEFAULT_ICON,
+    fallbackWords,
     iconName,
     parseMeta,
     settingsRow,
 } from '../../src/lib/settingsSearch.js';
 
 export function run() {
+    equal(fallbackWords('what is weather tomorrow?').join(','),
+        'weather,tomorrow');
+    equal(fallbackWords('gnome display settings').join(','),
+        'gnome,display,settings');
+    equal(fallbackWords('is display').join(','), 'display');
+    equal(fallbackWords('what').join(','), '');
+    equal(fallbackWords('a b c').join(','), '');
+
     const themed = new GLib.Variant('(sv)', ['themed',
         new GLib.Variant('as',
             ['org.gnome.Settings-display-symbolic', 'org.gnome.Settings-display'])]);

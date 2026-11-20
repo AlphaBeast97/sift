@@ -291,6 +291,12 @@ export const SiftOverlay = GObject.registerClass({
         this._webId = settings.connect('changed', (_settings, key) => {
             if (key === 'web-browser')
                 this._browserName = this._resolveBrowser()?.get_name() ?? '';
+            if (key === 'settings-search') {
+                this._settingsRows = [];
+                this.refreshApps();
+                if (this._settings.get_boolean('settings-search'))
+                    this._scheduleQuery();
+            }
             if (key === 'web-search' || key === 'web-search-engine' ||
                 key === 'web-browser')
                 this.refreshApps();
@@ -394,18 +400,28 @@ export const SiftOverlay = GObject.registerClass({
         this._results.setMaxRows(this._maxRows);
         const previous = this._results.selectedRow?.key ?? null;
         const previousIndex = this._results.selectedIndex;
-        const learned = this._apps?.learned(this._entry.text) ?? null;
-        const count = row => learned?.get(row.key) ?? 0;
-        const settings = [...this._settingsRows]
-            .sort((a, b) => count(b) - count(a));
-        const promoted = settings.filter(row => count(row) >= LEARNED_THRESHOLD);
+        const settingsEnabled = this._settings.get_boolean('settings-search');
+        const counts = new Map();
+        if (settingsEnabled) {
+            for (const row of this._settingsRows)
+                counts.set(row.key, this._apps?.settingCount(row.key) ?? 0);
+        }
+        const settingsCount = row => counts.get(row.key) ?? 0;
+        const settings = settingsEnabled
+            ? [...this._settingsRows]
+                .sort((a, b) => settingsCount(b) - settingsCount(a))
+                .slice(0, 2)
+            : [];
+        const promoted = settings
+            .filter(row => settingsCount(row) >= LEARNED_THRESHOLD);
         const records = this._apps
             ? this._apps.search(this._entry.text, Math.min(4, this._maxRows))
             : [];
         const rows = mergeRows({
             calc: this._daemonCalc,
             apps: [...promoted, ...records.map(appRow)],
-            settings: settings.filter(row => count(row) < LEARNED_THRESHOLD),
+            settings: settings.filter(row =>
+                settingsCount(row) < LEARNED_THRESHOLD),
             files: this._daemonFiles
                 .map(file => fileRow(file, this._home))
                 .filter(Boolean),
@@ -490,12 +506,15 @@ export const SiftOverlay = GObject.registerClass({
         const generation = this._queryGeneration;
         this._queryTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, QUERY_DEBOUNCE_MS, () => {
             this._queryTimer = 0;
-            this._settingsSearch.search(text).then(rows => {
-                if (generation !== this._queryGeneration)
-                    return;
-                this._settingsRows = rows;
-                this.refreshApps();
-            });
+            if (this._settings.get_boolean('settings-search')) {
+                this._settingsSearch.search(text).then(rows => {
+                    if (generation !== this._queryGeneration ||
+                        !this._settings.get_boolean('settings-search'))
+                        return;
+                    this._settingsRows = rows;
+                    this.refreshApps();
+                }).catch(error => logError(error, 'sift: settings search'));
+            }
             this._enqueueQuery(text, generation);
             return GLib.SOURCE_REMOVE;
         });
@@ -1100,6 +1119,7 @@ export const SiftOverlay = GObject.registerClass({
             const index = this._results.rows.indexOf(row);
             if (index > 0)
                 this._apps?.recordSelection(this._entry.text, row.key);
+            this._apps?.recordLaunch(row.key);
         }
 
         const activate = () => {
