@@ -246,6 +246,40 @@ export async function run() {
     api.settings.set_string('web-browser', '');
     await Scripting.waitLeisure();
 
+    // Settings arrive after files. The late first row takes the selection, so
+    // the file that briefly held it must not stay selected.
+    const realQuery = api.daemon.query;
+    api.daemon.query = () => Promise.resolve({
+        files: [{path: '/tmp/notification-notes.txt',
+            name: 'notification-notes.txt', kind: 'file'}],
+    });
+    api.overlay._settingsSearch.search = async () => {
+        await Scripting.sleep(120);
+        return [{
+            kind: 'setting',
+            key: 'setting:notifications',
+            title: 'Notifications',
+            subtitle: 'Control which notifications are displayed and what they show',
+            icon: 'org.gnome.Settings-notifications-symbolic',
+            settingId: 'notifications',
+            terms: ['notification'],
+        }];
+    };
+    api.overlay.entry.set_text('notification');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'file'),
+        'a file result appears before settings', 2000);
+    assert(api.overlay.selectedIndex === 0 &&
+        api.overlay.rows[0].kind === 'file',
+    'the first file starts selected');
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'setting'),
+        'the settings result arrives late', 4000);
+    assert(api.overlay.selectedIndex === 0 &&
+        api.overlay.rows[0].kind === 'setting',
+    'the late first settings row takes the selection');
+    delete api.overlay._settingsSearch.search;
+    api.daemon.query = realQuery;
+
     api.overlay.entry.set_text('display');
     await Scripting.waitLeisure();
     await waitFor(() => api.overlay.rows.some(row => row.kind === 'setting'),

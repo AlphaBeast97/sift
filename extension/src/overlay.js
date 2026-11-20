@@ -433,12 +433,13 @@ export const SiftOverlay = GObject.registerClass({
         }, this._maxRows);
 
         this._results.setRows(rows);
-        // A promoted settings row takes the default selection; slower rows
-        // arriving below keep the row the user was already on.
+        // A settings row that loads above the current top row takes the default
+        // selection; calc and file rows arriving below leave it alone.
         let next = selectionAfter(rows, previous);
         if (previous === 'web' && rows.length > 1)
             next = 0;
-        else if (previousIndex === 0 && next > 0 && rows[0] === promoted[0])
+        else if (previousIndex === 0 && next > 0 &&
+            rows[0]?.kind === 'setting')
             next = 0;
         this._results.select(next);
         this._syncEmptyState();
