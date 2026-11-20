@@ -108,5 +108,6 @@ export function webRow(text, engine = 'duckduckgo', browserName = '') {
         title: `Search the web for “${query}”`,
         subtitle: browserName ? `${label} in ${browserName}` : label,
         uri: searchUrl(engine, query),
+        icon: 'web-browser-symbolic',
     };
 }

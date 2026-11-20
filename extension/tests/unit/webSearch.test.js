@@ -31,11 +31,13 @@ export function run() {
     equal(search.title, 'Search the web for “two words”');
     equal(search.subtitle, 'Google in Brave');
     equal(search.uri, 'https://www.google.com/search?q=two%20words');
+    equal(search.icon, 'web-browser-symbolic');
 
     const open = webRow('example.com', 'google', 'Brave');
     equal(open.title, 'Open example.com');
     equal(open.subtitle, 'Open in Brave');
     equal(open.uri, 'https://example.com');
+    equal(open.icon, 'web-browser-symbolic');
 
     assert(webRow('x') === null, 'short text has no web row');
     assert(webRow('   ') === null, 'blank text has no web row');
