@@ -59,14 +59,18 @@ gnome-extensions enable sift@alphabeast97.github.io
 - With the GNOME overview enabled, Super and Super+A work as usual; Sift opens
   with **Ctrl+Space** and **Alt+A** instead.
 - Record different shortcuts in the preferences; each one replaces its default.
+- Sift stays closed while an app is fullscreen. Turn off **Disable in
+  fullscreen apps** under Search → Fullscreen to allow shortcuts there.
 - Type to search applications. Two or more characters also search file names,
   directories, and evaluate arithmetic and unit expressions.
-- Type a web address such as `example.com` to open it in your browser,
-  or a phrase to get a last **Search the web** row. The row only appears when
-  local results leave room; Sift never contacts the network by itself.
-- Type part of a settings panel name such as `display` or `wifi` to open that
-  GNOME Settings panel directly. Multi-word queries try the meaningful words
-  when needed; turn panel results off under Search → Search settings panels.
+- Web results are off by default. Turn on **Search the web** under
+  Search → Web, then type an address such as `example.com` to open it, or a
+  phrase to get a last **Search the web** row. The row only appears when local
+  results leave room; Sift never contacts the network by itself.
+- Settings panel results are off by default. Turn on **Search settings panels**
+  under Search → Results, then type part of a panel name such as `display` or
+  `wifi` to open it directly. Multi-word queries try the meaningful words when
+  needed.
 - **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.
 - **Enter**: open an app or file; on a calculation, copy the result and close.
 - **Ctrl+Enter**: open a new app window, or reveal a file in the file manager.
@@ -94,11 +98,12 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes glass brightness, animations, search panel height, maximum
-results, web search with its engine and browser, settings panel search,
-app-grid labels and order, learned-ranking clearing, the GNOME overview
-takeover, and both shortcuts, plus a **Files** page for the file index and a
-**How to use** page covering shortcuts, navigation, calculator examples, the
-app grid, settings panels, privacy, and current limits.
+results, web search with its engine and browser, settings panel search (web and
+settings panel results are off by default), the fullscreen guard, app-grid
+labels and order, learned-ranking clearing, the GNOME overview takeover, and
+both shortcuts, plus a **Files** page for the file index and a **How to use**
+page covering shortcuts, navigation, calculator examples, the app grid,
+settings panels, fullscreen behavior, privacy, and current limits.
 The panel height is fixed while typing; extra results scroll. Changes apply
 live.
 Extension settings are ordinary GSettings under

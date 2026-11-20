@@ -1,5 +1,6 @@
 import {run as appScore} from './appScore.test.js';
 import {run as format} from './format.test.js';
+import {run as fullscreen} from './fullscreen.test.js';
 import {run as geometry} from './geometry.test.js';
 import {run as glassParams} from './glassParams.test.js';
 import {run as gridMath} from './gridMath.test.js';
@@ -19,6 +20,7 @@ const tests = [
     ['keys', keys],
     ['appScore', appScore],
     ['format', format],
+    ['fullscreen', fullscreen],
     ['glassParams', glassParams],
     ['merge', merge],
     ['settingsSearch', settingsSearch],

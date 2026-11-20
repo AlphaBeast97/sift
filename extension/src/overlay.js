@@ -13,6 +13,7 @@ import {gridPanel, searchPanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
 import {LEARNED_THRESHOLD} from './lib/appScore.js';
+import {isFullscreenWindow} from './lib/fullscreen.js';
 import {SettingsSearch} from './lib/settingsSearch.js';
 import {MOVE, Spring} from './lib/spring.js';
 import {webRow} from './lib/webSearch.js';
@@ -661,6 +662,11 @@ export const SiftOverlay = GObject.registerClass({
 
     open(view = 'search') {
         if (this._destroyed || Main.sessionMode.currentMode !== 'user')
+            return;
+
+        if (!this.visible &&
+            this._settings.get_boolean('fullscreen-guard') &&
+            isFullscreenWindow(global.display.focus_window))
             return;
 
         if (this._state === 'closing') {

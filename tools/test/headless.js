@@ -107,6 +107,10 @@ export async function run() {
     await Scripting.waitLeisure();
 
     let api = ext.getTestAPI();
+    assert(!api.settings.get_boolean('web-search'),
+        'web search is off by default');
+    assert(!api.settings.get_boolean('settings-search'),
+        'settings search is off by default');
 
     // The GNOME overview is disabled by default; Super and Super+A are Sift's
     // defaults, and every other GNOME trigger does nothing.
@@ -192,6 +196,8 @@ export async function run() {
         'typing expands the panel to its fixed height');
 
     // The web row is a last resort and never displaces a local result.
+    api.settings.set_boolean('web-search', true);
+    await Scripting.waitLeisure();
     api.overlay.entry.set_text('sift-no-such-app-or-file-zzz');
     await Scripting.waitLeisure();
     await waitFor(() => api.overlay.rowCount > 0, 'the web row renders', 2000);
@@ -248,6 +254,8 @@ export async function run() {
 
     // Settings arrive after files. The late first row takes the selection, so
     // the file that briefly held it must not stay selected.
+    api.settings.set_boolean('settings-search', true);
+    await Scripting.waitLeisure();
     const realQuery = api.daemon.query;
     api.daemon.query = () => Promise.resolve({
         files: [{path: '/tmp/notification-notes.txt',

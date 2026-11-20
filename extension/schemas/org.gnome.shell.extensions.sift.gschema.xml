@@ -34,9 +34,9 @@
     </key>
 
     <key name="web-search" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Search the web</summary>
-      <description>Show a last, low-priority row that searches the web or opens a typed address in the default browser. It only appears when local results leave room, and Sift never contacts the network by itself.</description>
+      <description>Show a last, low-priority row that searches the web or opens a typed address in the default browser. It only appears when local results leave room, and Sift never contacts the network by itself. Off by default.</description>
     </key>
 
     <key name="web-search-engine" type="s">
@@ -58,9 +58,15 @@
     </key>
 
     <key name="settings-search" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Search settings panels</summary>
-      <description>Include GNOME Settings panels in search results. Turn off to keep only apps, files, calculations and web results.</description>
+      <description>Include GNOME Settings panels in search results. Off by default; turn on to find panels such as Displays and Wi-Fi.</description>
+    </key>
+
+    <key name="fullscreen-guard" type="b">
+      <default>true</default>
+      <summary>Disable in fullscreen apps</summary>
+      <description>Ignore Sift shortcuts while an application is fullscreen. Turn off to open Sift over fullscreen apps.</description>
     </key>
 
     <key name="search-height" type="i">

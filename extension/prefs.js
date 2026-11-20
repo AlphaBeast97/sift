@@ -16,7 +16,7 @@ const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-brightness', 'animations', 'app-order', 'max-results',
     'search-height', 'web-search', 'web-search-engine', 'web-browser',
-    'settings-search', 'grid-labels', 'disable-overview',
+    'settings-search', 'fullscreen-guard', 'grid-labels', 'disable-overview',
     'sift-search-shortcut', 'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
@@ -617,6 +617,16 @@ export default class SiftPreferences extends ExtensionPreferences {
         addEngineRow(webGroup, settings);
         behavior.add(webGroup);
 
+        const fullscreenGroup = new Adw.PreferencesGroup({title: 'Fullscreen'});
+        const fullscreenRow = new Adw.SwitchRow({
+            title: 'Disable in fullscreen apps',
+            subtitle: 'Ignore Sift shortcuts while an app is fullscreen.',
+        });
+        settings.bind('fullscreen-guard', fullscreenRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        fullscreenGroup.add(fullscreenRow);
+        behavior.add(fullscreenGroup);
+
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});
         const labelsRow = new Adw.SwitchRow({
             title: 'Show app labels',
@@ -811,6 +821,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Search', 'open search');
         addGuideShortcutRow(openGroup, settings, 'sift-apps-shortcut',
             'App grid', 'open the app grid');
+        openGroup.add(valueRow('Fullscreen apps',
+            'Sift stays closed while an app is fullscreen. Turn off Disable in fullscreen apps under Search → Fullscreen to allow the shortcuts there.'));
         page.add(openGroup);
 
         const searchGroup = new Adw.PreferencesGroup({title: 'Search'});
@@ -823,9 +835,9 @@ export default class SiftPreferences extends ExtensionPreferences {
         searchGroup.add(valueRow('Calculator',
             'Try 2+2*3, 15% of 80, 1 km to m or 2 hours in minutes. Enter or Ctrl+C copies the result.'));
         searchGroup.add(valueRow('Web results',
-            'Type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself. Pick Default or an installed browser under Search → Web.'));
+            'Off by default. Turn on Search the web under Search → Web, then type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself. Pick Default or an installed browser under Search → Web.'));
         searchGroup.add(valueRow('Settings panels',
-            'Type a panel name such as display, sound or wifi to open it directly. Multi-word queries try the meaningful words when needed. Turn panel results off with Search → Search settings panels.'));
+            'Off by default. Turn on Search settings panels under Search → Results, then type a panel name such as display, sound or wifi to open it directly. Multi-word queries try the meaningful words when needed.'));
         page.add(searchGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});
