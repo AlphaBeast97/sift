@@ -140,7 +140,21 @@ export const AppGrid = GObject.registerClass(
             this._needsBuild = true;
 
             if (this.mapped)
+                this._syncTiles();
+        }
+
+        // Rebuilds only when there is nothing to reuse; otherwise the existing
+        // tiles are reordered and the missing ones are added.
+        _syncTiles() {
+            if (this._tiles.length === 0)
                 this._build();
+            else
+                this._reconcile();
+        }
+
+        refresh() {
+            this.setApps(this._apps ? this._apps.gridApps(this._order) : []);
+            this._dirty = false;
         }
 
         setOrder(order) {
@@ -150,7 +164,7 @@ export const AppGrid = GObject.registerClass(
             this._order = order;
             this.setApps(this._apps ? this._apps.gridApps(order) : []);
             // While hidden, leave the grid dirty so the next prewarm refetches
-            // and rebuilds the tiles in the new order.
+            // and reorders the tiles.
             this._dirty = !this.mapped;
         }
 
@@ -198,7 +212,7 @@ export const AppGrid = GObject.registerClass(
 
             this.setApps(this._apps ? this._apps.gridApps(this._order) : []);
             this._dirty = false;
-            this._build();
+            this._syncTiles();
         }
 
         open() {
@@ -207,8 +221,12 @@ export const AppGrid = GObject.registerClass(
                 this._dirty = false;
             }
 
-            if (this._needsBuild)
-                this._startBuild();
+            if (this._needsBuild) {
+                if (this._tiles.length > 0)
+                    this._reconcile();
+                else
+                    this._startBuild();
+            }
 
             this._selected = 0;
             this._layout();
@@ -335,46 +353,8 @@ export const AppGrid = GObject.registerClass(
             const end = Math.min(this._buildIndex + CHUNK_SIZE,
                 this._records.length);
 
-            for (; this._buildIndex < end; this._buildIndex++) {
-                const record = this._records[this._buildIndex];
-                const tile = new AppDisplay.AppIcon(record.app, {
-                    isDraggable: false,
-                    expandTitleOnHover: false,
-                });
-                tile.can_focus = false;
-                tile.activate = button => {
-                    const event = Clutter.get_current_event();
-                    const state = event ? event.get_state() : 0;
-                    this._onActivate?.(record, {
-                        newWindow: button === Clutter.BUTTON_MIDDLE ||
-                            (state & Clutter.ModifierType.CONTROL_MASK) !== 0,
-                    });
-                };
-                const popupMenu = tile.popupMenu.bind(tile);
-                tile.popupMenu = () => {
-                    const result = popupMenu();
-                    const menu = tile._menu;
-                    if (menu && !menu._siftHooked) {
-                        menu._siftHooked = true;
-                        menu.connectObject('activate', (_menu, item) => {
-                            // Favourites and Quit leave the overview open;
-                            // launching, details and window actions close it.
-                            if (item === menu._toggleFavoriteItem ||
-                                item === menu._quitItem)
-                                return;
-                            this._onClose?.();
-                        }, tile);
-                    }
-                    return result;
-                };
-                tile.accessible_name = record.name;
-                tile.icon.label.visible = this._showLabels;
-                this._grid.appendItem(tile);
-                tile.icon.setIconSize(this._iconSize);
-                tile.queue_relayout();
-                tile.connect('notify::allocation', () => this._scheduleLayout());
-                this._tiles.push(tile);
-            }
+            for (; this._buildIndex < end; this._buildIndex++)
+                this._tiles.push(this._addTile(this._records[this._buildIndex]));
 
             this._snapLayout();
             this._layout();
@@ -386,6 +366,90 @@ export const AppGrid = GObject.registerClass(
 
             this._chunkId = 0;
             return GLib.SOURCE_REMOVE;
+        }
+
+        _addTile(record) {
+            const tile = new AppDisplay.AppIcon(record.app, {
+                isDraggable: false,
+                expandTitleOnHover: false,
+            });
+            tile.can_focus = false;
+            tile._siftId = record.id;
+            tile.activate = button => {
+                const event = Clutter.get_current_event();
+                const state = event ? event.get_state() : 0;
+                this._onActivate?.(record, {
+                    newWindow: button === Clutter.BUTTON_MIDDLE ||
+                        (state & Clutter.ModifierType.CONTROL_MASK) !== 0,
+                });
+            };
+            const popupMenu = tile.popupMenu.bind(tile);
+            tile.popupMenu = () => {
+                const result = popupMenu();
+                const menu = tile._menu;
+                if (menu && !menu._siftHooked) {
+                    menu._siftHooked = true;
+                    menu.connectObject('activate', (_menu, item) => {
+                        // Favourites and Quit leave the overview open;
+                        // launching, details and window actions close it.
+                        if (item === menu._toggleFavoriteItem ||
+                            item === menu._quitItem)
+                            return;
+                        this._onClose?.();
+                    }, tile);
+                }
+                return result;
+            };
+            tile.accessible_name = record.name;
+            tile.icon.label.visible = this._showLabels;
+            this._grid.appendItem(tile);
+            tile.icon.setIconSize(this._iconSize);
+            tile.queue_relayout();
+            tile.connect('notify::allocation', () => this._scheduleLayout());
+            return tile;
+        }
+
+        // Installs and removals touch one or two tiles. Reusing the rest keeps
+        // the grid from tearing down and rebuilding every icon in a frame.
+        _reconcile() {
+            this._cancelChunks();
+            this._buildIndex = 0;
+            this._needsBuild = false;
+
+            const wanted = new Set(this._records.map(record => record.id));
+            const existing = new Map();
+            for (const tile of this._tiles) {
+                if (wanted.has(tile._siftId))
+                    existing.set(tile._siftId, tile);
+                else {
+                    this._grid.removeItem(tile);
+                    tile.destroy();
+                }
+            }
+
+            const tiles = [];
+            for (const record of this._records) {
+                let tile = existing.get(record.id);
+                if (!tile)
+                    tile = this._addTile(record);
+                tiles.push(tile);
+            }
+            this._tiles = tiles;
+
+            const perPage = Math.max(1, this._columns * this._rows);
+            for (let i = 0; i < tiles.length; i++) {
+                const page = Math.floor(i / perPage);
+                const index = i % perPage;
+                const [currentPage, currentIndex] =
+                    this._grid.getItemPosition(tiles[i]);
+                if (currentPage !== page || currentIndex !== index)
+                    this._grid.moveItem(tiles[i], page, index);
+            }
+
+            this._snapLayout();
+            this._layout();
+            this._syncPages();
+            this._applySelection();
         }
 
         _cancelChunks() {

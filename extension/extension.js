@@ -10,7 +10,8 @@ export default class SiftExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._apps = new Apps();
-        this._apps.connect(() => this._overlay?.onAppsChanged());
+        this._apps.connect(() => this._overlay?.onAppsChanged(),
+            () => this._overlay?.onAppsInstalled());
         this._daemon = new Daemon({
             version: this.metadata['version-name'],
             onChanged: () => this._overlay?.onDaemonChanged(),

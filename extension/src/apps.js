@@ -52,15 +52,18 @@ export class Apps {
         this._stateId = 0;
     }
 
-    connect(onChanged = null) {
+    connect(onChanged = null, onInstalled = null) {
         if (this._installedId)
             return;
 
         this._onChanged = onChanged;
-        this._installedId = this._appSystem.connect('installed-changed',
-            () => this._invalidate());
+        this._onInstalled = onInstalled;
+        this._installedId = this._appSystem.connect('installed-changed', () => {
+            this._records = null;
+            this._onInstalled?.();
+        });
         this._stateId = this._appSystem.connect('app-state-changed',
-            () => this._invalidate());
+            () => this._refreshRunning());
     }
 
     disconnect() {
@@ -71,6 +74,7 @@ export class Apps {
         this._installedId = 0;
         this._stateId = 0;
         this._onChanged = null;
+        this._onInstalled = null;
         this._records = null;
         this._usage?.destroy();
         this._usage = null;
@@ -110,8 +114,22 @@ export class Apps {
         return this._records;
     }
 
-    _invalidate() {
-        this._records = null;
-        this._onChanged?.();
+    // Running state only changes the search boost. Updating the records in
+    // place keeps the app grid and its tiles untouched.
+    _refreshRunning() {
+        if (!this._records)
+            return;
+
+        let changed = false;
+        for (const record of this._records) {
+            const running = record.app.state !== Shell.AppState.STOPPED;
+            if (running === record.running)
+                continue;
+            record.running = running;
+            changed = true;
+        }
+
+        if (changed)
+            this._onChanged?.();
     }
 }

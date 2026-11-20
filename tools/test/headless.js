@@ -498,10 +498,42 @@ export async function run() {
     const lastRecord = api.appGrid._records[api.appGrid._records.length - 1];
     for (let i = 0; i < 3; i++)
         api.apps.recordLaunch(lastRecord.id);
+    const tilesBefore = new Map(api.appGrid._tiles.map(tile => [tile._siftId, tile]));
     api.settings.set_string('app-order', 'most-used');
     await waitFor(() => api.appGrid._records[0]?.id === lastRecord.id,
         'most-used order applies to the open grid', 2000);
+    assert(api.appGrid._tiles.every(tile =>
+        tilesBefore.get(tile._siftId) === tile),
+    'an order change reuses the existing tiles');
     api.settings.set_string('app-order', 'az');
+
+    // Installs and removals reconcile the tile set instead of rebuilding it.
+    const gridRecords = api.appGrid._records;
+    api.appGrid.setApps(gridRecords.slice(0, -1));
+    assert(api.appGrid.itemCount === gridRecords.length - 1 &&
+        api.appGrid._tiles.length === gridRecords.length - 1,
+    'a removal drops only the missing tile');
+    api.appGrid.refresh();
+    assert(api.appGrid.itemCount === gridRecords.length &&
+        api.appGrid._tiles.length === gridRecords.length,
+    'an install adds the missing tile back');
+
+    // The install signal reconciles the open grid instead of rebuilding it.
+    const idsBefore = api.appGrid._tiles.map(tile => tile._siftId);
+    api.apps._appSystem.emit('installed-changed');
+    await Scripting.waitLeisure();
+    assert(api.appGrid._tiles.length === idsBefore.length &&
+        api.appGrid._tiles.every((tile, index) =>
+            tile._siftId === idsBefore[index]),
+    'the install signal keeps the existing tiles');
+
+    // A launch changes running state only; the grid must not be invalidated.
+    const sample = api.apps._getRecords()[0];
+    const running = sample.running;
+    sample.running = !running;
+    api.apps._refreshRunning();
+    assert(sample.running === running, 'running state updates in place');
+    assert(!api.appGrid._dirty, 'an app state change leaves the grid alone');
 
     api.overlay.handleKey('Escape', 0);
     await waitFor(() => !api.overlay.visible, 'escape closes the grid');

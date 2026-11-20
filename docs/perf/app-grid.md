@@ -54,6 +54,33 @@ The cold path only matters during the first five seconds after the extension
 starts, before the idle prewarm runs. It still fills the grid in about half a
 second, but now in small steps instead of one 89ms stall.
 
+## Live updates
+
+Installing, removing, or reordering apps used to mark the grid dirty, and the
+next open destroyed and rebuilt every tile. A launch also marked it dirty even
+though the tile set had not changed.
+
+- `installed-changed` clears the app snapshot and refreshes the grid;
+  `app-state-changed` only updates the running flag used by search ranking.
+- The grid matches tiles to apps by id. It removes the tiles whose app is gone,
+  creates tiles for new apps, and moves the rest to their new slots with
+  `IconGrid.moveItem`. Existing `AppDisplay.AppIcon` actors are reused.
+- A visible install or uninstall refreshes in place instead of waiting for the
+  next open.
+
+Measured on the open grid with 91 apps:
+
+| Change | Cost |
+| --- | --- |
+| Remove one app | 1.4ms |
+| Add one app | 6.0ms |
+| Reverse all 91 (worst case) | 14.8ms |
+| Rebuild all tiles (before) | 192ms in 23 chunks |
+
+The first grid paint after the session starts still carries the one-time
+allocation frame described above. That frame is the first paint of the tiles,
+not a rebuild.
+
 ## Reproduce
 
 Run the smoke test's headless shell with a script that opens the grid through

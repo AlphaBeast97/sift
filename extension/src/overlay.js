@@ -398,8 +398,16 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     onAppsChanged() {
-        this._grid?.invalidate();
         this.refreshApps();
+    }
+
+    onAppsInstalled() {
+        this.refreshApps();
+        if (this.visible && this._view === 'grid') {
+            this._grid?.refresh();
+            return;
+        }
+        this._grid?.invalidate();
         if (!this.visible)
             this._prewarmGrid();
     }
