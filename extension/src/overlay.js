@@ -65,8 +65,7 @@ export const SiftOverlay = GObject.registerClass({
         this._daemonCalc = null;
         this._daemonFiles = [];
         this._home = GLib.get_home_dir();
-        this._browserName =
-            Gio.AppInfo.get_default_for_uri_scheme('https')?.get_name() ?? '';
+        this._browserName = this._resolveBrowser()?.get_name() ?? '';
         this._serviceUnavailable = false;
         this._queryTimer = 0;
         this._queryGeneration = 0;
@@ -286,7 +285,10 @@ export const SiftOverlay = GObject.registerClass({
                 this.applySettings();
         });
         this._webId = settings.connect('changed', (_settings, key) => {
-            if (key === 'web-search' || key === 'web-search-engine')
+            if (key === 'web-browser')
+                this._browserName = this._resolveBrowser()?.get_name() ?? '';
+            if (key === 'web-search' || key === 'web-search-engine' ||
+                key === 'web-browser')
                 this.refreshApps();
         });
         this._monitorsId = Main.layoutManager.connect('monitors-changed', () => {
@@ -368,6 +370,17 @@ export const SiftOverlay = GObject.registerClass({
 
     setRows(rows) {
         this._results.setRows(rows);
+    }
+
+    _resolveBrowser() {
+        const id = this._settings.get_string('web-browser');
+        if (id) {
+            const apps = Gio.AppInfo.get_all_for_type('x-scheme-handler/https');
+            const app = apps.find(candidate => candidate.get_id() === id);
+            if (app)
+                return app;
+        }
+        return Gio.AppInfo.get_default_for_uri_scheme('https');
     }
 
     refreshApps() {
@@ -1070,7 +1083,11 @@ export const SiftOverlay = GObject.registerClass({
                 this._copySelected();
             } else if (row.kind === 'web') {
                 try {
-                    Gio.AppInfo.launch_default_for_uri(row.uri, null);
+                    const browser = this._resolveBrowser();
+                    if (browser)
+                        browser.launch_uris([row.uri], null);
+                    else
+                        Gio.AppInfo.launch_default_for_uri(row.uri, null);
                 } catch (error) {
                     console.error(`Sift: cannot open ${row.uri}: ${error.message}`);
                 }

@@ -61,7 +61,7 @@ gnome-extensions enable sift@alphabeast97.github.io
 - Record different shortcuts in the preferences; each one replaces its default.
 - Type to search applications. Two or more characters also search file names,
   directories, and evaluate arithmetic and unit expressions.
-- Type a web address such as `example.com` to open it in the default browser,
+- Type a web address such as `example.com` to open it in your browser,
   or a phrase to get a last **Search the web** row. The row only appears when
   local results leave room; Sift never contacts the network by itself.
 - **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.
@@ -90,10 +90,11 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes glass brightness, animations, search panel height, maximum
-results, web search and its engine, app-grid labels and order, learned-ranking
-clearing, the GNOME overview takeover, and both shortcuts, plus a **Files**
-page for the file index and a **How to use** page covering shortcuts,
-navigation, calculator examples, the app grid, privacy, and current limits.
+results, web search with its engine and browser, app-grid labels and order,
+learned-ranking clearing, the GNOME overview takeover, and both shortcuts,
+plus a **Files** page for the file index and a **How to use** page covering
+shortcuts, navigation, calculator examples, the app grid, privacy, and current
+limits.
 The panel height is fixed while typing; extra results scroll. Changes apply
 live.
 Extension settings are ordinary GSettings under

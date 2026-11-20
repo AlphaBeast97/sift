@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 
@@ -221,6 +222,28 @@ export async function run() {
     assert(!api.overlay.rows.some(row => row.kind === 'web'),
         'turning web search off hides the row');
     api.settings.set_boolean('web-search', true);
+    await Scripting.waitLeisure();
+
+    const defaultBrowser = Gio.AppInfo.get_default_for_uri_scheme('https');
+    if (defaultBrowser?.get_id()) {
+        api.settings.set_string('web-browser', defaultBrowser.get_id());
+        await Scripting.waitLeisure();
+        api.overlay.entry.set_text('example.com');
+        await Scripting.waitLeisure();
+        await waitFor(() => api.overlay.rows.some(row => row.kind === 'web'),
+            'a chosen browser still opens addresses', 2000);
+        const chosen = api.overlay.rows.find(row => row.kind === 'web');
+        assert(chosen.subtitle === `Open in ${defaultBrowser.get_name()}`,
+            'the chosen browser is named');
+    }
+
+    api.settings.set_string('web-browser', 'sift-missing-browser.desktop');
+    await Scripting.waitLeisure();
+    api.overlay.entry.set_text('example.com');
+    await Scripting.waitLeisure();
+    await waitFor(() => api.overlay.rows.some(row => row.kind === 'web'),
+        'a missing browser falls back to the default', 2000);
+    api.settings.set_string('web-browser', '');
     await Scripting.waitLeisure();
 
     const hidden = installed.find(a => !a.should_show());

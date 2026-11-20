@@ -15,8 +15,9 @@ const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
     'glass-brightness', 'animations', 'app-order', 'max-results',
-    'search-height', 'web-search', 'web-search-engine', 'grid-labels',
-    'disable-overview', 'sift-search-shortcut', 'sift-apps-shortcut',
+    'search-height', 'web-search', 'web-search-engine', 'web-browser',
+    'grid-labels', 'disable-overview', 'sift-search-shortcut',
+    'sift-apps-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -304,6 +305,41 @@ const ENGINE_MODES = [
     ['startpage', 'Startpage'],
 ];
 
+function browserChoices() {
+    const apps = Gio.AppInfo.get_all_for_type('x-scheme-handler/https')
+        .map(app => [app.get_id(), app.get_name()])
+        .filter(([id]) => id)
+        .sort((a, b) => a[1].localeCompare(b[1]));
+    return [['', 'Default'], ...apps];
+}
+
+function addBrowserRow(group, settings) {
+    const choices = browserChoices();
+    const row = new Adw.ComboRow({
+        title: 'Browser',
+        subtitle: 'Default follows the system browser.',
+        model: new Gtk.StringList({
+            strings: choices.map(([, label]) => label),
+        }),
+    });
+    const sync = () => {
+        const index = choices.findIndex(([value]) =>
+            value === settings.get_string('web-browser'));
+        row.selected = Math.max(0, index);
+    };
+    row.connect('notify::selected', () => {
+        const browser = choices[row.selected]?.[0];
+        if (browser !== undefined &&
+            browser !== settings.get_string('web-browser'))
+            settings.set_string('web-browser', browser);
+    });
+    settings.connect('changed::web-browser', sync);
+    settings.bind('web-search', row, 'sensitive', Gio.SettingsBindFlags.GET);
+    sync();
+    group.add(row);
+    return row;
+}
+
 function addEngineRow(group, settings) {
     const row = new Adw.ComboRow({
         title: 'Search engine',
@@ -565,11 +601,12 @@ export default class SiftPreferences extends ExtensionPreferences {
         });
         const webRow = new Adw.SwitchRow({
             title: 'Search the web',
-            subtitle: 'Offer a last row that searches, or opens a typed address in the default browser.',
+            subtitle: 'Offer a last row that searches, or opens a typed address in your browser.',
         });
         settings.bind('web-search', webRow, 'active',
             Gio.SettingsBindFlags.DEFAULT);
         webGroup.add(webRow);
+        addBrowserRow(webGroup, settings);
         addEngineRow(webGroup, settings);
         behavior.add(webGroup);
 
@@ -779,7 +816,7 @@ export default class SiftPreferences extends ExtensionPreferences {
         searchGroup.add(valueRow('Calculator',
             'Try 2+2*3, 15% of 80, 1 km to m or 2 hours in minutes. Enter or Ctrl+C copies the result.'));
         searchGroup.add(valueRow('Web results',
-            'Type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself.'));
+            'Type an address like example.com or localhost:3000 to open it, or a phrase to get a last "Search the web" row. The row appears only when local results leave room, and Sift never contacts the network by itself. Pick Default or an installed browser under Search → Web.'));
         page.add(searchGroup);
 
         const gridGroup = new Adw.PreferencesGroup({title: 'App grid'});

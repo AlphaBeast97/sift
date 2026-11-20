@@ -51,6 +51,12 @@
       <description>Search engine used by the web row. Opening a typed address uses the default browser directly.</description>
     </key>
 
+    <key name="web-browser" type="s">
+      <default>''</default>
+      <summary>Browser for the web row</summary>
+      <description>Desktop ID of the browser that opens web rows. Empty uses the system default for https.</description>
+    </key>
+
     <key name="search-height" type="i">
       <range min="144" max="716"/>
       <default>404</default>
