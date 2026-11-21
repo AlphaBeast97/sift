@@ -8,7 +8,8 @@ test-gjs:
 	gjs -m extension/tests/unit/all.js
 
 test-rust:
-	dbus-run-session -- cargo test --manifest-path daemon/Cargo.toml
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	XDG_DATA_HOME="$$tmp" dbus-run-session -- cargo test --manifest-path daemon/Cargo.toml
 
 test-schema:
 	@set -e; tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
