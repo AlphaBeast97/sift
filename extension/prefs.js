@@ -85,13 +85,21 @@ function gnomeBindings() {
     return bindings;
 }
 
+const SHORTCUT_TITLES = {
+    'sift-search-shortcut': 'Search',
+    'sift-apps-shortcut': 'App grid',
+    'sift-workspaces-shortcut': 'Workspace view',
+};
+
 function shortcutBindings(settings, key) {
     const bindings = gnomeBindings();
-    const otherKey = key === 'sift-search-shortcut'
-        ? 'sift-apps-shortcut' : 'sift-search-shortcut';
-    const other = shortcutAccel(settings, otherKey);
-    if (other)
-        bindings.push({action: 'Sift\'s other shortcut', accels: [other]});
+    for (const [otherKey, title] of Object.entries(SHORTCUT_TITLES)) {
+        if (otherKey === key)
+            continue;
+        const accel = shortcutAccel(settings, otherKey);
+        if (accel)
+            bindings.push({action: `Sift ${title.toLowerCase()}`, accels: [accel]});
+    }
     return bindings;
 }
 
@@ -104,6 +112,7 @@ function acceleratorLabel(accel) {
 const OVERVIEW_DEFAULTS = {
     'sift-search-shortcut': '<Super>',
     'sift-apps-shortcut': '<Super>a',
+    'sift-workspaces-shortcut': '<Super>Tab',
 };
 
 function shortcutAccel(settings, key) {
@@ -670,7 +679,7 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const shortcutGroup = new Adw.PreferencesGroup({
             title: 'Shortcuts',
-            description: 'With the GNOME overview disabled, the defaults are Super and Super+A; with it enabled, Ctrl+Space and Alt+A. Sift never changes GNOME\'s shortcuts.',
+            description: 'With the GNOME overview disabled, the defaults are Super, Super+A and Super+Tab; with it enabled, Ctrl+Space, Alt+A and Ctrl+Super+Tab. Sift never changes GNOME\'s shortcuts.',
         });
         const overviewRow = new Adw.SwitchRow({
             title: 'Disable the GNOME overview',
@@ -683,6 +692,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Search', 'Opens the Sift search panel.');
         addShortcutRow(shortcutGroup, window, settings, 'sift-apps-shortcut',
             'App grid', 'Opens the Sift app grid.');
+        addShortcutRow(shortcutGroup, window, settings, 'sift-workspaces-shortcut',
+            'Workspace view', 'Opens the workspace and window switcher.');
         behavior.add(shortcutGroup);
 
         window.add(behavior);
@@ -821,6 +832,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Search', 'open search');
         addGuideShortcutRow(openGroup, settings, 'sift-apps-shortcut',
             'App grid', 'open the app grid');
+        addGuideShortcutRow(openGroup, settings, 'sift-workspaces-shortcut',
+            'Workspace view', 'open the workspace switcher');
         openGroup.add(valueRow('Fullscreen apps',
             'Sift stays closed while an app is fullscreen. Turn off Disable in fullscreen apps under Search → Fullscreen to allow the shortcuts there.'));
         page.add(openGroup);
@@ -853,9 +866,9 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const workspaceGroup = new Adw.PreferencesGroup({title: 'Windows and workspaces'});
         workspaceGroup.add(valueRow('Workspace view',
-            'Click the window button in the search bar to see every workspace as a column with its open windows. Left/Right move between workspaces and Enter switches to the selected one.'));
+            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a card with its open windows. Left/Right move between workspaces and Enter switches to the selected one.'));
         workspaceGroup.add(valueRow('Focus and move windows',
-            'Click a window to focus it. Drag a window onto another workspace column to move it there.'));
+            'Click a workspace card or its header to switch to it. Click a window to focus it. Drag a window onto another card to move it there.'));
         page.add(workspaceGroup);
 
         const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});

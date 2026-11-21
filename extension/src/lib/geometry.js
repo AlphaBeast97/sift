@@ -43,3 +43,14 @@ export function gridPanel(monitor, topBarBottom) {
         height,
     };
 }
+
+// The workspace strip is deliberately shallow: workspaces sit side by side,
+// so it should use the width of the grid panel without covering the desktop.
+export function workspacePanel(monitor, topBarBottom) {
+    const grid = gridPanel(monitor, topBarBottom);
+    const height = Math.round(Math.min(
+        clamp(280, 0.42 * monitor.height, 460),
+        monitor.height - (grid.y - monitor.y) - monitor.height * BOTTOM_MARGIN));
+
+    return {...grid, height};
+}

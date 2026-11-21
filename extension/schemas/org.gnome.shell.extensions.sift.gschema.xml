@@ -99,5 +99,11 @@
       <summary>Sift app grid shortcut</summary>
       <description>Keyboard shortcut that opens Sift's app grid. When unset with the GNOME overview disabled, Super+A is the default; a recorded shortcut replaces it. Sift never changes GNOME's own shortcuts.</description>
     </key>
+
+    <key name="sift-workspaces-shortcut" type="as">
+      <default>['&lt;Control&gt;&lt;Super&gt;Tab']</default>
+      <summary>Sift workspace view shortcut</summary>
+      <description>Keyboard shortcut that opens Sift's workspace and window switcher. When unset with the GNOME overview disabled, Super+Tab is the default and replaces the app switcher while Sift fills that role; a recorded shortcut replaces it. With the overview enabled the default is Ctrl+Super+Tab. Sift never changes GNOME's own shortcuts.</description>
+    </key>
   </schema>
 </schemalist>

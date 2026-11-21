@@ -155,6 +155,10 @@ export const WorkspaceView = GObject.registerClass(
             headerBox.add_child(title);
             headerBox.add_child(count);
 
+            const activate = () => {
+                this.select(index);
+                this._onActivateWorkspace?.(workspace);
+            };
             const header = new St.Button({
                 style_class: 'sift-workspace-header',
                 child: headerBox,
@@ -163,8 +167,16 @@ export const WorkspaceView = GObject.registerClass(
                 reactive: true,
                 accessible_name: `Switch to workspace ${index + 1}`,
             });
-            header.connect('clicked',
-                () => this._onActivateWorkspace?.(workspace));
+            header.connect('clicked', activate);
+            // The card body has no buttons of its own, so a click there means
+            // "switch to this workspace" too. Header and window clicks are
+            // consumed by their own buttons before they reach the card.
+            const activateCard = () => {
+                activate();
+                return Clutter.EVENT_STOP;
+            };
+            card.connect('enter-event', () => this.select(index));
+            card.connect('button-press-event', activateCard);
 
             const body = new St.ScrollView({
                 style_class: 'sift-workspace-body',
@@ -179,6 +191,7 @@ export const WorkspaceView = GObject.registerClass(
                 x_expand: true,
             });
             body.set_child(list);
+            body.connect('button-press-event', activateCard);
 
             if (windows.length === 0) {
                 list.add_child(new St.Label({
@@ -217,8 +230,11 @@ export const WorkspaceView = GObject.registerClass(
                 list,
                 windows: [],
             };
-            for (const window of windows)
-                record.windows.push(this._createWindowTile(window));
+            for (const window of windows) {
+                const tile = this._createWindowTile(window);
+                record.windows.push(tile);
+                list.add_child(tile.tile);
+            }
 
             card.add_child(header);
             card.add_child(body);
@@ -333,9 +349,9 @@ export const WorkspaceView = GObject.registerClass(
             const innerWidth = Math.max(0, cardWidth - 16);
             const bodyHeight = Math.max(0, cardHeight - HEADER_HEIGHT - 16 - 8);
             const previewWidth = Math.max(0, innerWidth - 8);
-            const previewHeight = Math.max(72,
-                Math.min(MAX_PREVIEW_HEIGHT,
-                    Math.round(previewWidth * 9 / 16)));
+            const previewHeight = Math.max(48, Math.min(MAX_PREVIEW_HEIGHT,
+                Math.round(previewWidth * 9 / 16),
+                Math.max(72, bodyHeight - 30)));
 
             for (let i = 0; i < count; i++) {
                 const card = this._cards[i];

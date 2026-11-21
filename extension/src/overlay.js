@@ -9,7 +9,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {GlassPanel} from './glass.js';
-import {gridPanel, searchPanel} from './lib/geometry.js';
+import {gridPanel, searchPanel, workspacePanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
 import {LEARNED_THRESHOLD} from './lib/appScore.js';
@@ -1395,7 +1395,9 @@ export const SiftOverlay = GObject.registerClass({
         const panelBox = Main.layoutManager.panelBox;
         const topBarBottom = panelBox ? panelBox.y + panelBox.height : monitor.y;
 
-        if (view === 'grid' || view === 'workspace')
+        if (view === 'workspace')
+            return workspacePanel(monitor, topBarBottom);
+        if (view === 'grid')
             return gridPanel(monitor, topBarBottom);
 
         const compact = this._entry.text.trim() === '';

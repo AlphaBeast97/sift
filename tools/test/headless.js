@@ -132,6 +132,10 @@ export async function run() {
         'the search key is unbound while Super is the default');
     assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
         'the app-grid key is unbound while Super+A is the default');
+    assert(!Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
+        'the workspace key is unbound while Super+Tab is the default');
+    assert(api.blocker._switchHijacked,
+        'Super+Tab opens the workspace view while the overview is off');
 
     global.display.emit('overlay-key');
     await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
@@ -804,7 +808,36 @@ export async function run() {
     await waitFor(() => !api.overlay.visible,
         'Enter activates the selected workspace', 2000);
     assert(activated !== null, 'the selected workspace is activated');
+    assert(wsManager.get_active_workspace_index() === 0,
+        'Enter switches to the selected workspace');
     api.workspaceView._onActivateWorkspace = activateWorkspace;
+
+    api.blocker.toggleWorkspaces();
+    await waitFor(() => api.overlay.visible &&
+        api.overlay.view === 'workspace',
+    'the workspace shortcut opens the workspace view', 2000);
+    await settle(api, 'the workspace shortcut settles');
+    assert(api.glass.rect.height < 470,
+        'the workspace view keeps a shallow horizontal panel');
+
+    const clickTarget = api.workspaceView.cardRecords.find(record =>
+        record.index !== wsManager.get_active_workspace_index());
+    assert(clickTarget !== undefined, 'a second workspace is clickable');
+    clickTarget.header.emit('clicked', clickTarget.header);
+    await waitFor(() => !api.overlay.visible,
+        'clicking a workspace header closes the view', 2000);
+    await waitFor(() =>
+        wsManager.get_active_workspace_index() === clickTarget.index,
+    'clicking a workspace header switches workspace', 2000);
+
+    api.blocker.toggleWorkspaces();
+    await waitFor(() => api.overlay.visible &&
+        api.overlay.view === 'workspace',
+    'the workspace shortcut reopens the workspace view', 2000);
+    await settle(api, 'the reopened workspace view settles');
+    api.blocker.toggleWorkspaces();
+    await waitFor(() => !api.overlay.visible,
+        'the workspace shortcut closes the workspace view', 2000);
 
     while (wsManager.n_workspaces > originalWorkspaces) {
         wsManager.remove_workspace(
@@ -847,6 +880,10 @@ export async function run() {
         'the Sift search shortcut stays bound with the overview on');
     assert(Main.wm._allowedKeybindings['sift-apps-shortcut'],
         'the Sift app-grid shortcut stays bound with the overview on');
+    assert(Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
+        'the Sift workspace shortcut is bound with the overview on');
+    assert(!api.blocker._switchHijacked,
+        'the app switcher is restored with the overview on');
 
     Main.overview.toggle();
     await waitFor(() => Main.overview.visible,
@@ -878,6 +915,22 @@ export async function run() {
         'the search key is unbound while Super is the default again');
     assert(!Main.wm._allowedKeybindings['sift-apps-shortcut'],
         'the app-grid key is unbound while Super+A is the default again');
+    assert(!Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
+        'the workspace key is unbound while Super+Tab is the default again');
+    assert(api.blocker._switchHijacked,
+        'Super+Tab is taken over again when the overview is off');
+
+    // A recorded workspace shortcut leaves GNOME's Super+Tab alone.
+    api.settings.set_strv('sift-workspaces-shortcut', ['<Control><Alt>w']);
+    await Scripting.waitLeisure();
+    assert(!api.blocker._switchHijacked,
+        'a recorded shortcut returns Super+Tab to GNOME');
+    assert(Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
+        'the recorded workspace shortcut is bound');
+    api.settings.reset('sift-workspaces-shortcut');
+    await Scripting.waitLeisure();
+    assert(api.blocker._switchHijacked,
+        'resetting the shortcut takes Super+Tab back');
     Main.overview.toggle();
     Main.overview.show();
     await Scripting.waitLeisure();

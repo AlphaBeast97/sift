@@ -4,14 +4,15 @@ Spotlight-style search for GNOME Shell 51: applications, files, settings
 panels, a calculator, the web, an app grid, a workspace and window switcher,
 and liquid glass.
 
-Sift disables the GNOME Overview by default: **Super** opens Sift search and
-**Super+A** opens its app grid, while Activities, the hot corner, swipe and the
-login overview do nothing. Turn off "Disable the GNOME overview" in the
-preferences to keep GNOME's overview: Super and Super+A go back to GNOME, and
-Sift opens with **Ctrl+Space** and **Alt+A**. A recorded shortcut replaces its
-default. The UI and glass run in GJS, and application search uses GNOME's app
-system in the shell. File indexing, fuzzy matching, and calculations run in a
-small Rust daemon (`siftd`) so the shell process stays responsive.
+Sift disables the GNOME Overview by default: **Super** opens Sift search,
+**Super+A** opens its app grid and **Super+Tab** opens the workspace switcher,
+while Activities, the hot corner, swipe and the login overview do nothing.
+Turn off "Disable the GNOME overview" in the preferences to keep GNOME's
+overview: Super, Super+A and Super+Tab go back to GNOME, and Sift opens with
+**Ctrl+Space**, **Alt+A** and **Ctrl+Super+Tab**. A recorded shortcut replaces
+its default. The UI and glass run in GJS, and application search uses GNOME's
+app system in the shell. File indexing, fuzzy matching, and calculations run in
+a small Rust daemon (`siftd`) so the shell process stays responsive.
 
 ## Requirements
 
@@ -52,13 +53,13 @@ gnome-extensions enable sift@alphabeast97.github.io
 
 ## Use
 
-- **Super**: open or close Sift search, and **Super+A**: open the app grid. The
-  grid button in the search bar and the empty-state button open it too.
-- With the GNOME overview disabled (default), Activities, the hot corner, swipe,
-  **Super+Tab** and the login overview do nothing, and login goes straight to
-  the desktop.
-- With the GNOME overview enabled, Super and Super+A work as usual; Sift opens
-  with **Ctrl+Space** and **Alt+A** instead.
+- **Super**: open or close Sift search, **Super+A**: open the app grid, and
+  **Super+Tab**: open the workspace switcher. The grid button in the search bar
+  and the empty-state button open the grid too.
+- With the GNOME overview disabled (default), Activities, the hot corner, swipe
+  and the login overview do nothing, and login goes straight to the desktop.
+- With the GNOME overview enabled, Super, Super+A and Super+Tab work as usual;
+  Sift opens with **Ctrl+Space**, **Alt+A** and **Ctrl+Super+Tab** instead.
 - Record different shortcuts in the preferences; each one replaces its default.
 - Sift stays closed while an app is fullscreen. Turn off **Disable in
   fullscreen apps** under Search → Fullscreen to allow shortcuts there.
@@ -81,11 +82,12 @@ gnome-extensions enable sift@alphabeast97.github.io
   Enter; typing switches back to search. The grid is A-Z by default; **Order
   apps** under Search → App grid can sort by recent use, most used, or a smart
   blend of frequency and recency.
-- The window button in the search bar opens the workspace view. Every
-  workspace is a column with live window thumbnails; click a workspace header
-  or press **Enter** to switch to it, and click a window to focus it. Drag a
-  window onto another column to move it to that workspace. **Left/Right** move
-  between workspaces, and typing switches back to search.
+- The window button in the search bar or **Super+Tab** opens the workspace
+  view. Every workspace is a card in a shallow horizontal strip with live
+  window thumbnails; click a workspace card or header, or press **Enter**, to
+  switch to it, and click a window to focus it. Drag a window onto another card
+  to move it to that workspace. **Left/Right** move between workspaces, and
+  typing switches back to search.
 
 File search reads names only. File contents are never indexed or read.
 
@@ -107,8 +109,8 @@ The window exposes glass brightness, animations, search panel height, maximum
 results, web search with its engine and browser, settings panel search (web and
 settings panel results are off by default), the fullscreen guard, app-grid
 labels and order, learned-ranking clearing, the GNOME overview takeover, and
-both shortcuts, plus a **Files** page for the file index and a **How to use**
-page covering shortcuts, navigation, calculator examples, the app grid,
+all three shortcuts, plus a **Files** page for the file index and a **How to
+use** page covering shortcuts, navigation, calculator examples, the app grid,
 workspaces and window dragging, settings panels, fullscreen behavior, privacy,
 and current limits.
 The panel height is fixed while typing; extra results scroll. Changes apply

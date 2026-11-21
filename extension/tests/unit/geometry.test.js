@@ -1,5 +1,5 @@
 import {equal} from './assert.js';
-import {searchPanel, gridPanel} from '../../src/lib/geometry.js';
+import {searchPanel, gridPanel, workspacePanel} from '../../src/lib/geometry.js';
 
 export function run() {
     const hd = {x: 0, y: 0, width: 1920, height: 1080};
@@ -40,6 +40,17 @@ export function run() {
 
     const portraitGrid = gridPanel({x: 0, y: 0, width: 480, height: 800}, 32);
     equal(portraitGrid.width, 456);
+
+    const workspace = workspacePanel(hd, 32);
+    equal(workspace.width, 1040);
+    equal(workspace.height, 454);
+    equal(workspace.x, 440);
+    equal(workspace.y, 130);
+
+    const portraitWorkspace =
+        workspacePanel({x: 0, y: 0, width: 480, height: 800}, 32);
+    equal(portraitWorkspace.width, 456);
+    equal(portraitWorkspace.height, 336);
 
     const offset = searchPanel({x: 1920, y: 0, width: 1920, height: 1080}, 32, 404);
     equal(offset.x, 2520);

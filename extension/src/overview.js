@@ -11,6 +11,7 @@ const PATCHED = ['show', 'showApps', 'toggle', 'focusSearch',
 const LAYOUT_PATCHED = ['showOverview'];
 const SEARCH_KEY = 'sift-search-shortcut';
 const APPS_KEY = 'sift-apps-shortcut';
+const WORKSPACES_KEY = 'sift-workspaces-shortcut';
 const KEY_FLAGS = Meta.KeyBindingFlags.IGNORE_AUTOREPEAT;
 const KEY_MODES = Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW;
 
@@ -25,6 +26,7 @@ export class OverviewBlocker {
         this._swipeEnabled = false;
         this._startupShowingId = 0;
         this._overlayKeyId = 0;
+        this._switchHijacked = false;
         this._bound = new Set();
         this._settingsIds = [];
         this._installed = false;
@@ -38,7 +40,7 @@ export class OverviewBlocker {
         if (this._settingsIds.length > 0)
             return;
 
-        for (const key of ['disable-overview', SEARCH_KEY, APPS_KEY]) {
+        for (const key of ['disable-overview', SEARCH_KEY, APPS_KEY, WORKSPACES_KEY]) {
             this._settingsIds.push(this._settings.connect(`changed::${key}`,
                 () => this._sync()));
         }
@@ -51,7 +53,7 @@ export class OverviewBlocker {
             this._settings.disconnect(id);
         this._settingsIds = [];
 
-        for (const key of [SEARCH_KEY, APPS_KEY]) {
+        for (const key of [SEARCH_KEY, APPS_KEY, WORKSPACES_KEY]) {
             if (this._bound.delete(key))
                 Main.wm.removeKeybinding(key);
         }
@@ -77,6 +79,15 @@ export class OverviewBlocker {
             this._closeNative(() => this._overlay.showApps());
     }
 
+    toggleWorkspaces() {
+        if (this._overlay.closing)
+            this._overlay.open('workspace');
+        else if (this._overlay.visible && this._overlay.view === 'workspace')
+            this._overlay.close();
+        else
+            this._closeNative(() => this._overlay.open('workspace'));
+    }
+
     _sync() {
         const blocked = this._settings.get_boolean('disable-overview');
         if (blocked)
@@ -84,9 +95,14 @@ export class OverviewBlocker {
         else
             this._unblock();
 
+        // With the overview disabled and no recorded shortcut, Super+Tab
+        // belongs to the workspace view instead of GNOME's app switcher.
+        this._setSwitcherHijack(blocked && this._isDefault(WORKSPACES_KEY));
+
         for (const [key, handler] of [
             [SEARCH_KEY, () => this.toggle()],
             [APPS_KEY, () => this.toggleApps()],
+            [WORKSPACES_KEY, () => this.toggleWorkspaces()],
         ]) {
             // A disabled overview takes over the Super defaults; a recorded
             // shortcut replaces its default and is always bound.
@@ -108,6 +124,17 @@ export class OverviewBlocker {
             global.display.disconnect(this._overlayKeyId);
             this._overlayKeyId = 0;
         }
+    }
+
+    _setSwitcherHijack(on) {
+        if (on === this._switchHijacked)
+            return;
+
+        Main.wm.setCustomKeybindingHandler('switch-applications',
+            on ? KEY_MODES : Shell.ActionMode.NORMAL,
+            on ? () => this.toggleWorkspaces()
+                : Main.wm._startSwitcher.bind(Main.wm));
+        this._switchHijacked = on;
     }
 
     _isDefault(key) {
@@ -173,6 +200,8 @@ export class OverviewBlocker {
     _unblock() {
         if (!this._installed)
             return;
+
+        this._setSwitcherHijack(false);
 
         if (this._startupShowingId) {
             Main.overview.disconnect(this._startupShowingId);
