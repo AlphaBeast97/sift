@@ -26,7 +26,7 @@ export class OverviewBlocker {
         this._swipeEnabled = false;
         this._startupShowingId = 0;
         this._overlayKeyId = 0;
-        this._switchHijacked = false;
+        this._overviewHijacked = false;
         this._bound = new Set();
         this._settingsIds = [];
         this._installed = false;
@@ -96,8 +96,8 @@ export class OverviewBlocker {
             this._unblock();
 
         // With the overview disabled and no recorded shortcut, Super+Tab
-        // belongs to the workspace view instead of GNOME's app switcher.
-        this._setSwitcherHijack(blocked && this._isDefault(WORKSPACES_KEY));
+        // belongs to the workspace view instead of the blocked overview.
+        this._setOverviewHijack(blocked && this._isDefault(WORKSPACES_KEY));
 
         for (const [key, handler] of [
             [SEARCH_KEY, () => this.toggle()],
@@ -126,15 +126,15 @@ export class OverviewBlocker {
         }
     }
 
-    _setSwitcherHijack(on) {
-        if (on === this._switchHijacked)
+    _setOverviewHijack(on) {
+        if (on === this._overviewHijacked)
             return;
 
-        Main.wm.setCustomKeybindingHandler('switch-applications',
-            on ? KEY_MODES : Shell.ActionMode.NORMAL,
+        // Super+Tab is GNOME's toggle-overview binding, not the app switcher.
+        Main.wm.setCustomKeybindingHandler('toggle-overview', KEY_MODES,
             on ? () => this.toggleWorkspaces()
-                : Main.wm._startSwitcher.bind(Main.wm));
-        this._switchHijacked = on;
+                : () => Main.overview.toggle());
+        this._overviewHijacked = on;
     }
 
     _isDefault(key) {
@@ -201,7 +201,7 @@ export class OverviewBlocker {
         if (!this._installed)
             return;
 
-        this._setSwitcherHijack(false);
+        this._setOverviewHijack(false);
 
         if (this._startupShowingId) {
             Main.overview.disconnect(this._startupShowingId);
