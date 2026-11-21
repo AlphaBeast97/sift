@@ -160,8 +160,9 @@
     text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
 }
 
-.sift-workspace-scroll {
-    clip_to_allocation: true;
+.sift-workspace-strip {
+    padding: 8px;
+    spacing: 10px;
 }
 
 .sift-workspace {
@@ -194,6 +195,23 @@
     spacing: 8px;
 }
 
+.sift-workspace-header-row {
+    spacing: 4px;
+}
+
+.sift-workspace-close,
+.sift-window-close {
+    border-radius: 999px;
+    padding: 2px;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.sift-workspace-close:hover,
+.sift-window-close:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: rgba(255, 255, 255, 0.95);
+}
+
 .sift-workspace-title {
     font-size: 13px;
     font-weight: 600;
@@ -218,6 +236,7 @@
 
 .sift-window-tile {
     padding: 4px;
+    spacing: 3px;
     border-radius: 10px;
     border: 1px solid transparent;
     background-color: rgba(255, 255, 255, 0.06);
@@ -228,12 +247,18 @@
     border-color: rgba(255, 255, 255, 0.25);
 }
 
-.sift-window-dragging {
+.sift-window-selected {
+    background-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.sift-window-dragging,
+.sift-workspace-dragging {
     opacity: 0.4;
 }
 
-.sift-window-tile-content {
-    spacing: 3px;
+.sift-window-title-row {
+    spacing: 4px;
 }
 
 .sift-window-preview {
@@ -250,6 +275,14 @@
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.35);
     background-color: rgba(20, 22, 28, 0.75);
+}
+
+.sift-workspace-drag {
+    spacing: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(20, 22, 28, 0.85);
 }
 
 .sift-footer {
@@ -332,6 +365,17 @@
     background-color: rgba(0, 0, 0, 0.08);
 }
 
+.sift-light .sift-workspace-close,
+.sift-light .sift-window-close {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+.sift-light .sift-workspace-close:hover,
+.sift-light .sift-window-close:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.9);
+}
+
 .sift-light .sift-workspace-title {
     color: rgba(0, 0, 0, 0.9);
 }
@@ -351,6 +395,11 @@
     border-color: rgba(0, 0, 0, 0.2);
 }
 
+.sift-light .sift-window-selected {
+    background-color: rgba(255, 255, 255, 0.75);
+    border-color: rgba(0, 0, 0, 0.8);
+}
+
 .sift-light .sift-window-preview {
     background-color: rgba(0, 0, 0, 0.15);
 }
@@ -358,6 +407,11 @@
 .sift-light .sift-window-drag {
     border-color: rgba(0, 0, 0, 0.25);
     background-color: rgba(255, 255, 255, 0.85);
+}
+
+.sift-light .sift-workspace-drag {
+    border-color: rgba(0, 0, 0, 0.25);
+    background-color: rgba(255, 255, 255, 0.9);
 }
 
 .sift-light .sift-row:hover {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -134,8 +135,11 @@ export async function run() {
         'the app-grid key is unbound while Super+A is the default');
     assert(!Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
         'the workspace key is unbound while Super+Tab is the default');
-    assert(api.blocker._switchHijacked,
+    assert(api.blocker._overviewHijacked,
         'Super+Tab opens the workspace view while the overview is off');
+    assert((Main.wm._allowedKeybindings['toggle-overview'] &
+        Shell.ActionMode.OVERVIEW) !== 0,
+    'the Super+Tab handler is registered for the overview mode');
 
     global.display.emit('overlay-key');
     await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
@@ -797,6 +801,57 @@ export async function run() {
         'the window moves to the dropped workspace');
     await Scripting.waitLeisure();
 
+    // Header drags carry the workspace, and dropping one reorders the strip.
+    const dragRecord = api.workspaceView.cardRecords[0];
+    const dropRecord = api.workspaceView
+        .cardRecords[api.workspaceView.cardRecords.length - 1];
+    assert(dragRecord.header._delegate?.kind === 'workspace',
+        'a workspace header is a drag source');
+    const draggedWorkspace = dragRecord.workspace;
+    assert(dropRecord.card._delegate.acceptDrop({
+        kind: 'workspace',
+        workspace: draggedWorkspace,
+    }), 'a workspace accepts another workspace drop');
+    await Scripting.waitLeisure();
+    assert(wsManager.get_workspace_by_index(dropRecord.index) ===
+        draggedWorkspace, 'the dropped workspace moves to that position');
+    wsManager.reorder_workspace(draggedWorkspace, 0);
+    api.workspaceView._scheduleReload();
+    await Scripting.waitLeisure();
+
+    // Ctrl+Left/Right reorder the selected workspace.
+    const firstWorkspace = wsManager.get_workspace_by_index(0);
+    api.workspaceView.select(0);
+    api.overlay.handleKey('Right', Clutter.ModifierType.CONTROL_MASK);
+    await Scripting.waitLeisure();
+    assert(wsManager.get_workspace_by_index(1) === firstWorkspace,
+        'Ctrl+Right moves the selected workspace right');
+    api.overlay.handleKey('Left', Clutter.ModifierType.CONTROL_MASK);
+    await Scripting.waitLeisure();
+    assert(wsManager.get_workspace_by_index(0) === firstWorkspace,
+        'Ctrl+Left moves it back');
+
+    // The close-all button hands every window on the card to delete().
+    let closedWindows = 0;
+    api.workspaceView._closeWorkspace([
+        {delete: () => closedWindows++},
+        {delete: () => closedWindows++},
+    ]);
+    assert(closedWindows === 2,
+        'the workspace close button closes every window');
+    if (api.workspaceView._reloadId) {
+        GLib.source_remove(api.workspaceView._reloadId);
+        api.workspaceView._reloadId = 0;
+    }
+
+    let closedWindow = 0;
+    api.workspaceView._closeWindow({delete: () => closedWindow++});
+    assert(closedWindow === 1, 'a window close button closes that window');
+    if (api.workspaceView._reloadId) {
+        GLib.source_remove(api.workspaceView._reloadId);
+        api.workspaceView._reloadId = 0;
+    }
+
     const activateWorkspace = api.workspaceView._onActivateWorkspace;
     let activated = null;
     api.workspaceView._onActivateWorkspace = workspace => {
@@ -882,8 +937,8 @@ export async function run() {
         'the Sift app-grid shortcut stays bound with the overview on');
     assert(Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
         'the Sift workspace shortcut is bound with the overview on');
-    assert(!api.blocker._switchHijacked,
-        'the app switcher is restored with the overview on');
+    assert(!api.blocker._overviewHijacked,
+        'Super+Tab returns to the overview when the overview is on');
 
     Main.overview.toggle();
     await waitFor(() => Main.overview.visible,
@@ -917,19 +972,19 @@ export async function run() {
         'the app-grid key is unbound while Super+A is the default again');
     assert(!Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
         'the workspace key is unbound while Super+Tab is the default again');
-    assert(api.blocker._switchHijacked,
+    assert(api.blocker._overviewHijacked,
         'Super+Tab is taken over again when the overview is off');
 
     // A recorded workspace shortcut leaves GNOME's Super+Tab alone.
     api.settings.set_strv('sift-workspaces-shortcut', ['<Control><Alt>w']);
     await Scripting.waitLeisure();
-    assert(!api.blocker._switchHijacked,
+    assert(!api.blocker._overviewHijacked,
         'a recorded shortcut returns Super+Tab to GNOME');
     assert(Main.wm._allowedKeybindings['sift-workspaces-shortcut'],
         'the recorded workspace shortcut is bound');
     api.settings.reset('sift-workspaces-shortcut');
     await Scripting.waitLeisure();
-    assert(api.blocker._switchHijacked,
+    assert(api.blocker._overviewHijacked,
         'resetting the shortcut takes Super+Tab back');
     Main.overview.toggle();
     Main.overview.show();

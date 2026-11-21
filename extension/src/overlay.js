@@ -1103,6 +1103,24 @@ export const SiftOverlay = GObject.registerClass({
             case 'workspace-right':
                 view.moveSelection(1);
                 break;
+            case 'workspace-up':
+                view.selectWindow(-1);
+                break;
+            case 'workspace-down':
+                view.selectWindow(1);
+                break;
+            case 'workspace-move-left':
+                view.moveSelectedWorkspace(-1);
+                break;
+            case 'workspace-move-right':
+                view.moveSelectedWorkspace(1);
+                break;
+            case 'workspace-window-left':
+                view.moveSelectedWindow(-1);
+                break;
+            case 'workspace-window-right':
+                view.moveSelectedWindow(1);
+                break;
             case 'workspace-first':
                 view.select(0);
                 break;
@@ -1380,7 +1398,7 @@ export const SiftOverlay = GObject.registerClass({
         this._footerLabel.text = grid
             ? '←→↑↓ Navigate · Enter Open · Esc Close'
             : workspace
-                ? '←→ Workspaces · Enter Switch · Drag windows · Esc Close'
+                ? '←→ Workspaces · ↑↓ Windows · Enter Open · Ctrl/Shift+←→ Move · Drag · Esc Close'
                 : '↑↓ Navigate · Enter Open · Esc Close';
         this._syncEmptyState();
         this._syncFooter();
@@ -1459,7 +1477,7 @@ export const SiftOverlay = GObject.registerClass({
         this._grid.syncSize();
         this._workspaceView.set_position(8, 0);
         this._workspaceView.set_size(viewWidth, viewHeight);
-        this._workspaceView.syncSize(viewWidth, viewHeight);
+        this._workspaceView.syncSize();
     }
 
     _seedSprings(rect) {

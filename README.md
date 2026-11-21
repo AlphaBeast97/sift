@@ -84,10 +84,15 @@ gnome-extensions enable sift@alphabeast97.github.io
   blend of frequency and recency.
 - The window button in the search bar or **Super+Tab** opens the workspace
   view. Every workspace is a card in a shallow horizontal strip with live
-  window thumbnails; click a workspace card or header, or press **Enter**, to
-  switch to it, and click a window to focus it. Drag a window onto another card
-  to move it to that workspace. **Left/Right** move between workspaces, and
-  typing switches back to search.
+  window thumbnails. Click a workspace card or header, or press **Enter**, to
+  switch to it; **Up/Down** select a window and **Enter** focuses it. Drag a
+  window onto another card to move it, or drag a workspace header to reorder
+  the strip. **Ctrl+Left/Right** reorders the selected workspace and
+  **Shift+Left/Right** moves the selected window to the previous or next
+  workspace. Each window and workspace card has a close button.
+  **Left/Right** move between workspaces, and typing switches back to search.
+  When more workspaces than fit are open, **Shift+wheel** (or a horizontal
+  wheel) pans the strip.
 
 File search reads names only. File contents are never indexed or read.
 

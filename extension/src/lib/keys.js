@@ -49,10 +49,18 @@ export function resolveKey(symbol, {ctrl = false, shift = false, preedit = false
     if (view === 'workspace') {
         if (RETURN_KEYS.has(symbol))
             return 'workspace-activate';
-        if (symbol === 'Left')
-            return 'workspace-left';
-        if (symbol === 'Right')
-            return 'workspace-right';
+        if (symbol === 'Left' || symbol === 'Right') {
+            const right = symbol === 'Right';
+            if (ctrl)
+                return right ? 'workspace-move-right' : 'workspace-move-left';
+            if (shift)
+                return right ? 'workspace-window-right' : 'workspace-window-left';
+            return right ? 'workspace-right' : 'workspace-left';
+        }
+        if (symbol === 'Up')
+            return 'workspace-up';
+        if (symbol === 'Down')
+            return 'workspace-down';
         if (symbol === 'Home')
             return 'workspace-first';
         if (symbol === 'End')

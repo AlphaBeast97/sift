@@ -24,6 +24,16 @@ export function run() {
     equal(resolveKey('Return', {view: 'workspace'}), 'workspace-activate');
     equal(resolveKey('Left', {view: 'workspace'}), 'workspace-left');
     equal(resolveKey('Right', {view: 'workspace'}), 'workspace-right');
+    equal(resolveKey('Up', {view: 'workspace'}), 'workspace-up');
+    equal(resolveKey('Down', {view: 'workspace'}), 'workspace-down');
+    equal(resolveKey('Left', {view: 'workspace', ctrl: true}),
+        'workspace-move-left');
+    equal(resolveKey('Right', {view: 'workspace', ctrl: true}),
+        'workspace-move-right');
+    equal(resolveKey('Left', {view: 'workspace', shift: true}),
+        'workspace-window-left');
+    equal(resolveKey('Right', {view: 'workspace', shift: true}),
+        'workspace-window-right');
     equal(resolveKey('Home', {view: 'workspace'}), 'workspace-first');
     equal(resolveKey('End', {view: 'workspace'}), 'workspace-last');
     equal(resolveKey('a', {view: 'workspace'}), 'search-type');

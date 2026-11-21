@@ -866,9 +866,9 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const workspaceGroup = new Adw.PreferencesGroup({title: 'Windows and workspaces'});
         workspaceGroup.add(valueRow('Workspace view',
-            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a card with its open windows. Left/Right move between workspaces and Enter switches to the selected one.'));
-        workspaceGroup.add(valueRow('Focus and move windows',
-            'Click a workspace card or its header to switch to it. Click a window to focus it. Drag a window onto another card to move it there.'));
+            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a card with its open windows. Left/Right move between workspaces, Up/Down select a window, and Enter opens the selected window or workspace.'));
+        workspaceGroup.add(valueRow('Move and close',
+            'Drag a window onto another card to move it there, or drag a workspace header to reorder the strip. Ctrl+Left/Right reorders the selected workspace and Shift+Left/Right moves the selected window. Click the close button on a window or workspace card to close it.'));
         page.add(workspaceGroup);
 
         const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});
