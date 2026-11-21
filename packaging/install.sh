@@ -164,4 +164,4 @@ install_service
 install_extension
 
 printf 'Sift installed for %s.\n' "${USER:-$(id -un)}"
-printf 'Open it with Super; Super+A opens the app grid. Ctrl+Space and Alt+A work when the GNOME overview is enabled.\n'
+printf 'Open it with Super; Super+A opens the app grid and Super+Tab the workspace switcher. Ctrl+Space, Alt+A and Ctrl+Super+Tab work when the GNOME overview is enabled.\n'
