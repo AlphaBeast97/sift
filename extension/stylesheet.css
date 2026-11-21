@@ -160,6 +160,98 @@
     text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
 }
 
+.sift-workspace-scroll {
+    clip_to_allocation: true;
+}
+
+.sift-workspace {
+    padding: 8px;
+    spacing: 6px;
+    border-radius: 14px;
+    border: 2px solid transparent;
+    background-color: rgba(255, 255, 255, 0.055);
+}
+
+.sift-workspace-active {
+    background-color: rgba(255, 255, 255, 0.085);
+}
+
+.sift-workspace-selected {
+    border-color: rgba(255, 255, 255, 0.85);
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.sift-workspace-header {
+    border-radius: 8px;
+    padding: 0 6px;
+}
+
+.sift-workspace-header:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sift-workspace-header-box {
+    spacing: 8px;
+}
+
+.sift-workspace-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.sift-workspace-count {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.sift-workspace-list {
+    spacing: 8px;
+    padding: 2px 4px 4px;
+}
+
+.sift-workspace-empty {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 18px 0;
+}
+
+.sift-window-tile {
+    padding: 4px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.sift-window-tile:hover {
+    background-color: rgba(255, 255, 255, 0.13);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.sift-window-dragging {
+    opacity: 0.4;
+}
+
+.sift-window-tile-content {
+    spacing: 3px;
+}
+
+.sift-window-preview {
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.sift-window-title {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.sift-window-drag {
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background-color: rgba(20, 22, 28, 0.75);
+}
+
 .sift-footer {
     height: 32px;
     padding: 0 16px;
@@ -223,6 +315,51 @@
     background-color: rgba(0, 0, 0, 0.14);
 }
 
+.sift-light .sift-workspace {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sift-light .sift-workspace-active {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.sift-light .sift-workspace-selected {
+    border-color: rgba(0, 0, 0, 0.8);
+    background-color: rgba(0, 0, 0, 0.10);
+}
+
+.sift-light .sift-workspace-header:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.sift-light .sift-workspace-title {
+    color: rgba(0, 0, 0, 0.9);
+}
+
+.sift-light .sift-workspace-count,
+.sift-light .sift-workspace-empty,
+.sift-light .sift-window-title {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+.sift-light .sift-window-tile {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+.sift-light .sift-window-tile:hover {
+    background-color: rgba(255, 255, 255, 0.6);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.sift-light .sift-window-preview {
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+.sift-light .sift-window-drag {
+    border-color: rgba(0, 0, 0, 0.25);
+    background-color: rgba(255, 255, 255, 0.85);
+}
+
 .sift-light .sift-row:hover {
     background-color: rgba(0, 0, 0, 0.05);
 }
@@ -264,7 +401,11 @@
 .sift-dark .sift-footer-hint,
 .sift-dark .sift-empty-title,
 .sift-dark .sift-empty-hint,
-.sift-dark .sift-empty-button {
+.sift-dark .sift-empty-button,
+.sift-dark .sift-workspace-title,
+.sift-dark .sift-workspace-count,
+.sift-dark .sift-workspace-empty,
+.sift-dark .sift-window-title {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
@@ -281,7 +422,11 @@
 .sift-light .sift-footer-hint,
 .sift-light .sift-empty-title,
 .sift-light .sift-empty-hint,
-.sift-light .sift-empty-button {
+.sift-light .sift-empty-button,
+.sift-light .sift-workspace-title,
+.sift-light .sift-workspace-count,
+.sift-light .sift-workspace-empty,
+.sift-light .sift-window-title {
     text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
 }
 

@@ -21,6 +21,7 @@ import {AppGrid} from './appGrid.js';
 import {loadFileIcon, openFile, revealFile} from './files.js';
 import {EaseDriver, SpringDriver} from './motion.js';
 import {ResultsView} from './results.js';
+import {WorkspaceView} from './workspaceView.js';
 
 const OPEN_FADE_MS = 120;
 const CLOSE_FADE_MS = 120;
@@ -136,9 +137,25 @@ export const SiftOverlay = GObject.registerClass({
         });
         this._gridButton.connect('clicked', () => this._toggleView());
 
+        this._workspacesIcon = new St.Icon({
+            icon_name: 'focus-windows-symbolic',
+            icon_size: 18,
+        });
+        this._workspacesButton = new St.Button({
+            style_class: 'sift-grid-button',
+            child: this._workspacesIcon,
+            can_focus: false,
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: 'Show workspaces',
+        });
+        this._workspacesButton.connect('clicked',
+            () => this._toggleWorkspaces());
+
         entryBar.add_child(searchIcon);
         entryBar.add_child(this._entry);
         entryBar.add_child(this._gridButton);
+        entryBar.add_child(this._workspacesButton);
 
         this._entry.clutter_text.connect('text-changed', () => this._onTextChanged());
 
@@ -207,6 +224,12 @@ export const SiftOverlay = GObject.registerClass({
         });
         this._gridView.add_child(this._grid);
 
+        this._workspaceView = new WorkspaceView({
+            onActivateWorkspace: workspace =>
+                this._activateWorkspace(workspace),
+            onActivateWindow: window => this._activateWindow(window),
+        });
+
         this._schedulePrewarm();
 
         const footer = new St.BoxLayout({
@@ -232,6 +255,7 @@ export const SiftOverlay = GObject.registerClass({
         this._content.add_child(this._scroll);
         this._content.add_child(this._empty);
         this._content.add_child(this._gridView);
+        this._content.add_child(this._workspaceView);
         this._content.add_child(footer);
 
         this._springs = {
@@ -330,6 +354,10 @@ export const SiftOverlay = GObject.registerClass({
 
     get appGrid() {
         return this._grid;
+    }
+
+    get workspaceView() {
+        return this._workspaceView;
     }
 
     get glass() {
@@ -807,6 +835,7 @@ export const SiftOverlay = GObject.registerClass({
         this.visible = false;
         this._glass?.close();
         this._grid?.close();
+        this._workspaceView?.close();
         this._entry.text = '';
         this._results.setRows([]);
         this._syncEmptyState();
@@ -1001,6 +1030,8 @@ export const SiftOverlay = GObject.registerClass({
 
         this._grid?.destroy();
         this._grid = null;
+        this._workspaceView?.destroy();
+        this._workspaceView = null;
         this._glass?.destroy();
         this._glass = null;
         Main.layoutManager.removeChrome(this);
@@ -1048,9 +1079,49 @@ export const SiftOverlay = GObject.registerClass({
                 this._scrollSelectionIntoView();
                 break;
             default:
-                this._dispatchGrid(action, ctrl);
+                this._dispatchView(action, ctrl);
                 break;
         }
+    }
+
+    _dispatchView(action, ctrl) {
+        if (action.startsWith('workspace-'))
+            this._dispatchWorkspace(action);
+        else
+            this._dispatchGrid(action, ctrl);
+    }
+
+    _dispatchWorkspace(action) {
+        const view = this._workspaceView;
+        if (!view)
+            return;
+
+        switch (action) {
+            case 'workspace-left':
+                view.moveSelection(-1);
+                break;
+            case 'workspace-right':
+                view.moveSelection(1);
+                break;
+            case 'workspace-first':
+                view.select(0);
+                break;
+            case 'workspace-last':
+                view.select(view.cardRecords.length - 1);
+                break;
+            case 'workspace-activate':
+                view.activateSelected();
+                break;
+        }
+    }
+
+    _activateWorkspace(workspace) {
+        this.close({then: () => workspace.activate(global.get_current_time())});
+    }
+
+    _activateWindow(window) {
+        this.close({then: () =>
+            Main.activateWindow(window, global.get_current_time())});
     }
 
     _dispatchGrid(action, ctrl) {
@@ -1178,8 +1249,13 @@ export const SiftOverlay = GObject.registerClass({
         this._entry.clutter_text.grab_key_focus();
     }
 
+    _toggleWorkspaces() {
+        this._setView(this._view === 'workspace' ? 'search' : 'workspace');
+        this._entry.clutter_text.grab_key_focus();
+    }
+
     _setView(view) {
-        const next = view === 'grid' ? 'grid' : 'search';
+        const next = view === 'grid' || view === 'workspace' ? view : 'search';
         if (next === this._view) {
             this._entry.clutter_text.grab_key_focus();
             return;
@@ -1192,7 +1268,7 @@ export const SiftOverlay = GObject.registerClass({
             this._content.opacity = 255;
             this._revealPending = false;
             this._view = next;
-            if (next === 'grid')
+            if (next !== 'search')
                 this._entry.text = '';
             const target = this._targetRect(next);
             if (target) {
@@ -1268,28 +1344,44 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _setViewState(view) {
-        this._view = view === 'grid' ? 'grid' : 'search';
+        this._view = view === 'grid' || view === 'workspace' ? view : 'search';
         this._shownView = this._view;
 
         const grid = this._view === 'grid';
-        this._results.visible = !grid;
+        const workspace = this._view === 'workspace';
         this._gridView.visible = grid;
+        this._workspaceView.visible = workspace;
         this._gridIcon.icon_name = grid
             ? 'edit-find-symbolic' : 'view-app-grid-symbolic';
         this._gridButton.accessible_name = grid
             ? 'Show search' : 'Show all applications';
+        this._workspacesIcon.icon_name = workspace
+            ? 'edit-find-symbolic' : 'focus-windows-symbolic';
+        this._workspacesButton.accessible_name = workspace
+            ? 'Show search' : 'Show workspaces';
 
         if (grid) {
             this._entry.text = '';
             this._grid.open();
         } else {
             this._grid.close();
-            this.refreshApps();
         }
+
+        if (workspace) {
+            this._entry.text = '';
+            this._workspaceView.open();
+        } else {
+            this._workspaceView.close();
+        }
+
+        if (!grid && !workspace)
+            this.refreshApps();
 
         this._footerLabel.text = grid
             ? '←→↑↓ Navigate · Enter Open · Esc Close'
-            : '↑↓ Navigate · Enter Open · Esc Close';
+            : workspace
+                ? '←→ Workspaces · Enter Switch · Drag windows · Esc Close'
+                : '↑↓ Navigate · Enter Open · Esc Close';
         this._syncEmptyState();
         this._syncFooter();
     }
@@ -1303,7 +1395,7 @@ export const SiftOverlay = GObject.registerClass({
         const panelBox = Main.layoutManager.panelBox;
         const topBarBottom = panelBox ? panelBox.y + panelBox.height : monitor.y;
 
-        if (view === 'grid')
+        if (view === 'grid' || view === 'workspace')
             return gridPanel(monitor, topBarBottom);
 
         const compact = this._entry.text.trim() === '';
@@ -1357,10 +1449,15 @@ export const SiftOverlay = GObject.registerClass({
         this._content.set_size(width, height);
 
         const gridHeight = Math.max(0, height - 92);
+        const viewWidth = Math.max(0, width - 16);
+        const viewHeight = Math.max(0, gridHeight - 8);
         this._gridView.set_size(width, gridHeight);
         this._grid.set_position(8, 0);
-        this._grid.set_size(Math.max(0, width - 16), Math.max(0, gridHeight - 8));
+        this._grid.set_size(viewWidth, viewHeight);
         this._grid.syncSize();
+        this._workspaceView.set_position(8, 0);
+        this._workspaceView.set_size(viewWidth, viewHeight);
+        this._workspaceView.syncSize(viewWidth, viewHeight);
     }
 
     _seedSprings(rect) {

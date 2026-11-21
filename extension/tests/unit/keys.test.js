@@ -21,6 +21,13 @@ export function run() {
     equal(resolveKey('Up', {view: 'grid'}), 'grid-up');
     equal(resolveKey('Page_Down', {view: 'grid'}), 'grid-page-next');
     equal(resolveKey('Page_Up', {view: 'grid'}), 'grid-page-prev');
+    equal(resolveKey('Return', {view: 'workspace'}), 'workspace-activate');
+    equal(resolveKey('Left', {view: 'workspace'}), 'workspace-left');
+    equal(resolveKey('Right', {view: 'workspace'}), 'workspace-right');
+    equal(resolveKey('Home', {view: 'workspace'}), 'workspace-first');
+    equal(resolveKey('End', {view: 'workspace'}), 'workspace-last');
+    equal(resolveKey('a', {view: 'workspace'}), 'search-type');
+    equal(resolveKey('a', {view: 'workspace', ctrl: true}), null);
     equal(resolveKey('Home', {view: 'grid'}), 'grid-first');
     equal(resolveKey('End', {view: 'grid'}), 'grid-last');
     equal(resolveKey('Return', {view: 'grid'}), 'grid-activate');

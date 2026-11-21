@@ -3,6 +3,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
@@ -740,6 +741,79 @@ export async function run() {
     assert(api.overlay.view === 'grid',
         'the Sift app-grid shortcut opens the grid from closed');
     await closeOverlay(api);
+
+    // The workspace view shows one column per workspace and moves a window
+    // onto the card it was dropped on.
+    const wsManager = global.workspace_manager;
+    const originalWorkspaces = wsManager.n_workspaces;
+    const originalIndex = wsManager.get_active_workspace_index();
+    if (wsManager.n_workspaces < 2)
+        wsManager.append_new_workspace(false, global.get_current_time());
+
+    await openOverlay(api, 'search');
+    api.overlay._toggleWorkspaces();
+    await waitFor(() => api.overlay.view === 'workspace',
+        'the window button opens the workspace view', 2000);
+    await settle(api, 'the workspace view settles');
+    assert(api.overlay.view === 'workspace', 'the workspace view opens');
+    assert(api.workspaceView.visible, 'workspace columns are visible');
+    assert(api.workspaceView.cards.length === wsManager.n_workspaces,
+        'one column per workspace');
+    assert(api.workspaceView.selectedIndex ===
+        wsManager.get_active_workspace_index(), 'the active workspace is selected');
+
+    api.overlay.handleKey('Right', 0);
+    await Scripting.waitLeisure();
+    assert(api.workspaceView.selectedIndex ===
+        Math.min(wsManager.get_active_workspace_index() + 1,
+            wsManager.n_workspaces - 1), 'right selects the next workspace');
+    api.overlay.handleKey('Left', 0);
+    await Scripting.waitLeisure();
+    assert(api.workspaceView.selectedIndex ===
+        wsManager.get_active_workspace_index(), 'left returns to the active workspace');
+
+    const sourceWorkspace = wsManager.get_workspace_by_index(0);
+    const targetCard = api.workspaceView.cardRecords.find(record =>
+        record.workspace !== sourceWorkspace);
+    assert(targetCard !== undefined, 'a second workspace takes a drop');
+    let movedTo = null;
+    const source = {
+        metaWindow: {
+            get_workspace: () => sourceWorkspace,
+            change_workspace: workspace => {
+                movedTo = workspace;
+            },
+        },
+    };
+    assert(targetCard.card._delegate.handleDragOver(source) ===
+        DND.DragMotionResult.MOVE_DROP, 'another workspace accepts a move');
+    assert(targetCard.card._delegate.acceptDrop(source),
+        'the workspace accepts the drop');
+    assert(movedTo === targetCard.workspace,
+        'the window moves to the dropped workspace');
+    await Scripting.waitLeisure();
+
+    const activateWorkspace = api.workspaceView._onActivateWorkspace;
+    let activated = null;
+    api.workspaceView._onActivateWorkspace = workspace => {
+        activated = workspace;
+        activateWorkspace(workspace);
+    };
+    api.workspaceView.select(0);
+    api.overlay.handleKey('Return', 0);
+    await waitFor(() => !api.overlay.visible,
+        'Enter activates the selected workspace', 2000);
+    assert(activated !== null, 'the selected workspace is activated');
+    api.workspaceView._onActivateWorkspace = activateWorkspace;
+
+    while (wsManager.n_workspaces > originalWorkspaces) {
+        wsManager.remove_workspace(
+            wsManager.get_workspace_by_index(wsManager.n_workspaces - 1),
+            global.get_current_time());
+    }
+    if (wsManager.get_active_workspace_index() !== originalIndex)
+        wsManager.get_workspace_by_index(originalIndex).activate(
+            global.get_current_time());
 
     // Nothing else opens the overview while it is disabled.
     assert(Main.overview.shouldToggleByCornerOrButton() === false,

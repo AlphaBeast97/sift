@@ -46,6 +46,22 @@ export function resolveKey(symbol, {ctrl = false, shift = false, preedit = false
         return null;
     }
 
+    if (view === 'workspace') {
+        if (RETURN_KEYS.has(symbol))
+            return 'workspace-activate';
+        if (symbol === 'Left')
+            return 'workspace-left';
+        if (symbol === 'Right')
+            return 'workspace-right';
+        if (symbol === 'Home')
+            return 'workspace-first';
+        if (symbol === 'End')
+            return 'workspace-last';
+        if (!ctrl && isPrintable(symbol))
+            return 'search-type';
+        return null;
+    }
+
     if (RETURN_KEYS.has(symbol)) {
         if (!ctrl)
             return 'activate';

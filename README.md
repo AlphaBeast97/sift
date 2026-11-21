@@ -1,7 +1,8 @@
 # Sift
 
 Spotlight-style search for GNOME Shell 51: applications, files, settings
-panels, a calculator, the web, an app grid, and liquid glass.
+panels, a calculator, the web, an app grid, a workspace and window switcher,
+and liquid glass.
 
 Sift disables the GNOME Overview by default: **Super** opens Sift search and
 **Super+A** opens its app grid, while Activities, the hot corner, swipe and the
@@ -80,6 +81,11 @@ gnome-extensions enable sift@alphabeast97.github.io
   Enter; typing switches back to search. The grid is A-Z by default; **Order
   apps** under Search → App grid can sort by recent use, most used, or a smart
   blend of frequency and recency.
+- The window button in the search bar opens the workspace view. Every
+  workspace is a column with live window thumbnails; click a workspace header
+  or press **Enter** to switch to it, and click a window to focus it. Drag a
+  window onto another column to move it to that workspace. **Left/Right** move
+  between workspaces, and typing switches back to search.
 
 File search reads names only. File contents are never indexed or read.
 
@@ -103,7 +109,8 @@ settings panel results are off by default), the fullscreen guard, app-grid
 labels and order, learned-ranking clearing, the GNOME overview takeover, and
 both shortcuts, plus a **Files** page for the file index and a **How to use**
 page covering shortcuts, navigation, calculator examples, the app grid,
-settings panels, fullscreen behavior, privacy, and current limits.
+workspaces and window dragging, settings panels, fullscreen behavior, privacy,
+and current limits.
 The panel height is fixed while typing; extra results scroll. Changes apply
 live.
 Extension settings are ordinary GSettings under

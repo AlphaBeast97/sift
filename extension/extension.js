@@ -49,6 +49,7 @@ export default class SiftExtension extends Extension {
             blocker: this._blocker,
             apps: this._apps,
             appGrid: this._overlay?.appGrid ?? null,
+            workspaceView: this._overlay?.workspaceView ?? null,
             glass: this._overlay?.glass ?? null,
             daemon: this._daemon,
         };

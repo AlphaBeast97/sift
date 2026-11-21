@@ -844,12 +844,19 @@ export default class SiftPreferences extends ExtensionPreferences {
         gridGroup.add(valueRow('Navigate apps',
             'Arrow keys move between apps, Page Up/Page Down change pages, and Home/End jump to the first or last app.'));
         gridGroup.add(valueRow('Type to search',
-            'Start typing in the grid to return to search with that text.'));
+            'Start typing in the grid or workspace view to return to search with that text.'));
         gridGroup.add(valueRow('Open or manage an app',
             'Enter opens the app. Ctrl+Enter or middle-click opens a new window when supported. Right-click for app actions.'));
         gridGroup.add(valueRow('Order apps',
             'A-Z is the default. Recent, Most used and Smart use local launch counts; change the order under Search → App grid.'));
         page.add(gridGroup);
+
+        const workspaceGroup = new Adw.PreferencesGroup({title: 'Windows and workspaces'});
+        workspaceGroup.add(valueRow('Workspace view',
+            'Click the window button in the search bar to see every workspace as a column with its open windows. Left/Right move between workspaces and Enter switches to the selected one.'));
+        workspaceGroup.add(valueRow('Focus and move windows',
+            'Click a window to focus it. Drag a window onto another workspace column to move it there.'));
+        page.add(workspaceGroup);
 
         const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});
         filesGroup.add(valueRow('Names only',
@@ -868,8 +875,6 @@ export default class SiftPreferences extends ExtensionPreferences {
         });
         limitsGroup.add(valueRow('No content search',
             'Search does not look inside documents or files.'));
-        limitsGroup.add(valueRow('No windows or workspaces',
-            'Sift does not list open windows or workspaces, and windows cannot be dragged onto it. Turn off Disable the GNOME overview on the Search page to use GNOME\'s overview for those.'));
         limitsGroup.add(valueRow('Index size cap',
             'Sift stops adding entries at the maximum set on the Files page (250,000 by default).'));
         page.add(limitsGroup);
