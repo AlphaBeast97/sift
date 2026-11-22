@@ -58,3 +58,20 @@ export function selectionAfter(rows, key) {
     const index = rows.findIndex(row => row.key === key);
     return index >= 0 ? index : 0;
 }
+
+// Files and folders only reach the UI through the daemon's ranked list, so a
+// learned choice needs to be moved back above that list's default order.
+export function promoteLearned(rows, counts, threshold = 2) {
+    if (!counts)
+        return rows;
+
+    const promoted = [];
+    const rest = [];
+    for (const row of rows) {
+        if ((counts.get(row.key) ?? 0) >= threshold)
+            promoted.push(row);
+        else
+            rest.push(row);
+    }
+    return [...promoted, ...rest];
+}

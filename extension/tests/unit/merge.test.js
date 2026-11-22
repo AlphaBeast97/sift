@@ -1,5 +1,11 @@
 import {equal} from './assert.js';
-import {calcRow, fileRow, mergeRows, selectionAfter} from '../../src/lib/merge.js';
+import {
+    calcRow,
+    fileRow,
+    mergeRows,
+    promoteLearned,
+    selectionAfter,
+} from '../../src/lib/merge.js';
 
 export function run() {
     const calc = {expression: '1+1', result: '2'};
@@ -43,4 +49,18 @@ export function run() {
     equal(fileRow({path: 'relative', name: 'x', kind: 'file'}, '/home/a'), null);
     equal(fileRow({path: '/a', name: '', kind: 'file'}, '/home/a'), null);
     equal(fileRow({path: '/a/b.txt', name: 'b.txt', kind: 'file'}, '/a').subtitle, '~');
+
+    const learned = promoteLearned([
+        {key: 'file:/a.txt'},
+        {key: 'file:/b.txt'},
+        {key: 'dir:/c'},
+    ], new Map([['file:/b.txt', 2]]), 2);
+    equal(learned.map(row => row.key).join(','),
+        'file:/b.txt,file:/a.txt,dir:/c');
+    equal(promoteLearned([{key: 'file:/a.txt'}], null).length, 1);
+    equal(promoteLearned([
+        {key: 'file:/a.txt'},
+        {key: 'file:/b.txt'},
+    ], new Map([['file:/b.txt', 1]])).map(row => row.key).join(','),
+    'file:/a.txt,file:/b.txt');
 }

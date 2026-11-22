@@ -89,6 +89,10 @@ export class Apps {
         return this._usage?.settingCount(id) ?? 0;
     }
 
+    learned(query) {
+        return this._usage?.learned(query) ?? null;
+    }
+
     gridApps(mode = 'az') {
         return sortApps(this._getRecords(), mode, this._usage?.snapshot() ?? null);
     }

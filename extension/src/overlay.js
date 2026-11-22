@@ -11,7 +11,13 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {GlassPanel} from './glass.js';
 import {gridPanel, searchPanel, workspacePanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
-import {appRow, fileRow, mergeRows, selectionAfter} from './lib/merge.js';
+import {
+    appRow,
+    fileRow,
+    mergeRows,
+    promoteLearned,
+    selectionAfter,
+} from './lib/merge.js';
 import {LEARNED_THRESHOLD} from './lib/appScore.js';
 import {isFullscreenWindow} from './lib/fullscreen.js';
 import {SettingsSearch} from './lib/settingsSearch.js';
@@ -451,9 +457,12 @@ export const SiftOverlay = GObject.registerClass({
             apps: [...promoted, ...records.map(appRow)],
             settings: settings.filter(row =>
                 settingsCount(row) < LEARNED_THRESHOLD),
-            files: this._daemonFiles
-                .map(file => fileRow(file, this._home))
-                .filter(Boolean),
+            files: promoteLearned(
+                this._daemonFiles
+                    .map(file => fileRow(file, this._home))
+                    .filter(Boolean),
+                this._apps?.learned(this._entry.text) ?? null,
+                LEARNED_THRESHOLD),
             web: this._settings.get_boolean('web-search')
                 ? webRow(this._entry.text,
                     this._settings.get_string('web-search-engine'),
@@ -1216,6 +1225,13 @@ export const SiftOverlay = GObject.registerClass({
             if (index > 0)
                 this._apps?.recordSelection(this._entry.text, row.key);
             this._apps?.recordLaunch(row.key);
+        }
+
+        if ((row.kind === 'file' || row.kind === 'dir') &&
+            this._view === 'search') {
+            const index = this._results.rows.indexOf(row);
+            if (index > 0)
+                this._apps?.recordSelection(this._entry.text, row.key);
         }
 
         const activate = () => {
