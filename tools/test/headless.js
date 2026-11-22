@@ -767,6 +767,8 @@ export async function run() {
     assert(api.workspaceView.visible, 'workspace columns are visible');
     assert(api.workspaceView.cards.length === wsManager.n_workspaces,
         'one column per workspace');
+    assert(api.workspaceView.cards.every(card => card.width === 200),
+        'workspace cards keep a fixed width');
     assert(api.workspaceView.selectedIndex ===
         wsManager.get_active_workspace_index(), 'the active workspace is selected');
 
@@ -891,8 +893,10 @@ export async function run() {
     'the workspace shortcut reopens the workspace view', 2000);
     await settle(api, 'the reopened workspace view settles');
     api.blocker.toggleWorkspaces();
-    await waitFor(() => !api.overlay.visible,
-        'the workspace shortcut closes the workspace view', 2000);
+    await waitFor(() => api.overlay.visible &&
+        api.overlay.view === 'search',
+    'the workspace shortcut returns to search', 2000);
+    await closeOverlay(api);
 
     while (wsManager.n_workspaces > originalWorkspaces) {
         wsManager.remove_workspace(

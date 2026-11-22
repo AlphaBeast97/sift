@@ -20,22 +20,13 @@ const TILE_PADDING = 4;
 const TILE_BORDER = 1;
 const TILE_SPACING = 3;
 const TITLE_HEIGHT = 15;
-const MIN_CARD_WIDTH = 120;
-const MAX_CARD_WIDTH = 340;
+const CARD_WIDTH = 200;
 const MIN_PREVIEW_HEIGHT = 24;
 const MAX_PREVIEW_HEIGHT = 150;
 const MAX_VISIBLE_PREVIEWS = 3;
 const DRAG_MAX_SIZE = 240;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
-function inside(actor, source) {
-    for (let current = source; current; current = current.get_parent()) {
-        if (current === actor)
-            return true;
-    }
-    return false;
-}
 
 // Workspaces are global in GNOME, so one strip shows every workspace and
 // every window on it, whichever monitor the window is on.
@@ -315,13 +306,16 @@ export const WorkspaceView = GObject.registerClass(
             });
             body.set_child(list);
 
-            // Empty card space switches to the workspace. Window presses are
-            // left for the tile so a drag can start instead of closing the view.
+            // Empty card space switches to the workspace. The event source is
+            // null inside a scroll view, so hit-test to tell tiles apart.
             body.connect('button-press-event', (actor, event) => {
-                for (let current = event.get_source(); current;
-                    current = current.get_parent()) {
-                    if (current._delegate?.metaWindow)
+                const [x, y] = event.get_coords();
+                let hit = global.stage.get_actor_at_pos(
+                    Clutter.PickMode.REACTIVE, x, y);
+                while (hit) {
+                    if (hit._delegate?.metaWindow)
                         return Clutter.EVENT_PROPAGATE;
+                    hit = hit.get_parent();
                 }
                 activate();
                 return Clutter.EVENT_STOP;
@@ -404,6 +398,7 @@ export const WorkspaceView = GObject.registerClass(
                 style_class: 'sift-window-preview',
                 clip_to_allocation: true,
                 layout_manager: new Clutter.FixedLayout(),
+                reactive: true,
             });
             preview.add_child(clone);
 
@@ -411,6 +406,7 @@ export const WorkspaceView = GObject.registerClass(
                 style_class: 'sift-window-title',
                 x_expand: true,
                 x_align: Clutter.ActorAlign.START,
+                reactive: true,
                 text: window.get_title() ?? 'Window',
             });
             label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
@@ -446,34 +442,38 @@ export const WorkspaceView = GObject.registerClass(
             });
             tile.add_child(preview);
             tile.add_child(titleRow);
-            tile.connect('button-release-event', (actor, event) => {
-                if (event.get_button() !== 1 ||
-                    inside(closeButton, event.get_source()))
-                    return Clutter.EVENT_PROPAGATE;
-                this._onActivateWindow?.(window);
-                return Clutter.EVENT_STOP;
-            });
 
             // DND uses the delegate for the drag actor and hands it to the
-            // workspace card, which reads metaWindow back out of it.
-            tile._delegate = {
+            // workspace card, which reads metaWindow back out of it. Only the
+            // thumbnail and title drag, so the close button keeps its clicks.
+            const dragDelegate = {
                 metaWindow: window,
                 getDragActor: () => this._createDragActor(actor,
                     sourceWidth, sourceHeight),
-                getDragActorSource: () => tile,
+                getDragActorSource: () => preview,
             };
-            const draggable = DND.makeDraggable(tile, {
-                dragActorMaxSize: DRAG_MAX_SIZE,
-                dragActorOpacity: 180,
-            });
-            draggable.connect('drag-begin', () =>
-                tile.add_style_class_name('sift-window-dragging'));
-            draggable.connect('drag-end', () => {
-                tile.remove_style_class_name('sift-window-dragging');
-                this._scheduleReload();
-            });
-            draggable.connect('drag-cancelled', () =>
-                tile.remove_style_class_name('sift-window-dragging'));
+            tile._delegate = dragDelegate;
+
+            for (const surface of [preview, label]) {
+                surface._delegate = dragDelegate;
+                const draggable = DND.makeDraggable(surface, {
+                    dragActorMaxSize: DRAG_MAX_SIZE,
+                    dragActorOpacity: 180,
+                });
+                draggable.connect('drag-begin', () =>
+                    tile.add_style_class_name('sift-window-dragging'));
+                draggable.connect('drag-end', () => {
+                    tile.remove_style_class_name('sift-window-dragging');
+                    this._scheduleReload();
+                });
+                draggable.connect('drag-cancelled', () =>
+                    tile.remove_style_class_name('sift-window-dragging'));
+
+                const clickGesture = new Clutter.ClickGesture();
+                clickGesture.connect('recognize', () =>
+                    this._onActivateWindow?.(window));
+                surface.add_action(clickGesture);
+            }
 
             return {
                 window,
@@ -532,9 +532,7 @@ export const WorkspaceView = GObject.registerClass(
                 return;
 
             const count = this._cards.length;
-            const available = width - PADDING * 2 - GAP * (count - 1);
-            const cardWidth = Math.max(MIN_CARD_WIDTH,
-                Math.min(MAX_CARD_WIDTH, Math.floor(available / count)));
+            const cardWidth = CARD_WIDTH;
             const cardHeight = Math.max(0, height - PADDING * 2);
             const innerWidth = Math.max(0, cardWidth -
                 CARD_PADDING * 2 - CARD_BORDER * 2);
@@ -560,7 +558,6 @@ export const WorkspaceView = GObject.registerClass(
                 card.left = firstX + i * (cardWidth + GAP);
                 card.card.set_width(cardWidth);
                 card.card.y_expand = true;
-                card.count.visible = cardWidth >= 150;
                 card.headerRow.set_size(innerWidth, HEADER_HEIGHT);
                 card.body.set_size(innerWidth, bodyHeight);
                 if (card.workspace.active)
