@@ -83,7 +83,7 @@ export class OverviewBlocker {
         if (this._overlay.closing)
             this._overlay.open('workspace');
         else if (this._overlay.visible && this._overlay.view === 'workspace')
-            this._overlay.close();
+            this._overlay.focusSearch();
         else
             this._closeNative(() => this._overlay.open('workspace'));
     }
