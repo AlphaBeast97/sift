@@ -83,24 +83,25 @@ gnome-extensions enable sift@alphabeast97.github.io
   apps** under Search → App grid can sort by recent use, most used, or a smart
   blend of frequency and recency.
 - The window button in the search bar or **Super+Tab** opens the workspace
-  view. Every workspace is a card in a shallow horizontal strip with live
-  window thumbnails. Click a workspace card or header, or press **Enter**, to
-  switch to it; **Up/Down** select a window and **Enter** focuses it. Drag a
-  window onto another card to move it, or drag a workspace header to reorder
-  the strip. **Ctrl+Left/Right** reorders the selected workspace and
+  view. Every workspace is a fixed-width card in a shallow horizontal strip
+  with live window thumbnails. Click a workspace card or header, or press
+  **Enter**, to switch to it; **Up/Down** select a window and **Enter** focuses
+  it. Drag a window onto another card to move it, or drag a workspace header to
+  reorder the strip. **Ctrl+Left/Right** reorders the selected workspace and
   **Shift+Left/Right** moves the selected window to the previous or next
   workspace. Each window and workspace card has a close button.
-  **Left/Right** move between workspaces, and typing switches back to search.
-  When more workspaces than fit are open, **Shift+wheel** (or a horizontal
-  wheel) pans the strip.
+  **Left/Right** move between workspaces, typing switches back to search, and
+  pressing the workspace shortcut again also returns to search. When more
+  workspaces than fit are open, **Shift+wheel** (or a horizontal wheel) pans
+  the strip.
 
 File search reads names only. File contents are never indexed or read.
 
 App launches and repeated search choices stay in
 `~/.local/state/sift/usage.json` and never leave the machine. Picking a
-non-first app result twice promotes it for that query and its prefixes. A
-settings panel selected twice is favored whenever it appears in later searches.
-Clear the counts with **Clear learned ranking** in preferences.
+non-first app, file, or folder result twice promotes it for that query and its
+prefixes. A settings panel selected twice is favored whenever it appears in
+later searches. Clear the counts with **Clear learned ranking** in preferences.
 
 ## Preferences
 

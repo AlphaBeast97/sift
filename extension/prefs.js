@@ -651,6 +651,8 @@ export default class SiftPreferences extends ExtensionPreferences {
             title: 'Learning',
             description: 'Usage counts and repeated search choices stay on this machine.',
         });
+        learningGroup.add(valueRow('How promotion works',
+            'Pick a non-first app, file or folder result twice and it moves to the top for that query and its prefixes.'));
         const clearRow = valueRow('Clear learned ranking',
             'Remove usage counts and search choices.');
         const clearButton = new Gtk.Button({
@@ -866,9 +868,9 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const workspaceGroup = new Adw.PreferencesGroup({title: 'Windows and workspaces'});
         workspaceGroup.add(valueRow('Workspace view',
-            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a card with its open windows. Left/Right move between workspaces, Up/Down select a window, and Enter opens the selected window or workspace.'));
+            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a fixed-width card with its open windows. Left/Right move between workspaces, Up/Down select a window, and Enter opens the selected window or workspace. Press the workspace shortcut again to return to search.'));
         workspaceGroup.add(valueRow('Move and close',
-            'Drag a window onto another card to move it there, or drag a workspace header to reorder the strip. Ctrl+Left/Right reorders the selected workspace and Shift+Left/Right moves the selected window. Click the close button on a window or workspace card to close it.'));
+            'Drag a window onto another card to move it there, or drag a workspace header to reorder the strip. Ctrl+Left/Right reorders the selected workspace and Shift+Left/Right moves the selected window. Click the close button on a window or workspace card to close it. Shift+wheel or a horizontal wheel pans the strip when the workspaces do not fit.'));
         page.add(workspaceGroup);
 
         const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});
