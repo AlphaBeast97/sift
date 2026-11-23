@@ -6,6 +6,7 @@ import {
     DEFAULT_ICON,
     fallbackWords,
     iconName,
+    metaMatches,
     parseMeta,
     settingsRow,
 } from '../../src/lib/settingsSearch.js';
@@ -42,6 +43,15 @@ export function run() {
     equal(meta.name, 'Displays');
     equal(meta.description, 'Use Night Light');
     equal(meta.icon, 'org.gnome.Settings-display-symbolic');
+
+    equal(metaMatches(meta, 'disp'), true);
+    equal(metaMatches(meta, 'night'), true);
+    equal(metaMatches(meta, 'work'), false);
+    equal(metaMatches(
+        {name: 'Network', description: 'Control how you connect'}, 'work'),
+    false);
+    equal(metaMatches({name: 'Work', description: ''}, 'work'), true);
+    equal(metaMatches(meta, 'gnome display'), true);
 
     const row = settingsRow(meta, ['display']);
     equal(row.kind, 'setting');

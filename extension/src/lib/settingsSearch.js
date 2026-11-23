@@ -19,6 +19,21 @@ function wordKey(word) {
     return word.replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase();
 }
 
+// A single word must start a word in the panel title or description, so
+// "Work" does not drag in "Network" just because it contains "work".
+export function metaMatches(meta, text) {
+    const words = text.trim().split(/\s+/u).filter(Boolean);
+    if (words.length !== 1)
+        return true;
+
+    const needle = wordKey(words[0]);
+    if (!needle)
+        return true;
+
+    return `${meta.name} ${meta.description}`.split(/\s+/u)
+        .some(word => wordKey(word).startsWith(needle));
+}
+
 export function fallbackWords(text) {
     const words = text.split(/\s+/u)
         .filter(Boolean)

@@ -40,12 +40,12 @@ export function fileRow(file, home) {
     };
 }
 
-export function mergeRows({calc = null, apps = [], settings = [], files = [],
-    web = null} = {}, maxRows) {
+export function mergeRows({calc = null, promoted = [], apps = [], settings = [],
+    files = [], web = null} = {}, maxRows) {
     const rows = [];
     if (calc)
         rows.push(calcRow(calc));
-    rows.push(...apps, ...settings, ...files);
+    rows.push(...promoted, ...apps, ...settings, ...files);
 
     // The web row is a last resort; it never pushes a local result out.
     if (web && rows.length < maxRows)
@@ -59,11 +59,23 @@ export function selectionAfter(rows, key) {
     return index >= 0 ? index : 0;
 }
 
+// A promoted or late row that takes first place becomes the default selection;
+// rows arriving below the current top leave it alone.
+export function defaultSelection(rows, previous, previousIndex, promoted = []) {
+    let next = selectionAfter(rows, previous);
+    if (previous === 'web' && rows.length > 1)
+        next = 0;
+    else if (previousIndex === 0 && next > 0 &&
+        (rows[0]?.kind === 'setting' || promoted.includes(rows[0])))
+        next = 0;
+    return next;
+}
+
 // Files and folders only reach the UI through the daemon's ranked list, so a
-// learned choice needs to be moved back above that list's default order.
-export function promoteLearned(rows, counts, threshold = 2) {
+// learned choice needs to be lifted above the rest of the merged results.
+export function splitLearned(rows, counts, threshold = 2) {
     if (!counts)
-        return rows;
+        return {promoted: [], rest: rows};
 
     const promoted = [];
     const rest = [];
@@ -73,5 +85,5 @@ export function promoteLearned(rows, counts, threshold = 2) {
         else
             rest.push(row);
     }
-    return [...promoted, ...rest];
+    return {promoted, rest};
 }

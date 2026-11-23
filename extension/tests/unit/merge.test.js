@@ -1,10 +1,11 @@
 import {equal} from './assert.js';
 import {
     calcRow,
+    defaultSelection,
     fileRow,
     mergeRows,
-    promoteLearned,
     selectionAfter,
+    splitLearned,
 } from '../../src/lib/merge.js';
 
 export function run() {
@@ -50,17 +51,35 @@ export function run() {
     equal(fileRow({path: '/a', name: '', kind: 'file'}, '/home/a'), null);
     equal(fileRow({path: '/a/b.txt', name: 'b.txt', kind: 'file'}, '/a').subtitle, '~');
 
-    const learned = promoteLearned([
+    const learned = splitLearned([
         {key: 'file:/a.txt'},
         {key: 'file:/b.txt'},
-        {key: 'dir:/c'},
+        {key: 'file:/c'},
     ], new Map([['file:/b.txt', 2]]), 2);
-    equal(learned.map(row => row.key).join(','),
-        'file:/b.txt,file:/a.txt,dir:/c');
-    equal(promoteLearned([{key: 'file:/a.txt'}], null).length, 1);
-    equal(promoteLearned([
+    equal(learned.promoted.map(row => row.key).join(','), 'file:/b.txt');
+    equal(learned.rest.map(row => row.key).join(','), 'file:/a.txt,file:/c');
+    equal(splitLearned([{key: 'file:/a.txt'}], null).rest.length, 1);
+    equal(splitLearned([
         {key: 'file:/a.txt'},
         {key: 'file:/b.txt'},
-    ], new Map([['file:/b.txt', 1]])).map(row => row.key).join(','),
+    ], new Map([['file:/b.txt', 1]])).rest.map(row => row.key).join(','),
     'file:/a.txt,file:/b.txt');
+
+    // A learned folder leaves the file group and lands above apps and files.
+    const folder = {key: 'file:/home/a/Documents', kind: 'dir'};
+    const promoted = mergeRows({
+        calc,
+        promoted: [folder],
+        apps,
+    }, 6);
+    equal(promoted.map(row => row.key).join(','),
+        'calc,file:/home/a/Documents,app:a.desktop');
+
+    // Selection follows a learned folder that takes first place from an app.
+    equal(defaultSelection([folder, ...apps], 'app:a.desktop', 0, [folder]), 0);
+    // A late settings row that becomes the first row also takes the selection.
+    equal(defaultSelection([setting, ...apps], 'app:a.desktop', 0), 0);
+    // Rows that arrive below a selected lower row leave the selection alone.
+    equal(defaultSelection([setting, ...apps], 'app:a.desktop', 1), 1);
+    equal(defaultSelection([...apps, web], 'web', 1), 0);
 }
