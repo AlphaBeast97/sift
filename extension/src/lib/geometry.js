@@ -44,13 +44,31 @@ export function gridPanel(monitor, topBarBottom) {
     };
 }
 
-// The workspace strip is deliberately shallow: workspaces sit side by side,
-// so it should use the width of the grid panel without covering the desktop.
+// The workspace strip shows two and a half cards across. Each card is sized
+// from the width it gets, so the half card is always the pan hint.
+export const WORKSPACE_GAP = 10;
+export const WORKSPACE_PADDING = 8;
+
+export function workspaceCardWidth(viewWidth) {
+    const available = viewWidth - WORKSPACE_PADDING * 2 - WORKSPACE_GAP * 2;
+    return Math.max(120, Math.floor(available / 2.5));
+}
+
+// One and a half 16:9 thumbnails are enough vertically; the rest scrolls.
+// 166 is the entry bar, footer, view inset and card chrome around the body.
+export function workspacePanelHeight(panelWidth) {
+    const card = workspaceCardWidth(panelWidth - 16);
+    const preview = Math.round((card - 38) * 9 / 16);
+    const tile = preview + 28;
+    return Math.round(1.5 * tile + 8 + 6) + 166;
+}
+
+// The workspace strip uses the width of the grid panel without covering the
+// desktop. The height leaves room for a row and a half of window thumbnails.
 export function workspacePanel(monitor, topBarBottom) {
     const grid = gridPanel(monitor, topBarBottom);
-    const height = Math.round(Math.min(
-        clamp(280, 0.42 * monitor.height, 460),
-        monitor.height - (grid.y - monitor.y) - monitor.height * BOTTOM_MARGIN));
+    const available = Math.max(0, monitor.height - (grid.y - monitor.y) -
+        monitor.height * BOTTOM_MARGIN);
 
-    return {...grid, height};
+    return {...grid, height: Math.min(workspacePanelHeight(grid.width), available)};
 }

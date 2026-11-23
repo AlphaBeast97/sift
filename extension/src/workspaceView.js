@@ -7,8 +7,9 @@ import St from 'gi://St';
 
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
-const PADDING = 8;
-const GAP = 10;
+import {WORKSPACE_GAP, WORKSPACE_PADDING, workspaceCardWidth}
+    from './lib/geometry.js';
+
 const HEADER_HEIGHT = 32;
 const CARD_PADDING = 8;
 const CARD_BORDER = 2;
@@ -20,11 +21,15 @@ const TILE_PADDING = 4;
 const TILE_BORDER = 1;
 const TILE_SPACING = 3;
 const TITLE_HEIGHT = 15;
-const CARD_WIDTH = 200;
 const MIN_PREVIEW_HEIGHT = 24;
-const MAX_PREVIEW_HEIGHT = 150;
-const MAX_VISIBLE_PREVIEWS = 3;
+// The panel is sized for 1.5 rows; the half tile hints at scrolling.
+const VISIBLE_PREVIEWS = 1.5;
 const DRAG_MAX_SIZE = 240;
+const DROP_EDGE = 24;
+const SCROLL_STEP = 48;
+const SCROLL_SCALE = 240;
+const AUTO_SCROLL_MARGIN = 48;
+const AUTO_SCROLL_STEP = 10;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -49,14 +54,39 @@ export const WorkspaceView = GObject.registerClass(
             this._reloadId = 0;
             this._offset = 0;
             this._maxOffset = 0;
+            this._pruning = false;
+            this._displayIds = [];
+            this._managerIds = [];
+            this._windowIds = new Map();
+            this._dragScrollId = 0;
 
-            this._strip = new St.BoxLayout({
-                orientation: Clutter.Orientation.HORIZONTAL,
+            // A fixed layout keeps card positions under our control while the
+            // strip is panned; a box layout would fight the offsets.
+            this._strip = new St.Widget({
                 style_class: 'sift-workspace-strip',
+                layout_manager: new Clutter.FixedLayout(),
             });
-            this._lead = new St.Widget({width: 0, height: 1});
-            this._strip.add_child(this._lead);
             this.add_child(this._strip);
+
+            // Dropping in the gaps or beyond the last card inserts a new
+            // workspace; the cards handle drops on their own middles.
+            this.reactive = true;
+            this._delegate = {
+                handleDragOver: source =>
+                    source?.metaWindow || source?.kind === 'workspace'
+                        ? DND.DragMotionResult.MOVE_DROP
+                        : DND.DragMotionResult.CONTINUE,
+                acceptDrop: (source, actor, x) => {
+                    if (!source?.metaWindow && source?.kind !== 'workspace')
+                        return false;
+
+                    const index = this._insertIndexAt(x);
+                    if (source.kind === 'workspace')
+                        return this._moveWorkspaceTo(source.workspace, index);
+                    this._insertWorkspaceAt(index, source.metaWindow);
+                    return true;
+                },
+            };
 
             // Workspaces that do not fit are panned: Shift+wheel (or a
             // horizontal wheel) moves the strip sideways, and keyboard
@@ -86,11 +116,14 @@ export const WorkspaceView = GObject.registerClass(
 
         open() {
             this._open = true;
+            this._connectSignals();
             this._rebuild();
         }
 
         close() {
             this._open = false;
+            this._disconnectSignals();
+            this._endDragScroll();
             this._clear();
         }
 
@@ -172,7 +205,80 @@ export const WorkspaceView = GObject.registerClass(
                 this._onActivateWorkspace?.(card.workspace);
         }
 
+        _watchWindow(window) {
+            if (!window || this._windowIds.has(window))
+                return;
+            this._windowIds.set(window, window.connect('unmanaged', () => {
+                this._windowIds.delete(window);
+                this._scheduleReload();
+            }));
+        }
+
+        _connectSignals() {
+            if (this._displayIds.length > 0)
+                return;
+
+            this._displayIds.push(global.display.connect('window-created',
+                (_display, window) => {
+                    this._watchWindow(window);
+                    this._scheduleReload();
+                }));
+            for (const actor of global.get_window_actors())
+                this._watchWindow(actor.meta_window);
+            this._managerIds.push(global.workspace_manager.connect(
+                'notify::n-workspaces', () => this._scheduleReload()));
+        }
+
+        _disconnectSignals() {
+            for (const id of this._displayIds)
+                global.display.disconnect(id);
+            for (const id of this._managerIds)
+                global.workspace_manager.disconnect(id);
+            for (const [window, id] of this._windowIds) {
+                try {
+                    window.disconnect(id);
+                } catch {
+                    // The window may already be gone.
+                }
+            }
+            this._displayIds = [];
+            this._managerIds = [];
+            this._windowIds.clear();
+        }
+
+        // One empty workspace is the spare GNOME keeps. Anything emptier goes
+        // as soon as the window it held is closed, even while the view is open.
+        _pruneEmptyWorkspaces() {
+            const manager = global.workspace_manager;
+            if (manager.n_workspaces <= 1)
+                return;
+
+            const empty = [];
+            let hasWindows = false;
+            for (let i = 0; i < manager.n_workspaces; i++) {
+                const workspace = manager.get_workspace_by_index(i);
+                if (workspace.list_windows().length === 0)
+                    empty.push(workspace);
+                else
+                    hasWindows = true;
+            }
+
+            if (!hasWindows || empty.length === 0)
+                return;
+
+            // Keep the last empty workspace, the dynamic one at the end.
+            const keep = empty[empty.length - 1];
+            this._pruning = true;
+            for (const workspace of empty) {
+                if (workspace === keep || manager.n_workspaces <= 1)
+                    continue;
+                manager.remove_workspace(workspace, global.get_current_time());
+            }
+            this._pruning = false;
+        }
+
         _rebuild(selectedIndex = null) {
+            this._pruneEmptyWorkspaces();
             this._clear();
             const manager = global.workspace_manager;
             const active = manager.get_active_workspace();
@@ -275,14 +381,19 @@ export const WorkspaceView = GObject.registerClass(
                 dragActorMaxSize: DRAG_MAX_SIZE,
                 dragActorOpacity: 180,
             });
-            draggable.connect('drag-begin', () =>
-                card.add_style_class_name('sift-workspace-dragging'));
+            draggable.connect('drag-begin', () => {
+                card.add_style_class_name('sift-workspace-dragging');
+                this._beginDragScroll();
+            });
             draggable.connect('drag-end', () => {
                 card.remove_style_class_name('sift-workspace-dragging');
+                this._endDragScroll();
                 this._scheduleReload();
             });
-            draggable.connect('drag-cancelled', () =>
-                card.remove_style_class_name('sift-workspace-dragging'));
+            draggable.connect('drag-cancelled', () => {
+                card.remove_style_class_name('sift-workspace-dragging');
+                this._endDragScroll();
+            });
 
             const headerRow = new St.BoxLayout({
                 orientation: Clutter.Orientation.HORIZONTAL,
@@ -329,10 +440,25 @@ export const WorkspaceView = GObject.registerClass(
                 }));
             }
 
-            // Dropping a window tile on a card moves that window here;
-            // dropping another header reorders the workspaces.
+            // Dropping on the middle of a card moves into that workspace.
+            // Dropping on a card edge inserts a new workspace at that gap, so
+            // an app or a whole workspace can be placed between two cards.
             card._delegate = {
-                handleDragOver: source => {
+                handleDragOver: (source, actor, x) => {
+                    const edge = this._dropEdge(x, card.width);
+                    if (edge !== 0) {
+                        if (source?.kind !== 'workspace') {
+                            return source?.metaWindow
+                                ? DND.DragMotionResult.MOVE_DROP
+                                : DND.DragMotionResult.CONTINUE;
+                        }
+                        const insertAt = edge < 0 ? index : index + 1;
+                        const from = source.workspace.index?.() ?? -1;
+                        return this._workspaceInsertIndex(from, insertAt) === from
+                            ? DND.DragMotionResult.NO_DROP
+                            : DND.DragMotionResult.MOVE_DROP;
+                    }
+
                     if (source?.kind === 'workspace') {
                         return source.workspace === workspace
                             ? DND.DragMotionResult.NO_DROP
@@ -345,7 +471,21 @@ export const WorkspaceView = GObject.registerClass(
                         ? DND.DragMotionResult.NO_DROP
                         : DND.DragMotionResult.MOVE_DROP;
                 },
-                acceptDrop: source => {
+                acceptDrop: (source, actor, x) => {
+                    const edge = this._dropEdge(x, card.width);
+                    if (edge !== 0) {
+                        if (source?.kind === 'workspace') {
+                            return this._moveWorkspaceTo(source.workspace,
+                                edge < 0 ? index : index + 1);
+                        }
+                        const window = source?.metaWindow;
+                        if (!window)
+                            return false;
+                        this._insertWorkspaceAt(edge < 0 ? index : index + 1,
+                            window);
+                        return true;
+                    }
+
                     if (source?.kind === 'workspace') {
                         if (source.workspace === workspace)
                             return false;
@@ -460,14 +600,19 @@ export const WorkspaceView = GObject.registerClass(
                     dragActorMaxSize: DRAG_MAX_SIZE,
                     dragActorOpacity: 180,
                 });
-                draggable.connect('drag-begin', () =>
-                    tile.add_style_class_name('sift-window-dragging'));
+                draggable.connect('drag-begin', () => {
+                    tile.add_style_class_name('sift-window-dragging');
+                    this._beginDragScroll();
+                });
                 draggable.connect('drag-end', () => {
                     tile.remove_style_class_name('sift-window-dragging');
+                    this._endDragScroll();
                     this._scheduleReload();
                 });
-                draggable.connect('drag-cancelled', () =>
-                    tile.remove_style_class_name('sift-window-dragging'));
+                draggable.connect('drag-cancelled', () => {
+                    tile.remove_style_class_name('sift-window-dragging');
+                    this._endDragScroll();
+                });
 
                 const clickGesture = new Clutter.ClickGesture();
                 clickGesture.connect('recognize', () =>
@@ -532,8 +677,8 @@ export const WorkspaceView = GObject.registerClass(
                 return;
 
             const count = this._cards.length;
-            const cardWidth = CARD_WIDTH;
-            const cardHeight = Math.max(0, height - PADDING * 2);
+            const cardWidth = workspaceCardWidth(width);
+            const cardHeight = Math.max(0, height - WORKSPACE_PADDING * 2);
             const innerWidth = Math.max(0, cardWidth -
                 CARD_PADDING * 2 - CARD_BORDER * 2);
             const bodyHeight = Math.max(0, cardHeight -
@@ -541,23 +686,19 @@ export const WorkspaceView = GObject.registerClass(
                 HEADER_HEIGHT - CARD_SPACING);
             const previewWidth = Math.max(0, innerWidth -
                 LIST_PADDING_X * 2 - TILE_PADDING * 2 - TILE_BORDER * 2);
-            const contentWidth = count * cardWidth + (count - 1) * GAP;
-            const offset = Math.max(0,
-                Math.floor((width - PADDING * 2 - contentWidth) / 2));
-
-            this._lead.visible = offset > GAP;
-            this._lead.width = this._lead.visible ? offset - GAP : 0;
-            const firstX = PADDING +
-                (this._lead.visible ? this._lead.width + GAP : 0);
-            const stripWidth = PADDING * 2 + firstX - PADDING + contentWidth;
+            const contentWidth = count * cardWidth + (count - 1) * WORKSPACE_GAP;
+            const firstX = Math.max(WORKSPACE_PADDING,
+                Math.floor((width - contentWidth) / 2));
+            const stripWidth = Math.max(width, WORKSPACE_PADDING * 2 +
+                contentWidth);
             this._strip.set_size(stripWidth, height);
             this._maxOffset = Math.max(0, stripWidth - width);
 
             for (let i = 0; i < count; i++) {
                 const card = this._cards[i];
-                card.left = firstX + i * (cardWidth + GAP);
-                card.card.set_width(cardWidth);
-                card.card.y_expand = true;
+                card.left = firstX + i * (cardWidth + WORKSPACE_GAP);
+                card.card.set_position(card.left, WORKSPACE_PADDING);
+                card.card.set_size(cardWidth, cardHeight);
                 card.headerRow.set_size(innerWidth, HEADER_HEIGHT);
                 card.body.set_size(innerWidth, bodyHeight);
                 if (card.workspace.active)
@@ -565,16 +706,15 @@ export const WorkspaceView = GObject.registerClass(
                 else
                     card.card.remove_style_class_name('sift-workspace-active');
 
-                const visible = Math.min(card.windows.length,
-                    MAX_VISIBLE_PREVIEWS);
-                const fitHeight = visible > 0
+                const slots = Math.min(card.windows.length,
+                    VISIBLE_PREVIEWS);
+                const fitHeight = slots > 0
                     ? Math.floor((bodyHeight - LIST_PADDING_Y -
-                        LIST_SPACING * (visible - 1)) / visible) -
+                        LIST_SPACING * (Math.ceil(slots) - 1)) / slots) -
                         TILE_PADDING * 2 - TILE_BORDER * 2 -
                         TILE_SPACING - TITLE_HEIGHT
                     : 0;
-                let previewHeight = Math.min(MAX_PREVIEW_HEIGHT,
-                    Math.round(previewWidth * 9 / 16));
+                let previewHeight = Math.round(previewWidth * 9 / 16);
                 if (fitHeight > MIN_PREVIEW_HEIGHT)
                     previewHeight = Math.min(previewHeight, fitHeight);
                 previewHeight = Math.max(MIN_PREVIEW_HEIGHT, previewHeight);
@@ -597,6 +737,117 @@ export const WorkspaceView = GObject.registerClass(
             this._syncSelection();
         }
 
+        _dropEdge(x, width) {
+            if (typeof x !== 'number' || width <= DROP_EDGE * 2)
+                return 0;
+            if (x <= DROP_EDGE)
+                return -1;
+            if (x >= width - DROP_EDGE)
+                return 1;
+            return 0;
+        }
+
+        _insertIndexAt(x) {
+            if (typeof x !== 'number')
+                return this._cards.length;
+
+            const contentX = x + this._offset;
+            let index = 0;
+            for (const card of this._cards) {
+                if (contentX > card.left + card.card.width / 2)
+                    index++;
+            }
+            return index;
+        }
+
+        _workspaceInsertIndex(from, insertAt) {
+            return insertAt > from ? insertAt - 1 : insertAt;
+        }
+
+        _insertWorkspaceAt(index, window) {
+            const manager = global.workspace_manager;
+            const time = global.get_current_time();
+            manager.append_new_workspace(false, time);
+            const workspace =
+                manager.get_workspace_by_index(manager.n_workspaces - 1);
+            const target = index >= this._cards.length
+                ? manager.n_workspaces - 1
+                : clamp(index, 0, manager.n_workspaces - 1);
+            if (target !== manager.n_workspaces - 1)
+                manager.reorder_workspace(workspace, target);
+            window.change_workspace(workspace);
+            this._scheduleReload();
+        }
+
+        _moveWorkspaceTo(workspace, insertAt) {
+            const manager = global.workspace_manager;
+            const from = workspace.index?.() ?? -1;
+            if (from < 0)
+                return false;
+
+            const target = clamp(
+                this._workspaceInsertIndex(from, insertAt),
+                0, manager.n_workspaces - 1);
+            if (target === from)
+                return false;
+
+            manager.reorder_workspace(workspace, target);
+            this._scheduleReload();
+            return true;
+        }
+
+        _beginDragScroll() {
+            if (this._dragScrollId || this._maxOffset <= 0)
+                return;
+
+            this._dragScrollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16,
+                () => {
+                    if (!this._open || this._maxOffset <= 0)
+                        return GLib.SOURCE_CONTINUE;
+
+                    const [x, y] = global.get_pointer();
+                    const [viewX, viewY] = this.get_transformed_position();
+                    if (y < viewY - AUTO_SCROLL_MARGIN ||
+                        y > viewY + this.height + AUTO_SCROLL_MARGIN)
+                        return GLib.SOURCE_CONTINUE;
+
+                    if (x < viewX + AUTO_SCROLL_MARGIN)
+                        this._panBy(-AUTO_SCROLL_STEP);
+                    else if (x > viewX + this.width - AUTO_SCROLL_MARGIN)
+                        this._panBy(AUTO_SCROLL_STEP);
+                    return GLib.SOURCE_CONTINUE;
+                });
+        }
+
+        _endDragScroll() {
+            if (!this._dragScrollId)
+                return;
+            GLib.source_remove(this._dragScrollId);
+            this._dragScrollId = 0;
+        }
+
+        _panBy(delta) {
+            this._offset = clamp(this._offset + delta, 0, this._maxOffset);
+            this._updateOffset();
+        }
+
+        _pointerOverScrollingCard() {
+            const [x, y] = global.get_pointer();
+            let hit = global.stage.get_actor_at_pos(
+                Clutter.PickMode.REACTIVE, x, y);
+            while (hit) {
+                const record = this._cards.find(card => card.body === hit);
+                if (record) {
+                    const adjustment = record.body.vadjustment;
+                    return adjustment.upper > adjustment.page_size + 1;
+                }
+                if (hit === this)
+                    return false;
+                hit = hit.get_parent();
+            }
+            return false;
+        }
+
         _handleScroll(event) {
             if (this._maxOffset <= 0)
                 return Clutter.EVENT_PROPAGATE;
@@ -604,24 +855,27 @@ export const WorkspaceView = GObject.registerClass(
             const direction = event.get_scroll_direction();
             const shift =
                 (event.get_state() & Clutter.ModifierType.SHIFT_MASK) !== 0;
+            const scrollingCard = this._pointerOverScrollingCard();
             let delta = 0;
             if (direction === Clutter.ScrollDirection.SMOOTH) {
                 const [dx, dy] = event.get_scroll_delta();
-                delta = dx || (shift ? dy : 0);
-                delta *= 200;
+                if (dx !== 0 || shift)
+                    delta = (dx || dy) * SCROLL_SCALE;
+                else if (!scrollingCard)
+                    delta = dy * SCROLL_SCALE;
             } else if (direction === Clutter.ScrollDirection.LEFT) {
-                delta = -1;
+                delta = -SCROLL_STEP;
             } else if (direction === Clutter.ScrollDirection.RIGHT) {
-                delta = 1;
-            } else if (shift) {
-                delta = direction === Clutter.ScrollDirection.UP ? -1 : 1;
+                delta = SCROLL_STEP;
+            } else if (shift || !scrollingCard) {
+                delta = direction === Clutter.ScrollDirection.UP
+                    ? -SCROLL_STEP : SCROLL_STEP;
             }
 
             if (delta === 0)
                 return Clutter.EVENT_PROPAGATE;
 
-            this._offset = clamp(this._offset + delta, 0, this._maxOffset);
-            this._updateOffset();
+            this._panBy(delta);
             return Clutter.EVENT_STOP;
         }
 
@@ -658,10 +912,10 @@ export const WorkspaceView = GObject.registerClass(
                 return;
 
             const right = card.left + card.card.width;
-            if (card.left - PADDING < this._offset)
-                this._offset = card.left - PADDING;
-            else if (right + PADDING > this._offset + this.width)
-                this._offset = right + PADDING - this.width;
+            if (card.left - WORKSPACE_PADDING < this._offset)
+                this._offset = card.left - WORKSPACE_PADDING;
+            else if (right + WORKSPACE_PADDING > this._offset + this.width)
+                this._offset = right + WORKSPACE_PADDING - this.width;
             this._updateOffset();
         }
 
@@ -693,7 +947,7 @@ export const WorkspaceView = GObject.registerClass(
         }
 
         _scheduleReload(delay = 0) {
-            if (!this._open || this._reloadId)
+            if (!this._open || this._reloadId || this._pruning)
                 return;
 
             const reload = () => {
@@ -718,6 +972,8 @@ export const WorkspaceView = GObject.registerClass(
 
         destroy() {
             this._open = false;
+            this._disconnectSignals();
+            this._endDragScroll();
             this._clear();
             super.destroy();
         }

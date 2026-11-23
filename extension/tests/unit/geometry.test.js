@@ -43,14 +43,14 @@ export function run() {
 
     const workspace = workspacePanel(hd, 32);
     equal(workspace.width, 1040);
-    equal(workspace.height, 454);
+    equal(workspace.height, 524);
     equal(workspace.x, 440);
     equal(workspace.y, 130);
 
     const portraitWorkspace =
         workspacePanel({x: 0, y: 0, width: 480, height: 800}, 32);
     equal(portraitWorkspace.width, 456);
-    equal(portraitWorkspace.height, 336);
+    equal(portraitWorkspace.height, 326);
 
     const offset = searchPanel({x: 1920, y: 0, width: 1920, height: 1080}, 32, 404);
     equal(offset.x, 2520);
