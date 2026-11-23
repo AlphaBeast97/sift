@@ -464,6 +464,53 @@
     icon-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
+/* Clear glass lets bright desktops through, so white text gets a dark outline
+   instead of a heavy tint behind it. This stays readable on light and dark. */
+.sift-clear .sift-entry,
+.sift-clear .sift-entry StLabel.hint-text,
+.sift-clear .sift-row-title,
+.sift-clear .sift-row-subtitle,
+.sift-clear .sift-footer-hint,
+.sift-clear .sift-empty-title,
+.sift-clear .sift-empty-hint,
+.sift-clear .sift-empty-button,
+.sift-clear .sift-workspace-title,
+.sift-clear .sift-workspace-count,
+.sift-clear .sift-workspace-empty,
+.sift-clear .sift-window-title {
+    text-shadow:
+        1px 0 1px rgba(0, 0, 0, 0.9),
+        -1px 0 1px rgba(0, 0, 0, 0.9),
+        0 1px 1px rgba(0, 0, 0, 0.9),
+        0 -1px 1px rgba(0, 0, 0, 0.9),
+        0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.sift-clear .sift-search-icon,
+.sift-clear .sift-row-icon,
+.sift-clear .sift-grid-button {
+    icon-shadow:
+        1px 0 1px rgba(0, 0, 0, 0.9),
+        -1px 0 1px rgba(0, 0, 0, 0.9),
+        0 1px 1px rgba(0, 0, 0, 0.9),
+        0 -1px 1px rgba(0, 0, 0, 0.9),
+        0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.sift-clear .sift-row:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sift-clear .sift-row-selected {
+    border-color: rgba(255, 255, 255, 0.95);
+    background-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.sift-clear .sift-grid-button {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
 .sift-light .sift-entry,
 .sift-light .sift-entry StLabel.hint-text,
 .sift-light .sift-row-title,

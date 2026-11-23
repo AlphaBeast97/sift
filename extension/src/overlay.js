@@ -662,14 +662,17 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _syncTheme() {
+        const mode = this._settings.get_string('glass-mode');
         const dark = glassIsDark({
-            mode: this._settings.get_string('glass-mode'),
+            mode,
             systemDark: St.Settings.get().color_scheme ===
                 St.SystemColorScheme.PREFER_DARK,
         });
-        for (const name of ['sift-dark', 'sift-light'])
+        for (const name of ['sift-dark', 'sift-light', 'sift-clear'])
             this.remove_style_class_name(name);
         this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
+        if (mode === 'clear')
+            this.add_style_class_name('sift-clear');
     }
 
     _syncEmptyState() {

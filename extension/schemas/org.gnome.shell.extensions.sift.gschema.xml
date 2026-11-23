@@ -12,7 +12,7 @@
       <range min="0" max="100"/>
       <default>50</default>
       <summary>Light glass brightness</summary>
-      <description>Brightness of the light glass. 0 is dense frosted white; 100 lets more of the desktop through.</description>
+      <description>Brightness of the light glass. 0 is dense pale glass; 100 lets more of the desktop through.</description>
     </key>
 
     <key name="glass-mode" type="s">
@@ -24,18 +24,19 @@
       </choices>
       <default>'auto'</default>
       <summary>Glass mode</summary>
-      <description>Auto follows the system color scheme. Light and Dark force that glass, and Clear is a thin smoke tint with light text.</description>
+      <description>Auto follows the system color scheme. Light and Dark force that glass, and Clear is a near-transparent veil with light text outlined in dark.</description>
     </key>
 
     <key name="glass-style" type="s">
       <choices>
         <choice value="liquid"/>
-        <choice value="frosted"/>
+        <choice value="crystal"/>
+        <choice value="glow"/>
         <choice value="flat"/>
       </choices>
       <default>'liquid'</default>
       <summary>Glass style</summary>
-      <description>Liquid bends the backdrop at the rim, Frosted blurs without the bend, and Flat uses a simple tint with no blur.</description>
+      <description>Liquid bends the backdrop at the rim, Crystal sharpens that bend into a thin bright edge, Glow drops the bend for a soft halo, and Flat uses a simple tint with no blur.</description>
     </key>
 
     <key name="animations" type="b">

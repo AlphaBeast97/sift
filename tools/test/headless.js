@@ -553,14 +553,26 @@ export async function run() {
 
     api.settings.set_string('glass-mode', 'clear');
     await Scripting.waitLeisure();
-    assert(api.glass.brightness === 85,
-        'clear glass keeps only a thin tint');
-    assert(api.overlay.has_style_class_name('sift-dark'),
-        'clear glass uses light text');
+    assert(api.glass.brightness === 100 && api.glass.blurRadius === 6,
+        'clear glass keeps the backdrop crisp');
+    assert(api.overlay.has_style_class_name('sift-dark') &&
+        api.overlay.has_style_class_name('sift-clear'),
+    'clear glass uses light text with a stronger shadow');
+
+    api.settings.set_string('glass-style', 'crystal');
+    await Scripting.waitLeisure();
+    assert(api.glass.style === 'crystal' && api.glass.blurRadius === 6,
+        'crystal sharpens the edge without more blur');
+
+    api.settings.set_string('glass-style', 'glow');
+    await Scripting.waitLeisure();
+    assert(api.glass.style === 'glow' && api.glass.blurRadius === 6,
+        'glow keeps the same backdrop');
 
     api.settings.set_string('glass-style', 'flat');
     await Scripting.waitLeisure();
-    assert(api.glass.blurRadius === 0, 'flat glass skips the blur');
+    assert(api.glass.style === 'flat' && api.glass.blurRadius === 0,
+        'flat glass skips the blur');
 
     api.settings.set_string('glass-style', savedStyle);
     api.settings.set_int('glass-light-brightness', savedLight);
@@ -571,6 +583,8 @@ export async function run() {
         'brightness is restored');
     api.settings.set_string('glass-mode', savedMode);
     await Scripting.waitLeisure();
+    assert(!api.overlay.has_style_class_name('sift-clear'),
+        'leaving clear drops the extra shadow');
 
     await openOverlay(api, 'search');
     api.overlay.close();

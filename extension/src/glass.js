@@ -225,6 +225,10 @@ export class GlassPanel {
         return this._params.brightness;
     }
 
+    get style() {
+        return this._params.style;
+    }
+
     get fallback() {
         return this._shaderFailed || this._blurFailed;
     }

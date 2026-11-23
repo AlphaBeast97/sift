@@ -2,6 +2,7 @@
 import {almost, assert, equal} from './assert.js';
 import {
     GLASS_PAD,
+    GLASS_STYLES,
     glassIsDark,
     glassParams,
 } from '../../src/lib/glassParams.js';
@@ -44,12 +45,15 @@ export function run() {
     equal(dark0.rimColour.join(','), '1,1,1');
 
     const light0 = glassParams({mode: 'light', lightBrightness: 0});
+    const light50 = glassParams({mode: 'light', lightBrightness: 50});
     const light100 = glassParams({mode: 'light', lightBrightness: 100});
-    almost(light0.lo, 0.55);
-    almost(light100.lo, 0.64);
+    almost(light0.lo, 0.36);
+    almost(light100.lo, 0.44);
     equal(light0.sheen, 0);
     equal(light100.glow, 0);
     equal(light0.rimColour.join(','), '0.12,0.12,0.14');
+    assert(toneOut(light50, 0.9) < 0.80,
+        'light glass shows the desktop instead of painting it white');
 
     // The sliders are independent: the other mode's value changes nothing.
     almost(glassParams({mode: 'dark', darkBrightness: 20,
@@ -61,9 +65,12 @@ export function run() {
 
     const clear = glassParams({mode: 'clear', darkBrightness: 0,
         lightBrightness: 0});
-    equal(clear.brightness, 85);
-    assert(clear.fill[3] > 0.20 && clear.fill[3] < 0.30,
-        'clear keeps a thin readable tint');
+    equal(clear.brightness, 100);
+    almost(clear.fill[3], 0.05);
+    assert(toneOut(clear, 0.9) > 0.65 && toneOut(clear, 0.9) < 0.80,
+        'clear stays transparent over a bright desktop');
+    assert(toneOut(clear, 0) < 0.04,
+        'clear keeps the dark desktop visible');
 
     for (const mode of ['dark', 'light']) {
         for (const backdrop of [0, 0.25, 0.5, 0.75, 1]) {
@@ -88,17 +95,27 @@ export function run() {
             darkBrightness: brightness}), 1) <= 0.30,
         `dark guardrail at ${brightness}`);
         assert(toneOut(glassParams({mode: 'light',
-            lightBrightness: brightness}), 0) >= 0.60,
+            lightBrightness: brightness}), 0) >= 0.40,
         `light guardrail at ${brightness}`);
     }
 
+    equal(GLASS_STYLES.join(','), 'liquid,crystal,glow,flat');
     const liquid = glassParams({mode: 'dark'});
-    const frosted = glassParams({mode: 'dark', style: 'frosted'});
+    const crystal = glassParams({mode: 'dark', style: 'crystal'});
+    const glow = glassParams({mode: 'dark', style: 'glow'});
     const flat = glassParams({mode: 'dark', style: 'flat'});
-    equal(frosted.lens, 0);
-    assert(frosted.blurRadius > liquid.blurRadius, 'frosted blurs more');
-    assert(frosted.fill[3] > liquid.fill[3], 'frosted keeps more tint');
+    assert(crystal.lens > liquid.lens, 'crystal bends the backdrop harder');
+    assert(crystal.band < liquid.band, 'crystal keeps the bend at the edge');
+    assert(crystal.rim > liquid.rim, 'crystal brightens the rim');
+    assert(crystal.fill[3] < liquid.fill[3], 'crystal keeps less haze');
+    equal(glow.lens, 0);
+    equal(glow.band, 0);
+    assert(glow.glow > liquid.glow, 'glow adds a soft halo');
+    assert(glow.sheen >= liquid.sheen, 'glow keeps a sheen');
+    assert(glassParams({mode: 'light', style: 'glow'}).glow > 0,
+        'the halo is visible on light glass too');
     equal(flat.blurRadius, 0);
     equal(flat.rim, 0);
     assert(flat.fill[3] > liquid.fill[3], 'flat keeps the most tint');
+    equal(glassParams({mode: 'dark', style: 'frosted'}).style, 'liquid');
 }

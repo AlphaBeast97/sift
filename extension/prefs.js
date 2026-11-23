@@ -394,6 +394,11 @@ function addChoiceRow(group, settings, key, title, subtitle, choices) {
         if (value && value !== settings.get_string(key))
             settings.set_string(key, value);
     });
+    // A stored choice that no longer exists (for example the old frosted
+    // style) falls back to the first option instead of showing a stale row.
+    if (choices.findIndex(([value]) =>
+        value === settings.get_string(key)) < 0)
+        settings.set_string(key, choices[0][0]);
     settings.connect(`changed::${key}`, sync);
     sync();
     group.add(row);
@@ -599,12 +604,13 @@ export default class SiftPreferences extends ExtensionPreferences {
                 lower: 0,
                 upper: 100,
                 step: 5,
-                subtitle: value => value <= 25 ? `Frosted (${value})` :
+                subtitle: value => value <= 25 ? `Dense (${value})` :
                     value >= 75 ? `Clear (${value})` : String(value),
             });
         addChoiceRow(appearanceGroup, settings, 'glass-style', 'Glass style',
-            'Liquid bends the backdrop at the rim; Flat skips the blur.',
-            [['liquid', 'Liquid'], ['frosted', 'Frosted'], ['flat', 'Flat']]);
+            'Liquid bends the rim, Crystal sharpens the edge, Glow adds a halo, Flat skips the blur.',
+            [['liquid', 'Liquid'], ['crystal', 'Crystal'], ['glow', 'Glow'],
+                ['flat', 'Flat']]);
 
         appearance.add(appearanceGroup);
 
@@ -884,7 +890,7 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const appearanceGroup = new Adw.PreferencesGroup({title: 'Appearance'});
         appearanceGroup.add(valueRow('Glass',
-            'Pick Auto, Light, Dark or Clear under Appearance. Auto follows the system color scheme. Dark and Light have their own brightness sliders, and Clear keeps a thin smoke tint with light text. Liquid bends the backdrop at the rim, Frosted blurs without the bend, and Flat skips the blur.'));
+            'Pick Auto, Light, Dark or Clear under Appearance. Auto follows the system color scheme. Dark and Light have their own brightness sliders; lower keeps the glass denser and higher shows more desktop. Clear is a nearly transparent veil with light text outlined in dark. Liquid bends the backdrop at the rim, Crystal sharpens that bend into a bright edge, Glow replaces it with a soft halo, and Flat skips the blur.'));
         page.add(appearanceGroup);
 
         const searchGroup = new Adw.PreferencesGroup({title: 'Search'});

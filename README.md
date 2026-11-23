@@ -120,8 +120,8 @@ gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
 The window exposes a glass mode (Auto, Light, Dark or Clear), separate Dark
-glass and Light glass brightness sliders, a glass style (Liquid, Frosted or
-Flat), animations, search panel height, maximum results, web search with its
+glass and Light glass brightness sliders, a glass style (Liquid, Crystal, Glow
+or Flat), animations, search panel height, maximum results, web search with its
 engine and browser, settings panel search (web and settings panel results are
 off by default), the fullscreen guard, app-grid labels and order,
 learned-ranking clearing, the GNOME overview takeover, and all three
@@ -273,9 +273,11 @@ one-time first-tile allocation are in `docs/perf/app-grid.md`.
   back in after the first install.
 - **Glass looks flat or the text is hard to read.** Pick a glass mode and style
   in preferences. Auto follows the system color scheme; Light and Dark force
-  their glass with their own brightness sliders; Clear keeps a thin smoke tint
-  and light text. Liquid bends the backdrop, Frosted blurs without the bend,
-  and Flat skips the blur. Blur my Shell can be enabled or disabled
+  their glass with their own brightness sliders; Clear is a near-transparent
+  veil that keeps the desktop visible, with light text outlined in dark for
+  contrast. Liquid bends the backdrop at the rim, Crystal
+  sharpens that bend into a bright edge, Glow replaces the bend with a soft
+  halo, and Flat skips the blur. Blur my Shell can be enabled or disabled
   independently.
 - **Blur my Shell is installed.** Sift detects it only to pick a conservative
   default; it does not patch or depend on it.
