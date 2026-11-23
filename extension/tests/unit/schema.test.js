@@ -12,6 +12,9 @@ export function run() {
     const settings = new Gio.Settings({schema_id: SCHEMA});
 
     equal(settings.get_int('glass-brightness'), 50);
+    equal(settings.get_int('glass-light-brightness'), 50);
+    equal(settings.get_string('glass-mode'), 'auto');
+    equal(settings.get_string('glass-style'), 'liquid');
     equal(settings.get_boolean('animations'), true);
     equal(settings.get_string('app-order'), 'az');
     equal(settings.get_int('max-results'), 6);
@@ -31,9 +34,10 @@ export function run() {
     const range = key => settings.get_range(key).recursiveUnpack()[1];
 
     equal(range('glass-brightness').join(','), '0,100');
+    equal(range('glass-light-brightness').join(','), '0,100');
     equal(range('max-results').join(','), '4,12');
     equal(range('search-height').join(','), '144,716');
 
     equal(schema.list_keys().sort().join(','),
-        'animations,app-order,disable-overview,fullscreen-guard,glass-brightness,grid-labels,max-results,search-height,settings-search,sift-apps-shortcut,sift-search-shortcut,sift-workspaces-shortcut,web-browser,web-search,web-search-engine');
+        'animations,app-order,disable-overview,fullscreen-guard,glass-brightness,glass-light-brightness,glass-mode,glass-style,grid-labels,max-results,search-height,settings-search,sift-apps-shortcut,sift-search-shortcut,sift-workspaces-shortcut,web-browser,web-search,web-search-engine');
 }

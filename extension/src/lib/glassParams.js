@@ -3,9 +3,14 @@ export const GLASS_PAD = 32;
 export const GLASS_RADIUS = 18;
 const GLASS_REACH = 24;
 
+export const GLASS_MODES = ['auto', 'light', 'dark', 'clear'];
+export const GLASS_STYLES = ['liquid', 'frosted', 'flat'];
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const mix = (a, b, t) => a + (b - a) * t;
 const mixArray = (a, b, t) => a.map((value, i) => mix(value, b[i], t));
+const moreFill = (fill, amount) =>
+    [...fill.slice(0, 3), clamp(fill[3] + amount, 0, 1)];
 
 // Brightness blends these linearly: 0 dark smoked, 100 clear.
 const DARK = {
@@ -19,14 +24,33 @@ const LIGHT = {
     clear: {fill: [0.96, 0.97, 0.99, 0.20], lo: 0.64, span: 0.32, deep: 0.10, knee: 0.40},
 };
 
-export function glassParams({brightness = 50, dark = true} = {}) {
-    const value = clamp(brightness, 0, 100);
-    const t = value / 100;
+// Clear keeps light text and the faint smoke tint that makes it readable.
+export function glassIsDark({mode = 'auto', systemDark = true} = {}) {
+    if (mode === 'dark' || mode === 'clear')
+        return true;
+    if (mode === 'light')
+        return false;
+    return systemDark;
+}
+
+export function glassParams({
+    mode = 'auto',
+    systemDark = true,
+    darkBrightness = 50,
+    lightBrightness = 50,
+    style = 'liquid',
+} = {}) {
+    const dark = glassIsDark({mode, systemDark});
+    const brightness = mode === 'clear'
+        ? 85
+        : clamp(dark ? darkBrightness : lightBrightness, 0, 100);
+    const t = brightness / 100;
     const a = dark ? DARK.dark : LIGHT.dark;
     const b = dark ? DARK.clear : LIGHT.clear;
 
-    return {
-        brightness: value,
+    const params = {
+        brightness,
+        style: GLASS_STYLES.includes(style) ? style : 'liquid',
         radius: GLASS_RADIUS,
         blurRadius: Math.round(mix(30, 14, t)),
         fill: mixArray(a.fill, b.fill, t),
@@ -46,4 +70,24 @@ export function glassParams({brightness = 50, dark = true} = {}) {
         rimWidth: 1.1,
         rimColour: dark ? [1, 1, 1] : [0.12, 0.12, 0.14],
     };
+
+    if (params.style === 'frosted') {
+        params.blurRadius += 8;
+        params.lens = 0;
+        params.band = 0;
+        params.rim *= 0.7;
+        params.sheen *= 0.6;
+        params.fill = moreFill(params.fill, 0.06);
+    } else if (params.style === 'flat') {
+        params.blurRadius = 0;
+        params.lens = 0;
+        params.band = 0;
+        params.rim = 0;
+        params.sheen = 0;
+        params.glow = 0;
+        params.saturation = 1;
+        params.fill = moreFill(params.fill, 0.12);
+    }
+
+    return params;
 }

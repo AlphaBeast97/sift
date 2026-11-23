@@ -14,10 +14,12 @@ const BUS_NAME = 'io.github.alphabeast97.Sift';
 const BUS_PATH = '/io/github/alphabeast97/Sift';
 const BUS_IFACE = 'io.github.alphabeast97.Sift';
 const SETTINGS_KEYS = [
-    'glass-brightness', 'animations', 'app-order', 'max-results',
+    'glass-brightness', 'glass-light-brightness', 'glass-mode',
+    'glass-style', 'animations', 'app-order', 'max-results',
     'search-height', 'web-search', 'web-search-engine', 'web-browser',
     'settings-search', 'fullscreen-guard', 'grid-labels', 'disable-overview',
     'sift-search-shortcut', 'sift-apps-shortcut',
+    'sift-workspaces-shortcut',
 ];
 const GNOME_BINDING_SCHEMAS = [
     'org.gnome.shell.keybindings',
@@ -374,6 +376,30 @@ function addEngineRow(group, settings) {
     return row;
 }
 
+function addChoiceRow(group, settings, key, title, subtitle, choices) {
+    const row = new Adw.ComboRow({
+        title,
+        subtitle,
+        model: new Gtk.StringList({
+            strings: choices.map(([, label]) => label),
+        }),
+    });
+    const sync = () => {
+        const index = choices.findIndex(([value]) =>
+            value === settings.get_string(key));
+        row.selected = Math.max(0, index);
+    };
+    row.connect('notify::selected', () => {
+        const value = choices[row.selected]?.[0];
+        if (value && value !== settings.get_string(key))
+            settings.set_string(key, value);
+    });
+    settings.connect(`changed::${key}`, sync);
+    sync();
+    group.add(row);
+    return row;
+}
+
 function addIntRow(group, settings, key, title,
     {lower, upper, step, subtitle = value => String(value)} = {}) {
     const row = valueRow(title);
@@ -556,13 +582,29 @@ export default class SiftPreferences extends ExtensionPreferences {
             Gio.SettingsBindFlags.DEFAULT);
         appearanceGroup.add(animationsRow);
 
-        addIntRow(appearanceGroup, settings, 'glass-brightness', 'Brightness', {
-            lower: 0,
-            upper: 100,
-            step: 5,
-            subtitle: value => value <= 25 ? `Dark (${value})` :
-                value >= 75 ? `Clear (${value})` : String(value),
-        });
+        addChoiceRow(appearanceGroup, settings, 'glass-mode', 'Glass mode',
+            'Auto follows the system color scheme.',
+            [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark'],
+                ['clear', 'Clear']]);
+        addIntRow(appearanceGroup, settings, 'glass-brightness',
+            'Dark glass brightness', {
+                lower: 0,
+                upper: 100,
+                step: 5,
+                subtitle: value => value <= 25 ? `Smoked (${value})` :
+                    value >= 75 ? `Clear (${value})` : String(value),
+            });
+        addIntRow(appearanceGroup, settings, 'glass-light-brightness',
+            'Light glass brightness', {
+                lower: 0,
+                upper: 100,
+                step: 5,
+                subtitle: value => value <= 25 ? `Frosted (${value})` :
+                    value >= 75 ? `Clear (${value})` : String(value),
+            });
+        addChoiceRow(appearanceGroup, settings, 'glass-style', 'Glass style',
+            'Liquid bends the backdrop at the rim; Flat skips the blur.',
+            [['liquid', 'Liquid'], ['frosted', 'Frosted'], ['flat', 'Flat']]);
 
         appearance.add(appearanceGroup);
 
@@ -840,6 +882,11 @@ export default class SiftPreferences extends ExtensionPreferences {
             'Sift stays closed while an app is fullscreen. Turn off Disable in fullscreen apps under Search → Fullscreen to allow the shortcuts there.'));
         page.add(openGroup);
 
+        const appearanceGroup = new Adw.PreferencesGroup({title: 'Appearance'});
+        appearanceGroup.add(valueRow('Glass',
+            'Pick Auto, Light, Dark or Clear under Appearance. Auto follows the system color scheme. Dark and Light have their own brightness sliders, and Clear keeps a thin smoke tint with light text. Liquid bends the backdrop at the rim, Frosted blurs without the bend, and Flat skips the blur.'));
+        page.add(appearanceGroup);
+
         const searchGroup = new Adw.PreferencesGroup({title: 'Search'});
         searchGroup.add(valueRow('Start typing',
             'Search needs at least two characters and matches app, file and folder names.'));
@@ -868,9 +915,9 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const workspaceGroup = new Adw.PreferencesGroup({title: 'Windows and workspaces'});
         workspaceGroup.add(valueRow('Workspace view',
-            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a fixed-width card with its open windows. Left/Right move between workspaces, Up/Down select a window, and Enter opens the selected window or workspace. Press the workspace shortcut again to return to search.'));
-        workspaceGroup.add(valueRow('Move and close',
-            'Drag a window onto another card to move it there, or drag a workspace header to reorder the strip. Ctrl+Left/Right reorders the selected workspace and Shift+Left/Right moves the selected window. Click the close button on a window or workspace card to close it. Shift+wheel or a horizontal wheel pans the strip when the workspaces do not fit.'));
+            'Click the window button in the search bar or use the workspace shortcut to see every workspace as a fixed-width card with large live thumbnails. About two and a half cards fit across, and each card shows a row and a half at a time; a partly visible card or row means there is more. Left/Right move between workspaces, Up/Down select a window, and Enter opens the selected window or workspace. Press the workspace shortcut again to return to search.'));
+        workspaceGroup.add(valueRow('Move, create and close',
+            'Drag a window onto the middle of another card to move it there. Drop it on a card edge, in a gap, or past the last card to create a workspace at that spot. Drag a workspace header to reorder it with its apps. Ctrl+Left/Right reorders the selected workspace and Shift+Left/Right moves the selected window. Click a close button to close a window or every window on a workspace; workspaces left empty disappear, and at most one empty workspace stays. Shift+wheel or a horizontal wheel pans the strip, a plain wheel pans it when not over a scrolling card, and dragging near an edge scrolls automatically.'));
         page.add(workspaceGroup);
 
         const filesGroup = new Adw.PreferencesGroup({title: 'Files and privacy'});

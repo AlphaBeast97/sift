@@ -326,6 +326,48 @@ export async function run() {
     assert(api.overlay.selectedIndex === 0,
         'the promoted settings panel keeps the default selection');
 
+    // An exact folder name must not be pushed out by weak settings matches
+    // ("Network" contains "work").
+    const savedQuery = api.daemon.query;
+    const savedSearch = api.overlay._settingsSearch.search;
+    api.daemon.query = () => Promise.resolve({
+        files: [{path: '/home/sift/Work', name: 'Work', kind: 'dir'}],
+        calc: null,
+    });
+    api.overlay._settingsSearch.search = async () => [
+        {
+            kind: 'setting',
+            key: 'setting:network',
+            title: 'Network',
+            subtitle: 'Control how you connect to the internet',
+            icon: 'org.gnome.Settings-network-symbolic',
+            settingId: 'network',
+            terms: ['Work'],
+        },
+        {
+            kind: 'setting',
+            key: 'setting:wwan',
+            title: 'Mobile Network',
+            subtitle: 'Connect to mobile broadband',
+            icon: 'org.gnome.Settings-network-symbolic',
+            settingId: 'wwan',
+            terms: ['Work'],
+        },
+    ];
+    api.overlay.entry.set_text('');
+    api.overlay.entry.set_text('Work');
+    await waitFor(() => api.overlay.rows.some(row =>
+        row.kind === 'dir' && row.title === 'Work'),
+    'the exact folder appears', 3000);
+    await Scripting.sleep(150);
+    assert(api.overlay.rows.some(row =>
+        row.kind === 'dir' && row.title === 'Work'),
+    'an exact folder match survives settings search');
+    assert(!api.overlay.rows.some(row => row.kind === 'setting'),
+        'weak settings matches leave room for the folder');
+    api.daemon.query = savedQuery;
+    api.overlay._settingsSearch.search = savedSearch;
+
     api.apps.recordLaunch('setting:display');
     api.apps.recordLaunch('setting:display');
     api.overlay.entry.set_text('screen');
@@ -472,22 +514,28 @@ export async function run() {
         'clearing the query settles the compact bar', 2000);
 
     const savedBrightness = api.settings.get_int('glass-brightness');
+    const savedLight = api.settings.get_int('glass-light-brightness');
+    const savedMode = api.settings.get_string('glass-mode');
+    const savedStyle = api.settings.get_string('glass-style');
     const savedAnimations = api.settings.get_boolean('animations');
     const searchRect = api.glass.rect;
     const clones = api.glass.cloneCount;
 
     api.settings.set_boolean('animations', true);
+    api.settings.set_string('glass-mode', 'dark');
     api.settings.set_int('glass-brightness', 0);
     await Scripting.waitLeisure();
     assert(api.glass.brightness === 0 && api.glass.blurRadius === 30,
-        'dark brightness applies live');
+        'dark glass brightness applies live');
+    assert(api.overlay.has_style_class_name('sift-dark'),
+        'dark glass uses light text');
     assert(api.glass.cloneCount === clones,
         'brightness does not rebuild the backdrop');
 
     api.settings.set_int('glass-brightness', 100);
     await Scripting.waitLeisure();
     assert(api.glass.brightness === 100 && api.glass.blurRadius === 14,
-        'clear brightness applies live');
+        'the clear end of dark glass applies live');
     assert(api.glass.cloneCount === clones,
         'the clear end keeps the same copies');
 
@@ -495,10 +543,34 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(api.glass.blurRadius === 22, 'the default brightness blurs 22 px');
 
+    api.settings.set_string('glass-mode', 'light');
+    api.settings.set_int('glass-light-brightness', 0);
+    await Scripting.waitLeisure();
+    assert(api.glass.brightness === 0 && api.glass.blurRadius === 30,
+        'the light slider is independent');
+    assert(api.overlay.has_style_class_name('sift-light'),
+        'light glass uses dark text');
+
+    api.settings.set_string('glass-mode', 'clear');
+    await Scripting.waitLeisure();
+    assert(api.glass.brightness === 85,
+        'clear glass keeps only a thin tint');
+    assert(api.overlay.has_style_class_name('sift-dark'),
+        'clear glass uses light text');
+
+    api.settings.set_string('glass-style', 'flat');
+    await Scripting.waitLeisure();
+    assert(api.glass.blurRadius === 0, 'flat glass skips the blur');
+
+    api.settings.set_string('glass-style', savedStyle);
+    api.settings.set_int('glass-light-brightness', savedLight);
     api.settings.set_int('glass-brightness', savedBrightness);
+    api.settings.set_string('glass-mode', 'dark');
     await Scripting.waitLeisure();
     assert(api.glass.brightness === savedBrightness,
         'brightness is restored');
+    api.settings.set_string('glass-mode', savedMode);
+    await Scripting.waitLeisure();
 
     await openOverlay(api, 'search');
     api.overlay.close();
@@ -767,8 +839,15 @@ export async function run() {
     assert(api.workspaceView.visible, 'workspace columns are visible');
     assert(api.workspaceView.cards.length === wsManager.n_workspaces,
         'one column per workspace');
-    assert(api.workspaceView.cards.every(card => card.width === 200),
-        'workspace cards keep a fixed width');
+    assert(api.workspaceView.cards.every(card =>
+        card.width === api.workspaceView.cards[0].width && card.width > 300),
+    'workspace cards share the width that shows two and a half of them');
+    const previews = api.workspaceView.cardRecords
+        .flatMap(record => record.windows.map(window => window.preview));
+    assert(previews.every(preview =>
+        preview.width === api.workspaceView.cards[0].width - 38 &&
+        preview.height >= 150),
+    'window thumbnails fill the larger cards');
     assert(api.workspaceView.selectedIndex ===
         wsManager.get_active_workspace_index(), 'the active workspace is selected');
 
@@ -818,6 +897,67 @@ export async function run() {
     assert(wsManager.get_workspace_by_index(dropRecord.index) ===
         draggedWorkspace, 'the dropped workspace moves to that position');
     wsManager.reorder_workspace(draggedWorkspace, 0);
+    api.workspaceView._scheduleReload();
+    await Scripting.waitLeisure();
+
+    // A drop on a card edge inserts a workspace at that gap instead of only
+    // moving the window into an existing workspace.
+    const edgeCard = api.workspaceView.cardRecords[0];
+    let edgeMoved = null;
+    const edgeSource = {
+        metaWindow: {
+            get_workspace: () => wsManager.get_workspace_by_index(1),
+            change_workspace: workspace => {
+                edgeMoved = workspace;
+            },
+        },
+    };
+    const beforeEdge = wsManager.n_workspaces;
+    assert(edgeCard.card._delegate.handleDragOver(
+        edgeSource, null, 2, 10) === DND.DragMotionResult.MOVE_DROP,
+    'the left edge of a card accepts a new workspace');
+    assert(edgeCard.card._delegate.acceptDrop(edgeSource, null, 2, 10),
+        'dropping on the edge moves the window');
+    assert(wsManager.n_workspaces === beforeEdge + 1,
+        'an edge drop creates a workspace');
+    assert(edgeMoved === wsManager.get_workspace_by_index(0),
+        'the new workspace lands in the gap before the card');
+
+    // Dropping past the last card uses the empty strip as an end drop target.
+    let endMoved = null;
+    const endSource = {
+        metaWindow: {
+            get_workspace: () => wsManager.get_workspace_by_index(0),
+            change_workspace: workspace => {
+                endMoved = workspace;
+            },
+        },
+    };
+    assert(api.workspaceView._delegate.acceptDrop(endSource, null,
+        api.workspaceView.width - 2, 10),
+    'the end of the strip accepts a new workspace');
+    assert(endMoved === wsManager.get_workspace_by_index(
+        wsManager.n_workspaces - 1),
+    'a drop past the cards appends a workspace');
+    api.workspaceView._scheduleReload();
+    await Scripting.waitLeisure();
+
+    // A horizontal wheel notch pans the overflowing strip. The empty test
+    // workspaces are pruned on reload, so lend the strip some room here.
+    const rightScroll = {
+        get_scroll_direction: () => Clutter.ScrollDirection.RIGHT,
+        get_state: () => 0,
+        get_scroll_delta: () => [0, 0],
+    };
+    api.workspaceView._offset = 0;
+    api.workspaceView._maxOffset = 200;
+    assert(api.workspaceView._handleScroll(rightScroll) ===
+        Clutter.EVENT_STOP, 'the strip handles a horizontal wheel notch');
+    assert(api.workspaceView._offset > 0,
+        'a horizontal wheel notch pans the strip');
+    api.workspaceView._maxOffset = 0;
+    api.workspaceView._offset = 0;
+
     api.workspaceView._scheduleReload();
     await Scripting.waitLeisure();
 
@@ -874,8 +1014,8 @@ export async function run() {
         api.overlay.view === 'workspace',
     'the workspace shortcut opens the workspace view', 2000);
     await settle(api, 'the workspace shortcut settles');
-    assert(api.glass.rect.height < 470,
-        'the workspace view keeps a shallow horizontal panel');
+    assert(api.glass.rect.height >= 460 && api.glass.rect.height <= 500,
+        'the workspace view fits a row and a half of thumbnails');
 
     const clickTarget = api.workspaceView.cardRecords.find(record =>
         record.index !== wsManager.get_active_workspace_index());

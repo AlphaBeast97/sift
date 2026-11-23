@@ -354,8 +354,10 @@ export class GlassPanel {
                 this._panel.remove_style_class_name('sift-glass-fallback');
         }
 
-        if (this._blur)
+        if (this._blur) {
+            this._blur.enabled = this._params.blurRadius > 0;
             this._blur.radius = this._params.blurRadius;
+        }
 
         this._updateUniforms();
     }
@@ -379,10 +381,14 @@ export class GlassPanel {
 
     _readParams() {
         return glassParams({
-            brightness: this._settings
-                ? this._settings.get_int('glass-brightness') : 50,
-            dark: St.Settings.get().color_scheme ===
+            mode: this._settings?.get_string('glass-mode') ?? 'auto',
+            systemDark: St.Settings.get().color_scheme ===
                 St.SystemColorScheme.PREFER_DARK,
+            darkBrightness: this._settings
+                ? this._settings.get_int('glass-brightness') : 50,
+            lightBrightness: this._settings
+                ? this._settings.get_int('glass-light-brightness') : 50,
+            style: this._settings?.get_string('glass-style') ?? 'liquid',
         });
     }
 

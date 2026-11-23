@@ -83,17 +83,25 @@ gnome-extensions enable sift@alphabeast97.github.io
   apps** under Search → App grid can sort by recent use, most used, or a smart
   blend of frequency and recency.
 - The window button in the search bar or **Super+Tab** opens the workspace
-  view. Every workspace is a fixed-width card in a shallow horizontal strip
-  with live window thumbnails. Click a workspace card or header, or press
-  **Enter**, to switch to it; **Up/Down** select a window and **Enter** focuses
-  it. Drag a window onto another card to move it, or drag a workspace header to
-  reorder the strip. **Ctrl+Left/Right** reorders the selected workspace and
+  view. Every workspace is a fixed-width card in a horizontal strip with large
+  live window thumbnails. About two and a half cards fit across, and each card
+  shows a row and a half of thumbnails; the partly visible card or row means
+  there is more. Click a workspace card or header, or press **Enter**, to
+  switch to it; **Up/Down** select a window and **Enter** focuses it.
+  Drag a window onto the middle of another card to move it there. Dropping it
+  on a card edge, a gap between cards, or past the last card creates a new
+  workspace at that spot, so an app can be placed behind the workspace it came
+  from. Drag a workspace header onto another position to reorder it with its
+  apps. **Ctrl+Left/Right** reorders the selected workspace and
   **Shift+Left/Right** moves the selected window to the previous or next
-  workspace. Each window and workspace card has a close button.
-  **Left/Right** move between workspaces, typing switches back to search, and
-  pressing the workspace shortcut again also returns to search. When more
-  workspaces than fit are open, **Shift+wheel** (or a horizontal wheel) pans
-  the strip.
+  workspace. Each window and workspace card has a close button. Empty
+  workspaces left behind when their last window closes disappear immediately,
+  and at most one empty workspace is kept. **Left/Right** move between
+  workspaces, typing switches back to search, and pressing the workspace
+  shortcut again also returns to search. When the strip does not fit,
+  **Shift+wheel** or a horizontal wheel pans it, a plain vertical wheel pans it
+  when the pointer is not over a scrolling card, and dragging near either edge
+  scrolls automatically.
 
 File search reads names only. File contents are never indexed or read.
 
@@ -111,14 +119,16 @@ make prefs
 gnome-extensions prefs sift@alphabeast97.github.io
 ```
 
-The window exposes glass brightness, animations, search panel height, maximum
-results, web search with its engine and browser, settings panel search (web and
-settings panel results are off by default), the fullscreen guard, app-grid
-labels and order, learned-ranking clearing, the GNOME overview takeover, and
-all three shortcuts, plus a **Files** page for the file index and a **How to
-use** page covering shortcuts, navigation, calculator examples, the app grid,
-workspaces and window dragging, settings panels, fullscreen behavior, privacy,
-and current limits.
+The window exposes a glass mode (Auto, Light, Dark or Clear), separate Dark
+glass and Light glass brightness sliders, a glass style (Liquid, Frosted or
+Flat), animations, search panel height, maximum results, web search with its
+engine and browser, settings panel search (web and settings panel results are
+off by default), the fullscreen guard, app-grid labels and order,
+learned-ranking clearing, the GNOME overview takeover, and all three
+shortcuts, plus a **Files** page for the file index and a **How to use** page
+covering shortcuts, navigation, calculator examples, the app grid, workspaces
+and window dragging, settings panels, fullscreen behavior, privacy, and
+current limits.
 The panel height is fixed while typing; extra results scroll. Changes apply
 live.
 Extension settings are ordinary GSettings under
@@ -261,9 +271,12 @@ one-time first-tile allocation are in `docs/perf/app-grid.md`.
 - **The extension is installed but does not open.** Confirm it is enabled with
   `gnome-extensions info sift@alphabeast97.github.io`; on Wayland, log out and
   back in after the first install.
-- **Glass looks flat or the text is hard to read.** Adjust **Brightness** in
-  preferences: lower values darken the glass, higher values show more of the
-  desktop. Blur my Shell can be enabled or disabled independently.
+- **Glass looks flat or the text is hard to read.** Pick a glass mode and style
+  in preferences. Auto follows the system color scheme; Light and Dark force
+  their glass with their own brightness sliders; Clear keeps a thin smoke tint
+  and light text. Liquid bends the backdrop, Frosted blurs without the bend,
+  and Flat skips the blur. Blur my Shell can be enabled or disabled
+  independently.
 - **Blur my Shell is installed.** Sift detects it only to pick a conservative
   default; it does not patch or depend on it.
 

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import {almost, assert, equal} from './assert.js';
-import {GLASS_PAD, glassParams} from '../../src/lib/glassParams.js';
+import {
+    GLASS_PAD,
+    glassIsDark,
+    glassParams,
+} from '../../src/lib/glassParams.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const mix = (a, b, t) => a + (b - a) * t;
@@ -21,9 +25,16 @@ function toneOut(params, backdropLuma) {
 export function run() {
     equal(GLASS_PAD, 32);
 
-    const dark0 = glassParams({brightness: 0, dark: true});
-    const dark50 = glassParams({brightness: 50, dark: true});
-    const dark100 = glassParams({brightness: 100, dark: true});
+    assert(glassIsDark({mode: 'auto', systemDark: true}), 'auto follows dark');
+    assert(!glassIsDark({mode: 'auto', systemDark: false}), 'auto follows light');
+    assert(glassIsDark({mode: 'dark', systemDark: false}), 'dark wins');
+    assert(!glassIsDark({mode: 'light', systemDark: true}), 'light wins');
+    assert(glassIsDark({mode: 'clear', systemDark: false}),
+        'clear uses light text');
+
+    const dark0 = glassParams({mode: 'dark', darkBrightness: 0});
+    const dark50 = glassParams({mode: 'dark', darkBrightness: 50});
+    const dark100 = glassParams({mode: 'dark', darkBrightness: 100});
     equal(dark0.blurRadius, 30);
     equal(dark50.blurRadius, 22);
     equal(dark100.blurRadius, 14);
@@ -32,30 +43,62 @@ export function run() {
     almost(dark100.fill[3], 0.24);
     equal(dark0.rimColour.join(','), '1,1,1');
 
-    const light0 = glassParams({brightness: 0, dark: false});
-    const light100 = glassParams({brightness: 100, dark: false});
+    const light0 = glassParams({mode: 'light', lightBrightness: 0});
+    const light100 = glassParams({mode: 'light', lightBrightness: 100});
     almost(light0.lo, 0.55);
     almost(light100.lo, 0.64);
     equal(light0.sheen, 0);
     equal(light100.glow, 0);
     equal(light0.rimColour.join(','), '0.12,0.12,0.14');
 
-    for (const dark of [true, false]) {
+    // The sliders are independent: the other mode's value changes nothing.
+    almost(glassParams({mode: 'dark', darkBrightness: 20,
+        lightBrightness: 90}).fill[3],
+    glassParams({mode: 'dark', darkBrightness: 20}).fill[3]);
+    almost(glassParams({mode: 'light', lightBrightness: 20,
+        darkBrightness: 90}).fill[3],
+    glassParams({mode: 'light', lightBrightness: 20}).fill[3]);
+
+    const clear = glassParams({mode: 'clear', darkBrightness: 0,
+        lightBrightness: 0});
+    equal(clear.brightness, 85);
+    assert(clear.fill[3] > 0.20 && clear.fill[3] < 0.30,
+        'clear keeps a thin readable tint');
+
+    for (const mode of ['dark', 'light']) {
         for (const backdrop of [0, 0.25, 0.5, 0.75, 1]) {
             let previous = -Infinity;
             for (const brightness of [0, 25, 50, 75, 100]) {
-                const value = toneOut(glassParams({brightness, dark}), backdrop);
-                assert(value > previous,
-                    `brightness rises at luma ${backdrop} (dark=${dark})`);
-                previous = value;
+                const params = glassParams({
+                    mode,
+                    ...(mode === 'dark'
+                        ? {darkBrightness: brightness}
+                        : {lightBrightness: brightness}),
+                });
+                const tone = toneOut(params, backdrop);
+                assert(tone > previous,
+                    `brightness rises at luma ${backdrop} (${mode})`);
+                previous = tone;
             }
         }
     }
 
     for (const brightness of [0, 50, 100]) {
-        assert(toneOut(glassParams({brightness, dark: true}), 1) <= 0.30,
-            `dark guardrail at ${brightness}`);
-        assert(toneOut(glassParams({brightness, dark: false}), 0) >= 0.60,
-            `light guardrail at ${brightness}`);
+        assert(toneOut(glassParams({mode: 'dark',
+            darkBrightness: brightness}), 1) <= 0.30,
+        `dark guardrail at ${brightness}`);
+        assert(toneOut(glassParams({mode: 'light',
+            lightBrightness: brightness}), 0) >= 0.60,
+        `light guardrail at ${brightness}`);
     }
+
+    const liquid = glassParams({mode: 'dark'});
+    const frosted = glassParams({mode: 'dark', style: 'frosted'});
+    const flat = glassParams({mode: 'dark', style: 'flat'});
+    equal(frosted.lens, 0);
+    assert(frosted.blurRadius > liquid.blurRadius, 'frosted blurs more');
+    assert(frosted.fill[3] > liquid.fill[3], 'frosted keeps more tint');
+    equal(flat.blurRadius, 0);
+    equal(flat.rim, 0);
+    assert(flat.fill[3] > liquid.fill[3], 'flat keeps the most tint');
 }

@@ -9,18 +9,19 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {GlassPanel} from './glass.js';
+import {glassIsDark} from './lib/glassParams.js';
 import {gridPanel, searchPanel, workspacePanel} from './lib/geometry.js';
 import {resolveKey} from './lib/keys.js';
 import {
     appRow,
+    defaultSelection,
     fileRow,
     mergeRows,
-    promoteLearned,
-    selectionAfter,
+    splitLearned,
 } from './lib/merge.js';
 import {LEARNED_THRESHOLD} from './lib/appScore.js';
 import {isFullscreenWindow} from './lib/fullscreen.js';
-import {SettingsSearch} from './lib/settingsSearch.js';
+import {metaMatches, SettingsSearch} from './lib/settingsSearch.js';
 import {MOVE, Spring} from './lib/spring.js';
 import {webRow} from './lib/webSearch.js';
 import {AppGrid} from './appGrid.js';
@@ -36,7 +37,10 @@ const CONTENT_IN_MS = 120;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
-const GLASS_KEYS = new Set(['glass-brightness', 'animations']);
+const GLASS_KEYS = new Set([
+    'glass-brightness', 'glass-light-brightness', 'glass-mode',
+    'glass-style', 'animations',
+]);
 
 export const SiftOverlay = GObject.registerClass({
     Signals: {
@@ -316,8 +320,11 @@ export const SiftOverlay = GObject.registerClass({
                 this._applyGeometry();
         });
         this._glassSettingsId = settings.connect('changed', (_settings, key) => {
-            if (GLASS_KEYS.has(key))
-                this.applySettings();
+            if (!GLASS_KEYS.has(key))
+                return;
+            if (key === 'glass-mode')
+                this._syncTheme();
+            this.applySettings();
         });
         this._webId = settings.connect('changed', (_settings, key) => {
             if (key === 'web-browser')
@@ -442,27 +449,37 @@ export const SiftOverlay = GObject.registerClass({
                 counts.set(row.key, this._apps?.settingCount(row.key) ?? 0);
         }
         const settingsCount = row => counts.get(row.key) ?? 0;
+        // A weak "work" match in "Network" must not push out a file or folder
+        // with that exact name. Learned panels always stay.
+        const queryText = this._entry.text.trim();
+        const exactFile = this._daemonFiles.some(file =>
+            file.name?.toLocaleLowerCase() === queryText.toLocaleLowerCase());
         const settings = settingsEnabled
             ? [...this._settingsRows]
+                .filter(row => !exactFile ||
+                    settingsCount(row) >= LEARNED_THRESHOLD ||
+                    metaMatches({name: row.title, description: row.subtitle},
+                        queryText))
                 .sort((a, b) => settingsCount(b) - settingsCount(a))
-                .slice(0, 2)
+                .slice(0, exactFile ? 1 : 2)
             : [];
         const promoted = settings
             .filter(row => settingsCount(row) >= LEARNED_THRESHOLD);
         const records = this._apps
             ? this._apps.search(this._entry.text, Math.min(4, this._maxRows))
             : [];
+        const fileRows = this._daemonFiles
+            .map(file => fileRow(file, this._home))
+            .filter(Boolean);
+        const learned = splitLearned(fileRows,
+            this._apps?.learned(this._entry.text) ?? null, LEARNED_THRESHOLD);
         const rows = mergeRows({
             calc: this._daemonCalc,
+            promoted: learned.promoted,
             apps: [...promoted, ...records.map(appRow)],
             settings: settings.filter(row =>
                 settingsCount(row) < LEARNED_THRESHOLD),
-            files: promoteLearned(
-                this._daemonFiles
-                    .map(file => fileRow(file, this._home))
-                    .filter(Boolean),
-                this._apps?.learned(this._entry.text) ?? null,
-                LEARNED_THRESHOLD),
+            files: learned.rest,
             web: this._settings.get_boolean('web-search')
                 ? webRow(this._entry.text,
                     this._settings.get_string('web-search-engine'),
@@ -471,15 +488,8 @@ export const SiftOverlay = GObject.registerClass({
         }, this._maxRows);
 
         this._results.setRows(rows);
-        // A settings row that loads above the current top row takes the default
-        // selection; calc and file rows arriving below leave it alone.
-        let next = selectionAfter(rows, previous);
-        if (previous === 'web' && rows.length > 1)
-            next = 0;
-        else if (previousIndex === 0 && next > 0 &&
-            rows[0]?.kind === 'setting')
-            next = 0;
-        this._results.select(next);
+        this._results.select(
+            defaultSelection(rows, previous, previousIndex, learned.promoted));
         this._syncEmptyState();
 
         if (this.visible && this._view === 'search')
@@ -652,8 +662,11 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     _syncTheme() {
-        const dark = St.Settings.get().color_scheme ===
-            St.SystemColorScheme.PREFER_DARK;
+        const dark = glassIsDark({
+            mode: this._settings.get_string('glass-mode'),
+            systemDark: St.Settings.get().color_scheme ===
+                St.SystemColorScheme.PREFER_DARK,
+        });
         for (const name of ['sift-dark', 'sift-light'])
             this.remove_style_class_name(name);
         this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
