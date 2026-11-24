@@ -26,7 +26,6 @@ const MIN_PREVIEW_HEIGHT = 24;
 const VISIBLE_PREVIEWS = 1.5;
 const DRAG_MAX_SIZE = 240;
 const DROP_EDGE = 24;
-const SCROLL_STEP = 48;
 const AUTO_SCROLL_MARGIN = 48;
 const AUTO_SCROLL_STEP = 10;
 
@@ -855,22 +854,23 @@ export const WorkspaceView = GObject.registerClass(
             const shift =
                 (event.get_state() & Clutter.ModifierType.SHIFT_MASK) !== 0;
             const scrollingCard = this._pointerOverScrollingCard();
+            // Same page-based unit St.ScrollView uses for a card's vertical
+            // scroll, so the strip has the same speed and feel.
+            const step = Math.pow(Math.max(this.width, 1), 2 / 3);
             let delta = 0;
             if (direction === Clutter.ScrollDirection.SMOOTH) {
-                // One smooth delta unit is one wheel notch, so scale it to
-                // the same distance as a discrete notch.
                 const [dx, dy] = event.get_scroll_delta();
                 if (dx !== 0 || shift)
-                    delta = (dx || dy) * SCROLL_STEP;
+                    delta = (dx || dy) * step;
                 else if (!scrollingCard)
-                    delta = dy * SCROLL_STEP;
+                    delta = dy * step;
             } else if (direction === Clutter.ScrollDirection.LEFT) {
-                delta = -SCROLL_STEP;
+                delta = -step;
             } else if (direction === Clutter.ScrollDirection.RIGHT) {
-                delta = SCROLL_STEP;
+                delta = step;
             } else if (shift || !scrollingCard) {
                 delta = direction === Clutter.ScrollDirection.UP
-                    ? -SCROLL_STEP : SCROLL_STEP;
+                    ? -step : step;
             }
 
             if (delta === 0)

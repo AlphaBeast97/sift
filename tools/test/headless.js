@@ -984,16 +984,17 @@ export async function run() {
     assert(api.workspaceView._offset > 0,
         'a horizontal wheel notch pans the strip');
 
+    const scrollUnit = Math.pow(api.workspaceView.width, 2 / 3);
     const smoothScroll = {
         get_scroll_direction: () => Clutter.ScrollDirection.SMOOTH,
         get_state: () => 0,
-        get_scroll_delta: () => [0.1, 0],
+        get_scroll_delta: () => [4.5 / scrollUnit, 0],
     };
     api.workspaceView._offset = 0;
     api.workspaceView._handleScroll(smoothScroll);
-    assert(Math.abs(api.workspaceView._offset - 4.8) < 0.001,
-        'a smooth scroll moves the strip by wheel-step pixels');
-    assert(Math.abs(api.workspaceView._strip.x + 4.8) < 0.001,
+    assert(Math.abs(api.workspaceView._offset - 4.5) < 0.001,
+        'a smooth scroll moves the strip by the scroll-view unit');
+    assert(Math.abs(api.workspaceView._strip.x + 4.5) < 0.001,
         'a smooth scroll keeps subpixel positions instead of snapping');
     api.workspaceView._maxOffset = 0;
     api.workspaceView._offset = 0;
