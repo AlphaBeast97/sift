@@ -24,7 +24,7 @@ export class OverviewBlocker {
         this._saved = {};
         this._savedLayout = {};
         this._swipeEnabled = false;
-        this._startupShowingId = 0;
+        this._startupCompleteId = 0;
         this._overlayKeyId = 0;
         this._overviewHijacked = false;
         this._bound = new Set();
@@ -176,21 +176,22 @@ export class OverviewBlocker {
         // Login goes straight to the desktop instead of showing the overview.
         Main.overview.runStartupAnimation = async () => {};
 
-        // The shell starts the animation before extensions are enabled, so
-        // also dismiss the overview as soon as it appears.
+        // The shell starts the animation before extensions are enabled. If it
+        // is already running, let it finish: hiding mid-flight leaves the
+        // controls' promise pending and startup never completes. Hide once the
+        // shell reports startup-complete instead.
         if (Main.layoutManager._startingUp) {
-            const id = Main.overview.connect('showing', () => {
-                Main.overview.disconnect(id);
-                if (this._startupShowingId === id)
-                    this._startupShowingId = 0;
-                if (Main.layoutManager._startingUp)
+            const id = Main.layoutManager.connect('startup-complete', () => {
+                Main.layoutManager.disconnect(id);
+                if (this._startupCompleteId === id)
+                    this._startupCompleteId = 0;
+                if (Main.overview.visible)
                     this._dismiss();
             });
-            this._startupShowingId = id;
-        }
-
-        if (Main.overview.visible)
+            this._startupCompleteId = id;
+        } else if (Main.overview.visible) {
             this._dismiss();
+        }
 
         this._swipeEnabled = Main.overview._swipeTracker.enabled;
         Main.overview._swipeTracker.enabled = false;
@@ -203,9 +204,9 @@ export class OverviewBlocker {
 
         this._setOverviewHijack(false);
 
-        if (this._startupShowingId) {
-            Main.overview.disconnect(this._startupShowingId);
-            this._startupShowingId = 0;
+        if (this._startupCompleteId) {
+            Main.layoutManager.disconnect(this._startupCompleteId);
+            this._startupCompleteId = 0;
         }
 
         if (this._overlayKeyId) {
