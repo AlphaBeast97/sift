@@ -274,8 +274,8 @@ one-time first-tile allocation are in `docs/perf/app-grid.md`.
 - **Glass looks flat or the text is hard to read.** Pick a glass mode and style
   in preferences. Auto follows the system color scheme; Light and Dark force
   their glass with their own brightness sliders; Clear is a near-transparent
-  veil that keeps the desktop visible, with light text outlined in dark for
-  contrast. Liquid bends the backdrop at the rim, Crystal
+  veil that keeps the desktop visible, with clean light text and a filled
+  selection. Liquid bends the backdrop at the rim, Crystal
   sharpens that bend into a bright edge, Glow replaces the bend with a soft
   halo, and Flat skips the blur. Blur my Shell can be enabled or disabled
   independently.

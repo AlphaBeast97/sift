@@ -152,12 +152,14 @@
 
 .sift-app-grid .overview-icon.overview-icon-with-label StLabel {
     color: rgba(255, 255, 255, 0.92);
+}
+
+.sift-dark .sift-app-grid .overview-icon.overview-icon-with-label StLabel {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
 .sift-light .sift-app-grid .overview-icon.overview-icon-with-label StLabel {
     color: rgba(0, 0, 0, 0.88);
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
 }
 
 .sift-workspace {
@@ -414,8 +416,8 @@
 }
 
 .sift-light .sift-row-selected {
-    background-color: rgba(0, 0, 0, 0.09);
-    border-color: rgba(0, 0, 0, 0.8);
+    background-color: rgba(0, 0, 0, 0.13);
+    border-color: transparent;
 }
 
 .sift-light .sift-row-title {
@@ -464,37 +466,28 @@
     icon-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
-/* Clear glass lets bright desktops through, so white text gets a dark outline
-   instead of a heavy tint behind it. This stays readable on light and dark. */
-.sift-clear .sift-entry,
-.sift-clear .sift-entry StLabel.hint-text,
-.sift-clear .sift-row-title,
+/* Clear glass lets bright desktops through, so the small text is a little
+   brighter and the selection is a filled pill instead of a white outline. */
+.sift-clear .sift-entry {
+    color: #ffffff;
+    caret-color: #ffffff;
+}
+
+.sift-clear .sift-entry StLabel.hint-text {
+    color: rgba(255, 255, 255, 0.80);
+}
+
+.sift-clear .sift-search-icon {
+    color: rgba(255, 255, 255, 0.80);
+}
+
 .sift-clear .sift-row-subtitle,
 .sift-clear .sift-footer-hint,
-.sift-clear .sift-empty-title,
 .sift-clear .sift-empty-hint,
-.sift-clear .sift-empty-button,
-.sift-clear .sift-workspace-title,
 .sift-clear .sift-workspace-count,
 .sift-clear .sift-workspace-empty,
 .sift-clear .sift-window-title {
-    text-shadow:
-        1px 0 1px rgba(0, 0, 0, 0.9),
-        -1px 0 1px rgba(0, 0, 0, 0.9),
-        0 1px 1px rgba(0, 0, 0, 0.9),
-        0 -1px 1px rgba(0, 0, 0, 0.9),
-        0 2px 8px rgba(0, 0, 0, 0.6);
-}
-
-.sift-clear .sift-search-icon,
-.sift-clear .sift-row-icon,
-.sift-clear .sift-grid-button {
-    icon-shadow:
-        1px 0 1px rgba(0, 0, 0, 0.9),
-        -1px 0 1px rgba(0, 0, 0, 0.9),
-        0 1px 1px rgba(0, 0, 0, 0.9),
-        0 -1px 1px rgba(0, 0, 0, 0.9),
-        0 2px 8px rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.80);
 }
 
 .sift-clear .sift-row:hover {
@@ -502,32 +495,10 @@
 }
 
 .sift-clear .sift-row-selected {
-    border-color: rgba(255, 255, 255, 0.95);
-    background-color: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+    border-color: transparent;
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .sift-clear .sift-grid-button {
     background-color: rgba(255, 255, 255, 0.12);
-}
-
-.sift-light .sift-entry,
-.sift-light .sift-entry StLabel.hint-text,
-.sift-light .sift-row-title,
-.sift-light .sift-row-subtitle,
-.sift-light .sift-footer-hint,
-.sift-light .sift-empty-title,
-.sift-light .sift-empty-hint,
-.sift-light .sift-empty-button,
-.sift-light .sift-workspace-title,
-.sift-light .sift-workspace-count,
-.sift-light .sift-workspace-empty,
-.sift-light .sift-window-title {
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
-}
-
-.sift-light .sift-search-icon,
-.sift-light .sift-row-icon,
-.sift-light .sift-grid-button {
-    icon-shadow: 0 1px 2px rgba(255, 255, 255, 0.65);
 }

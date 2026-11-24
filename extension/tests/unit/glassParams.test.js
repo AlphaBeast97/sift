@@ -66,9 +66,9 @@ export function run() {
     const clear = glassParams({mode: 'clear', darkBrightness: 0,
         lightBrightness: 0});
     equal(clear.brightness, 100);
-    almost(clear.fill[3], 0.05);
-    assert(toneOut(clear, 0.9) > 0.65 && toneOut(clear, 0.9) < 0.80,
-        'clear stays transparent over a bright desktop');
+    almost(clear.fill[3], 0.07);
+    assert(toneOut(clear, 0.9) > 0.50 && toneOut(clear, 0.9) < 0.62,
+        'clear darkens bright backdrops enough for shadowless text');
     assert(toneOut(clear, 0) < 0.04,
         'clear keeps the dark desktop visible');
 

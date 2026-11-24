@@ -670,9 +670,10 @@ export const SiftOverlay = GObject.registerClass({
         });
         for (const name of ['sift-dark', 'sift-light', 'sift-clear'])
             this.remove_style_class_name(name);
-        this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
         if (mode === 'clear')
             this.add_style_class_name('sift-clear');
+        else
+            this.add_style_class_name(dark ? 'sift-dark' : 'sift-light');
     }
 
     _syncEmptyState() {
@@ -1467,7 +1468,7 @@ export const SiftOverlay = GObject.registerClass({
             return;
 
         if (!this.visible || !animate || !this._animationsEnabled() ||
-            this._state !== 'open') {
+            (this._state !== 'open' && this._state !== 'opening')) {
             this._setPanelRectInstant(rect);
             return;
         }

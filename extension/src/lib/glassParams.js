@@ -29,15 +29,14 @@ const LIGHT = {
         knee: 0.45},
 };
 
-// Clear is a colour-true veil: the backdrop keeps almost all of its brightness
-// and chroma. The white text carries a dark outline in the stylesheet instead
-// of relying on a heavy tint, so the glass can stay genuinely clear.
+// Clear is a colour-true veil with the highlights pulled down: dark desktops
+// stay clear, bright ones get enough tint for shadowless white text.
 const CLEAR = {
-    fill: [0.02, 0.025, 0.035, 0.05],
+    fill: [0.02, 0.025, 0.035, 0.07],
     lo: 0.02,
     span: 0.88,
-    deep: 0.08,
-    knee: 0.55,
+    deep: 0.30,
+    knee: 0.50,
     sheen: 0.02,
     glow: 0.05,
 };

@@ -890,7 +890,7 @@ export default class SiftPreferences extends ExtensionPreferences {
 
         const appearanceGroup = new Adw.PreferencesGroup({title: 'Appearance'});
         appearanceGroup.add(valueRow('Glass',
-            'Pick Auto, Light, Dark or Clear under Appearance. Auto follows the system color scheme. Dark and Light have their own brightness sliders; lower keeps the glass denser and higher shows more desktop. Clear is a nearly transparent veil with light text outlined in dark. Liquid bends the backdrop at the rim, Crystal sharpens that bend into a bright edge, Glow replaces it with a soft halo, and Flat skips the blur.'));
+            'Pick Auto, Light, Dark or Clear under Appearance. Auto follows the system color scheme. Dark and Light have their own brightness sliders; lower keeps the glass denser and higher shows more desktop. Clear is a nearly transparent veil with clean light text. Liquid bends the backdrop at the rim, Crystal sharpens that bend into a bright edge, Glow replaces it with a soft halo, and Flat skips the blur.'));
         page.add(appearanceGroup);
 
         const searchGroup = new Adw.PreferencesGroup({title: 'Search'});

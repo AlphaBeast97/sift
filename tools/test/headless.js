@@ -555,9 +555,9 @@ export async function run() {
     await Scripting.waitLeisure();
     assert(api.glass.brightness === 100 && api.glass.blurRadius === 6,
         'clear glass keeps the backdrop crisp');
-    assert(api.overlay.has_style_class_name('sift-dark') &&
+    assert(!api.overlay.has_style_class_name('sift-dark') &&
         api.overlay.has_style_class_name('sift-clear'),
-    'clear glass uses light text with a stronger shadow');
+    'clear glass uses light text without a shadow');
 
     api.settings.set_string('glass-style', 'crystal');
     await Scripting.waitLeisure();
@@ -584,7 +584,7 @@ export async function run() {
     api.settings.set_string('glass-mode', savedMode);
     await Scripting.waitLeisure();
     assert(!api.overlay.has_style_class_name('sift-clear'),
-        'leaving clear drops the extra shadow');
+        'leaving clear drops the extra style');
 
     await openOverlay(api, 'search');
     api.overlay.close();
@@ -635,6 +635,20 @@ export async function run() {
     await settle(api, 'the early grid switch settles');
     assert(api.glass.rect.height > 60,
         'the early grid switch follows the geometry spring');
+    await closeOverlay(api);
+
+    // Typing before the open spring finishes must grow the bar from the
+    // compact height instead of snapping to the full panel.
+    api.overlay.entry.set_text('');
+    api.overlay.open('search');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'search',
+        'search opens for early typing', 2000);
+    api.overlay.entry.set_text('a');
+    assert(api.glass.rect.height < 404,
+        'typing during the open spring does not snap to the full panel');
+    await settle(api, 'the early typing grows the panel');
+    assert(api.glass.rect.height === 404,
+        'the early typing settles at the search height');
     await closeOverlay(api);
 
     api.settings.set_boolean('animations', false);

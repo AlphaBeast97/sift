@@ -24,7 +24,7 @@
       </choices>
       <default>'auto'</default>
       <summary>Glass mode</summary>
-      <description>Auto follows the system color scheme. Light and Dark force that glass, and Clear is a near-transparent veil with light text outlined in dark.</description>
+      <description>Auto follows the system color scheme. Light and Dark force that glass, and Clear is a near-transparent veil with clean light text.</description>
     </key>
 
     <key name="glass-style" type="s">
