@@ -857,13 +857,13 @@ export const WorkspaceView = GObject.registerClass(
             const scrollingCard = this._pointerOverScrollingCard();
             let delta = 0;
             if (direction === Clutter.ScrollDirection.SMOOTH) {
-                // Smooth deltas are already pixels; scaling them made a
-                // two-finger scroll jump several cards at once.
+                // One smooth delta unit is one wheel notch, so scale it to
+                // the same distance as a discrete notch.
                 const [dx, dy] = event.get_scroll_delta();
                 if (dx !== 0 || shift)
-                    delta = dx || dy;
+                    delta = (dx || dy) * SCROLL_STEP;
                 else if (!scrollingCard)
-                    delta = dy;
+                    delta = dy * SCROLL_STEP;
             } else if (direction === Clutter.ScrollDirection.LEFT) {
                 delta = -SCROLL_STEP;
             } else if (direction === Clutter.ScrollDirection.RIGHT) {
@@ -882,7 +882,9 @@ export const WorkspaceView = GObject.registerClass(
 
         _updateOffset() {
             this._offset = clamp(this._offset, 0, this._maxOffset);
-            this._strip.x = -Math.round(this._offset);
+            // Keep the subpixel offset: rounding made slow trackpad scrolling
+            // stick and then jump a pixel at a time.
+            this._strip.x = -this._offset;
         }
 
         _syncSelection() {
