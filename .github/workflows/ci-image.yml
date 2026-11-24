@@ -16,6 +16,7 @@ jobs:
   image:
     if: github.actor == github.repository_owner
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:

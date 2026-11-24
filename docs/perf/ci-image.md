@@ -35,12 +35,11 @@ make test-shell-container
 
 ## Triggers
 
-Every workflow is manual and owner-only. `CI` and `Shell smoke` run from
-`workflow_dispatch`; `CI` also runs on a PR only when the repository owner adds
-the `ci` label. `CI image` is dispatched by hand or called by `Shell smoke`.
-Every job checks `github.actor == github.repository_owner`; there is no push,
-schedule, or automatic PR trigger. `Release` runs when the owner pushes a `v*`
-tag.
+Every workflow is owner-only. `CI` runs on pushes to `main` and on a pull
+request only after the owner adds the `ci` label, or by hand. `Shell smoke` runs
+on `main` pushes and by hand; it calls `CI image`. `CI image` is dispatched by
+hand or called by `Shell smoke`. `Release` runs when the owner pushes a `v*`
+tag; it runs the checks first, then builds and publishes the artifacts.
 
 ## GHCR
 

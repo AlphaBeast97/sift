@@ -51,7 +51,7 @@ test-shell-container:
 		sift-gnome51:local \
 		sh -c 'mkdir -p /tmp/sift-runtime && chmod 700 /tmp/sift-runtime && make test-shell'
 
-check-pack: build
+check-pack: extension
 	python3 tools/test/check_pack.py
 
 test: test-gjs test-schema test-rust lint

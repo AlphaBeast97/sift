@@ -1,5 +1,8 @@
 # Sift
 
+[![CI](https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml/badge.svg)](https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml)
+[![Shell smoke](https://github.com/AlphaBeast97/sift/actions/workflows/shell-smoke.yml/badge.svg)](https://github.com/AlphaBeast97/sift/actions/workflows/shell-smoke.yml)
+
 Spotlight-style search for GNOME Shell 51: applications, files, settings
 panels, a calculator, the web, an app grid, a workspace and window switcher,
 and liquid glass.
@@ -50,6 +53,9 @@ rescans. If the installer prints the logout note, log out and back in, then run:
 ```bash
 gnome-extensions enable sift@alphabeast97.github.io
 ```
+
+Sift runs only in the user session. GNOME Shell disables it while the screen is
+locked and it does not load at the GDM login screen; it comes back after unlock.
 
 ## Use
 
@@ -227,10 +233,12 @@ make check-pack         # metadata/schema/zip sanity check
 `make ci-image` and `make test-shell-container` build and run the pinned GNOME 51
 container (Docker required).
 
-GitHub Actions are manual-only and owner-only: nothing runs on pushes, schedules,
-or unlabeled pull requests. Dispatch `CI`, `CI image`, or `Shell smoke` from the
-Actions tab, or add the `ci` label to a PR to run `CI` there. `Release` runs only
-when the owner pushes a `v*` tag.
+GitHub Actions run when the owner pushes to `main`, and on a pull request only
+after the owner adds the `ci` label or dispatches `CI` by hand. There are no
+scheduled or automatic pull-request runs. `Shell smoke` runs on `main` pushes
+and by hand. `Release` runs when the owner pushes a `v*` tag: it reruns the
+checks, builds the artifacts, verifies `SHA256SUMS`, and attaches them to the
+release.
 
 ## Performance
 

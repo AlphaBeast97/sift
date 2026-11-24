@@ -12,6 +12,7 @@ jobs:
   release:
     if: github.actor == github.repository_owner
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     container:
       image: ghcr.io/alphabeast97/sift-gnome51:gnome51
       credentials:
@@ -19,8 +20,14 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install JS dependencies
+        run: npm ci
+      - name: Test
+        run: make test check-pack
       - name: Build release artifacts
         run: make release
+      - name: Verify checksums
+        run: cd dist && sha256sum -c SHA256SUMS
       - name: Attach artifacts
         uses: softprops/action-gh-release@v2
         with:
@@ -28,3 +35,4 @@ jobs:
             dist/siftd
             dist/sift@alphabeast97.github.io.shell-extension.zip
             dist/SHA256SUMS
+          fail_on_unmatched_files: true
