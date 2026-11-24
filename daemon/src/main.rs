@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::{mpsc, oneshot};
 
 mod cache;
@@ -132,8 +132,7 @@ async fn main() {
 
     let mut terminate =
         signal(SignalKind::terminate()).expect("cannot install the SIGTERM handler");
-    let mut interrupt =
-        signal(SignalKind::interrupt()).expect("cannot install the SIGINT handler");
+    let mut interrupt = signal(SignalKind::interrupt()).expect("cannot install the SIGINT handler");
 
     tokio::select! {
         result = &mut manager => {

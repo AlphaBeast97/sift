@@ -279,8 +279,8 @@ mod tests {
 
     #[test]
     fn entry_cap_is_bounded() {
-        let config = Config::load_str("max_entries = 50000000\n", Path::new("/home/alice"))
-            .unwrap();
+        let config =
+            Config::load_str("max_entries = 50000000\n", Path::new("/home/alice")).unwrap();
         assert_eq!(config.max_entries, 1_000_000);
     }
 

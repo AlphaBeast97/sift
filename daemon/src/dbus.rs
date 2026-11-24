@@ -230,14 +230,15 @@ mod tests {
         let (commands, _receiver) = mpsc::unbounded_channel();
         let service = SiftService::new(index, status, config, commands);
 
-        let config: serde_json::Value =
-            serde_json::from_str(&service.config_json()).unwrap();
+        let config: serde_json::Value = serde_json::from_str(&service.config_json()).unwrap();
         assert_eq!(config["roots"][0], "/home/alice");
-        assert!(config["exclude_dirs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|value| value == "go/pkg/mod"));
+        assert!(
+            config["exclude_dirs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value == "go/pkg/mod")
+        );
         assert_eq!(config["max_entries"], 250_000);
     }
 }
