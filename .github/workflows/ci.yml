@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: ghcr.io/${{ github.repository_owner }}/sift-gnome51:gnome51
+      image: ghcr.io/alphabeast97/sift-gnome51:gnome51
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: ghcr.io/${{ github.repository_owner }}/sift-gnome51:gnome51
+      image: ghcr.io/alphabeast97/sift-gnome51:gnome51
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

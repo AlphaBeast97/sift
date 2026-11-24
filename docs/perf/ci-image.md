@@ -14,7 +14,9 @@ by digest in `shell-smoke.yml`.
   `make`, `mesa`, `npm`, `python`, `rust`, `ttf-dejavu`. `rust` supplies gcc and
   clippy; `npm` supplies nodejs; `gnome-shell` supplies gjs and glib2.
   `gnome-terminal` and Xvfb are not installed: the smoke test uses a tiny test
-  `.desktop` entry and the headless backend.
+  `.desktop` entry and the headless backend. The missing `adwaita-morning.jpg`
+  warning from the perf background is harmless; the shell falls back and still
+  starts.
 - The snapshot dates from the GNOME 51 era; the earlier 2026-10-06 snapshot
   still had GNOME Shell 50.5 and cannot run the extension.
 
@@ -28,10 +30,9 @@ make test-shell-container
 - Local image: `sift-gnome51:local`, ID `9a69f977752e`, size 4.02GB, built
   2026-11-14 with the original package set.
 - Result: build succeeded locally in 2435s, almost entirely package downloads.
-  The lean Dockerfile is validated by the manual `CI image` workflow on GitHub
-  instead of another local build.
-- Rendering: pending the GH `Shell smoke` run (llvmpipe surfaceless; Xvfb is
-  not installed).
+  The lean Dockerfile is validated by `CI image` on GitHub instead of another
+  local build.
+- Rendering: llvmpipe surfaceless; the manual `Shell smoke` passes.
 
 ## Triggers
 
@@ -44,7 +45,8 @@ tag; it runs the checks first, then builds and publishes the artifacts.
 ## GHCR
 
 - Published as `ghcr.io/alphabeast97/sift-gnome51:gnome51`; `Shell smoke` pulls
-  the pushed digest built in the same run.
+  the pushed digest built in the same run. The path is hardcoded lowercase
+  because GHCR rejects repository names that contain uppercase letters.
 - First GitHub build: 4m15s in `Shell smoke` run 43548590019 (2026-11-14), down
   from 2435s locally. The digest is not recorded because the workflow token has
   no `read:packages` scope.
