@@ -27,7 +27,6 @@ const VISIBLE_PREVIEWS = 1.5;
 const DRAG_MAX_SIZE = 240;
 const DROP_EDGE = 24;
 const SCROLL_STEP = 48;
-const SCROLL_SCALE = 240;
 const AUTO_SCROLL_MARGIN = 48;
 const AUTO_SCROLL_STEP = 10;
 
@@ -858,11 +857,13 @@ export const WorkspaceView = GObject.registerClass(
             const scrollingCard = this._pointerOverScrollingCard();
             let delta = 0;
             if (direction === Clutter.ScrollDirection.SMOOTH) {
+                // Smooth deltas are already pixels; scaling them made a
+                // two-finger scroll jump several cards at once.
                 const [dx, dy] = event.get_scroll_delta();
                 if (dx !== 0 || shift)
-                    delta = (dx || dy) * SCROLL_SCALE;
+                    delta = dx || dy;
                 else if (!scrollingCard)
-                    delta = dy * SCROLL_SCALE;
+                    delta = dy;
             } else if (direction === Clutter.ScrollDirection.LEFT) {
                 delta = -SCROLL_STEP;
             } else if (direction === Clutter.ScrollDirection.RIGHT) {

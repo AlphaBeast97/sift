@@ -983,6 +983,16 @@ export async function run() {
         Clutter.EVENT_STOP, 'the strip handles a horizontal wheel notch');
     assert(api.workspaceView._offset > 0,
         'a horizontal wheel notch pans the strip');
+
+    const smoothScroll = {
+        get_scroll_direction: () => Clutter.ScrollDirection.SMOOTH,
+        get_state: () => 0,
+        get_scroll_delta: () => [4, 0],
+    };
+    api.workspaceView._offset = 0;
+    api.workspaceView._handleScroll(smoothScroll);
+    assert(Math.abs(api.workspaceView._offset - 4) < 0.001,
+        'a smooth scroll moves the strip by its pixel delta');
     api.workspaceView._maxOffset = 0;
     api.workspaceView._offset = 0;
 
