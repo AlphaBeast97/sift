@@ -3,6 +3,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -37,6 +38,7 @@ const CONTENT_IN_MS = 120;
 const QUERY_DEBOUNCE_MS = 40;
 const MIN_QUERY_LENGTH = 2;
 const FILE_QUERY_LIMIT = 20;
+const PREWARM_DELAY_MS = 100;
 const GLASS_KEYS = new Set([
     'glass-brightness', 'glass-light-brightness', 'glass-mode',
     'glass-style', 'animations',
@@ -89,6 +91,10 @@ export const SiftOverlay = GObject.registerClass({
         this._latestQuery = null;
         this._reindexTimer = 0;
         this._prewarmId = 0;
+        this._prewarming = false;
+        this._prewarmPainted = false;
+        this._prewarmLaterId = 0;
+        this._prewarmFrames = 0;
         this._afterClose = null;
         this._themeId = 0;
 
@@ -631,34 +637,93 @@ export const SiftOverlay = GObject.registerClass({
         this._statusLabel.visible = text !== '';
     }
 
-    // Builds the app grid while the overlay is hidden, so the first open does
-    // not create every tile in the middle of its animation.
+    // Builds and paints the app grid while the overlay is hidden, so the first
+    // open does not pay for tile creation and shader setup in its animation.
     _schedulePrewarm() {
         if (this._prewarmId || this._destroyed)
             return;
 
-        this._prewarmId = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, 5, () => {
-            this._prewarmId = 0;
-            if (this._destroyed)
-                return GLib.SOURCE_REMOVE;
+        this._prewarmId = GLib.timeout_add(GLib.PRIORITY_LOW,
+            PREWARM_DELAY_MS, () => {
+                this._prewarmId = 0;
+                if (this._destroyed)
+                    return GLib.SOURCE_REMOVE;
 
-            if (this.visible) {
-                this._schedulePrewarm();
-                return GLib.SOURCE_REMOVE;
-            }
+                if (this.visible || this._state !== 'closed') {
+                    this._schedulePrewarm();
+                    return GLib.SOURCE_REMOVE;
+                }
 
-            this._prewarmGrid();
-            return GLib.SOURCE_REMOVE;
-        });
+                this._prewarmGrid(true);
+                return GLib.SOURCE_REMOVE;
+            });
     }
 
     // The grid needs its final size before it can lay out hidden; without it
     // the first open repages every tile in the middle of the animation.
-    _prewarmGrid() {
+    _prewarmGrid(paint = false) {
         const rect = this._targetRect('grid');
         if (rect)
             this._sizeContent(rect.width, rect.height);
-        this._grid?.prewarm();
+        this._grid?.prewarm(paint ? () => this._paintPrewarm() : null);
+    }
+
+    // A hidden grid is never allocated or painted, so its first real open
+    // still builds theme nodes, icon textures and the glass shader. Paint one
+    // near-invisible frame while hidden to pay that cost up front.
+    _paintPrewarm() {
+        if (this._destroyed || this._prewarmPainted || this._prewarming ||
+            this.visible || this._state !== 'closed')
+            return;
+
+        const rect = this._targetRect('grid');
+        if (!rect)
+            return;
+
+        this._prewarmPainted = true;
+        this._prewarming = true;
+        this._prewarmFrames = 0;
+
+        this._setPanelRectInstant(rect);
+        this._gridView.visible = true;
+        this._grid.open();
+        this._workspaceView.visible = true;
+        this._workspaceView.prewarm();
+        this._glass?.setRect(rect);
+        this._glass?.open();
+        this.reactive = false;
+        this.opacity = 1;
+        this.show();
+
+        this._prewarmLaterId = global.compositor.get_laters().add(
+            Meta.LaterType.BEFORE_REDRAW, () => {
+                if (this._destroyed)
+                    return GLib.SOURCE_REMOVE;
+                if (++this._prewarmFrames < 2)
+                    return GLib.SOURCE_CONTINUE;
+                this._prewarmLaterId = 0;
+                this._finishPrewarmPaint();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _finishPrewarmPaint() {
+        if (this._prewarmLaterId) {
+            global.compositor.get_laters().remove(this._prewarmLaterId);
+            this._prewarmLaterId = 0;
+        }
+        if (!this._prewarming)
+            return;
+
+        this._prewarming = false;
+        this.visible = false;
+        this.opacity = 255;
+        this.reactive = false;
+        this._rect = null;
+        this._grid?.close();
+        this._workspaceView?.close();
+        this._gridView.visible = false;
+        this._workspaceView.visible = false;
     }
 
     _syncTheme() {
@@ -717,6 +782,9 @@ export const SiftOverlay = GObject.registerClass({
     open(view = 'search') {
         if (this._destroyed || Main.sessionMode.currentMode !== 'user')
             return;
+
+        if (this._prewarming)
+            this._finishPrewarmPaint();
 
         if (!this.visible &&
             this._settings.get_boolean('fullscreen-guard') &&
@@ -1014,6 +1082,11 @@ export const SiftOverlay = GObject.registerClass({
             GLib.source_remove(this._prewarmId);
             this._prewarmId = 0;
         }
+        if (this._prewarmLaterId) {
+            global.compositor.get_laters().remove(this._prewarmLaterId);
+            this._prewarmLaterId = 0;
+        }
+        this._prewarming = false;
 
         if (this._grab) {
             const grab = this._grab;

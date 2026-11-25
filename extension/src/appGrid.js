@@ -44,6 +44,7 @@ export const AppGrid = GObject.registerClass(
             this._needsBuild = false;
             this._buildIndex = 0;
             this._chunkId = 0;
+            this._prewarmDone = null;
             this._mapId = 0;
             this._layoutId = 0;
             this._scrollTimeoutId = 0;
@@ -145,11 +146,13 @@ export const AppGrid = GObject.registerClass(
 
         // Rebuilds only when there is nothing to reuse; otherwise the existing
         // tiles are reordered and the missing ones are added.
-        _syncTiles() {
-            if (this._tiles.length === 0)
-                this._build();
-            else
+        _syncTiles(onDone = null) {
+            if (this._tiles.length === 0) {
+                this._build(onDone);
+            } else {
                 this._reconcile();
+                onDone?.();
+            }
         }
 
         refresh() {
@@ -198,12 +201,20 @@ export const AppGrid = GObject.registerClass(
         // Builds and lays out tiles while the overlay is hidden. The overlay
         // sizes this widget first, so the icon grid learns its real page size
         // and the first open does not have to repage every tile.
-        prewarm() {
-            if (this._destroyed || this._chunkId)
+        prewarm(onDone = null) {
+            if (this._destroyed)
                 return;
 
-            if (!this._dirty && this._tiles.length > 0)
+            if (this._chunkId) {
+                if (onDone)
+                    this._prewarmDone = onDone;
                 return;
+            }
+
+            if (!this._dirty && this._tiles.length > 0) {
+                onDone?.();
+                return;
+            }
 
             if (this.width > 0 && this.height > INDICATOR_HEIGHT) {
                 this._grid.layout_manager.adaptToSize(
@@ -212,7 +223,7 @@ export const AppGrid = GObject.registerClass(
 
             this.setApps(this._apps ? this._apps.gridApps(this._order) : []);
             this._dirty = false;
-            this._syncTiles();
+            this._syncTiles(onDone);
         }
 
         open() {
@@ -308,7 +319,7 @@ export const AppGrid = GObject.registerClass(
             super.destroy();
         }
 
-        _build() {
+        _build(onDone = null) {
             this._cancelChunks();
 
             for (const tile of this._tiles)
@@ -320,9 +331,11 @@ export const AppGrid = GObject.registerClass(
 
             if (this._records.length === 0) {
                 this._syncPages();
+                onDone?.();
                 return;
             }
 
+            this._prewarmDone = onDone;
             this._chunkId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE,
                 () => this._addChunk());
         }
@@ -365,6 +378,9 @@ export const AppGrid = GObject.registerClass(
                 return GLib.SOURCE_CONTINUE;
 
             this._chunkId = 0;
+            const done = this._prewarmDone;
+            this._prewarmDone = null;
+            done?.();
             return GLib.SOURCE_REMOVE;
         }
 
@@ -453,6 +469,7 @@ export const AppGrid = GObject.registerClass(
         }
 
         _cancelChunks() {
+            this._prewarmDone = null;
             if (this._chunkId) {
                 GLib.source_remove(this._chunkId);
                 this._chunkId = 0;

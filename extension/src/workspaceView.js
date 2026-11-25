@@ -51,6 +51,7 @@ export const WorkspaceView = GObject.registerClass(
             this._selected = 0;
             this._selectedWindow = -1;
             this._open = false;
+            this._prewarmed = false;
             this._reloadId = 0;
             this._offset = 0;
             this._maxOffset = 0;
@@ -117,11 +118,33 @@ export const WorkspaceView = GObject.registerClass(
         open() {
             this._open = true;
             this._connectSignals();
+            if (this._prewarmed) {
+                this._prewarmed = false;
+                this._selected = clamp(
+                    global.workspace_manager.get_active_workspace_index(),
+                    0, this._cards.length - 1);
+                this._selectedWindow = -1;
+                this._layout();
+                this._syncSelection();
+                return;
+            }
             this._rebuild();
+        }
+
+        // Builds the cards while the overlay is hidden so the first open only
+        // has to show them. They are kept until the view is opened once.
+        prewarm() {
+            if (this._prewarmed || this._open)
+                return;
+            this._prewarmed = true;
+            this._connectSignals();
+            this._rebuild(null, false);
         }
 
         close() {
             this._open = false;
+            if (this._prewarmed)
+                return;
             this._disconnectSignals();
             this._endDragScroll();
             this._clear();
@@ -208,10 +231,13 @@ export const WorkspaceView = GObject.registerClass(
         _watchWindow(window) {
             if (!window || this._windowIds.has(window))
                 return;
-            this._windowIds.set(window, window.connect('unmanaged', () => {
+            const minimizedId = window.connect('notify::minimized',
+                () => this._scheduleReload());
+            const unmanagedId = window.connect('unmanaged', () => {
                 this._windowIds.delete(window);
                 this._scheduleReload();
-            }));
+            });
+            this._windowIds.set(window, [unmanagedId, minimizedId]);
         }
 
         _connectSignals() {
@@ -234,11 +260,13 @@ export const WorkspaceView = GObject.registerClass(
                 global.display.disconnect(id);
             for (const id of this._managerIds)
                 global.workspace_manager.disconnect(id);
-            for (const [window, id] of this._windowIds) {
-                try {
-                    window.disconnect(id);
-                } catch {
-                    // The window may already be gone.
+            for (const [window, ids] of this._windowIds) {
+                for (const id of ids) {
+                    try {
+                        window.disconnect(id);
+                    } catch {
+                        // The window may already be gone.
+                    }
                 }
             }
             this._displayIds = [];
@@ -277,8 +305,9 @@ export const WorkspaceView = GObject.registerClass(
             this._pruning = false;
         }
 
-        _rebuild(selectedIndex = null) {
-            this._pruneEmptyWorkspaces();
+        _rebuild(selectedIndex = null, prune = true) {
+            if (prune)
+                this._pruneEmptyWorkspaces();
             this._clear();
             const manager = global.workspace_manager;
             const active = manager.get_active_workspace();
@@ -988,13 +1017,14 @@ export const WorkspaceView = GObject.registerClass(
         }
 
         _scheduleReload(delay = 0) {
-            if (!this._open || this._reloadId || this._pruning)
+            if ((!this._open && !this._prewarmed) ||
+                this._reloadId || this._pruning)
                 return;
 
             const reload = () => {
                 this._reloadId = 0;
-                if (this._open)
-                    this._rebuild(this._selected);
+                if (this._open || this._prewarmed)
+                    this._rebuild(this._selected, this._open);
             };
             this._reloadId = delay > 0
                 ? GLib.timeout_add_once(GLib.PRIORITY_DEFAULT, delay, reload)
@@ -1013,6 +1043,7 @@ export const WorkspaceView = GObject.registerClass(
 
         destroy() {
             this._open = false;
+            this._prewarmed = false;
             this._disconnectSignals();
             this._endDragScroll();
             this._clear();
