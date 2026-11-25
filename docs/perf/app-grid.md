@@ -45,10 +45,30 @@ animation, and each cold chunk added up to 89ms to a frame.
 | First warm open | 0.4ms layout, no repage |
 | Second warm open | 0.6ms layout, no repage |
 
-Frame timing during the first warm open: median 16.7ms, p95 40.7ms. The
-remaining long frame is the first allocation of all 91 `AppDisplay.AppIcon`
-tiles (theme nodes, labels, icons). It is a one-time cost per session; the
-second open stays at the frame clock.
+Frame timing during the first warm open after the paint prewarm: median
+16.7ms, p95 16.9ms, max 17.0ms. A build-only prewarm still spikes to
+36.6-55.3ms on the first open, so building tiles is not enough; the first
+paint is the cost.
+
+## First-paint prewarm
+
+The hidden grid is never allocated or painted, so its first real open still
+builds theme nodes, icon textures and the glass shader. The prewarm now paints
+one frame at `opacity = 1` while the overlay is hidden, then hides it again.
+That moves the one-time first-paint cost out of the opening animation.
+
+- The prewarm runs 100ms after enable, at low priority, so it does not compete
+  with session startup.
+- It finishes about 280-350ms after enable, including tile chunks.
+- Opening before it finishes is still cold; the fix targets the normal case
+  where the desktop is up before the user presses Super.
+- The workspace cards are built during the same paint pass and kept until the
+  view is opened once.
+- The glass stays open until the first real close, so its clones and shader are
+  not recreated on the first open. `close()` releases them afterwards.
+
+The paint pass is invisible in practice (1/255 opacity for two frames), and the
+overlay is not reactive during it.
 
 The cold path only matters during the first five seconds after the extension
 starts, before the idle prewarm runs. It still fills the grid in about half a
@@ -77,9 +97,8 @@ Measured on the open grid with 91 apps:
 | Reverse all 91 (worst case) | 14.8ms |
 | Rebuild all tiles (before) | 192ms in 23 chunks |
 
-The first grid paint after the session starts still carries the one-time
-allocation frame described above. That frame is the first paint of the tiles,
-not a rebuild.
+The first grid paint after the session starts is covered by the paint prewarm
+above; it is no longer part of the first open.
 
 ## Reproduce
 

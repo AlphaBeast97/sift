@@ -2,7 +2,7 @@ UUID := sift@alphabeast97.github.io
 SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
 PREFIX ?= $(HOME)/.local
 
-.PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension perf
+.PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension perf resources
 
 test-gjs:
 	gjs -m extension/tests/unit/all.js
@@ -36,6 +36,13 @@ test-shell: build
 perf: extension
 	cargo test --release --manifest-path daemon/Cargo.toml benchmark_query_latency -- --ignored --nocapture
 	SIFT_SCRIPT="$(CURDIR)/tools/perf/shell.js" tools/test/run-shell-test.sh
+
+# Writes the release resource report used to diff one release against the next.
+resources: extension
+	rm -f dist/resource-report.json
+	SIFT_RESOURCE_REPORT="$(CURDIR)/dist/resource-report.json" \
+	SIFT_SCRIPT="$(CURDIR)/tools/perf/resources.js" tools/test/run-shell-test.sh
+	@test -s dist/resource-report.json
 
 ci-image:
 	docker build -t sift-gnome51:local tools/ci/gnome51

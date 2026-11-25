@@ -265,11 +265,16 @@ not estimates.
 | App search, exact name | 0.1ms |
 | Warm search open | 2.7ms |
 | Typing an exact app name | 0.6ms |
-| Prewarmed app-grid open | 24.3ms |
+| First app-grid open, max frame | 17.7ms |
+| Prewarmed app-grid open | 27.4ms |
 
 `make perf` rebuilds the extension zip, runs the release Rust benchmark, and
 runs the headless shell benchmark; it prints both tables. Grid details and the
 one-time first-tile allocation are in `docs/perf/app-grid.md`.
+
+Each release also publishes `resource-report.json` plus a
+`RESOURCE_REPORT.md` diff against the previous release. `make resources`
+produces the JSON; the release workflow attaches both files.
 
 ## Troubleshooting
 

@@ -28,11 +28,24 @@ jobs:
         run: make release
       - name: Verify checksums
         run: cd dist && sha256sum -c SHA256SUMS
+      - name: Measure resource usage
+        run: |
+          export XDG_RUNTIME_DIR=/tmp/sift-runtime
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          make resources
+      - name: Compare with the previous release
+        run: python3 tools/perf/resource_diff.py dist/resource-report.json > dist/RESOURCE_REPORT.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Attach artifacts
         uses: softprops/action-gh-release@v2
         with:
+          body_path: dist/RESOURCE_REPORT.md
           files: |
             dist/siftd
             dist/sift@alphabeast97.github.io.shell-extension.zip
             dist/SHA256SUMS
+            dist/resource-report.json
+            dist/RESOURCE_REPORT.md
           fail_on_unmatched_files: true

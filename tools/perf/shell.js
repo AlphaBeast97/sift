@@ -2,6 +2,7 @@
 // Headless shell benchmark. Run with `make perf`; prints Markdown so the
 // README numbers come from this command instead of a stale measurement.
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -38,6 +39,46 @@ function state() {
     return Main.extensionManager.lookup(UUID)?.state;
 }
 
+class FrameMeter {
+    constructor() {
+        this._later = 0;
+        this._last = 0;
+        this._intervals = [];
+    }
+
+    start() {
+        this._last = 0;
+        this._intervals = [];
+        this._later = global.compositor.get_laters().add(
+            Meta.LaterType.BEFORE_REDRAW, () => this._tick());
+    }
+
+    _tick() {
+        const time = now();
+        if (this._last !== 0)
+            this._intervals.push(time - this._last);
+        this._last = time;
+        return GLib.SOURCE_CONTINUE;
+    }
+
+    stop() {
+        if (this._later === 0)
+            return;
+        global.compositor.get_laters().remove(this._later);
+        this._later = 0;
+    }
+
+    get summary() {
+        const sorted = [...this._intervals].sort((a, b) => a - b);
+        return {
+            p50: sorted[Math.floor(sorted.length * 0.5)] ?? 0,
+            p95: sorted[Math.floor(sorted.length * 0.95)] ?? 0,
+            max: sorted.length ? sorted[sorted.length - 1] : 0,
+            frames: sorted.length,
+        };
+    }
+}
+
 async function enable() {
     const start = now();
     Main.extensionManager.enableExtension(UUID);
@@ -64,7 +105,26 @@ export async function run() {
         .filter(app => app.should_show());
     const target = apps.find(app => app.get_name().length >= 4);
 
+    // The first open after enable is the one the prewarm targets. Wait for the
+    // hidden build and paint pass, then measure the opening frames.
+    await waitFor(() => !api.appGrid._chunkId &&
+        api.appGrid._tiles.length === api.appGrid.itemCount &&
+        api.overlay._prewarmPainted && !api.overlay._prewarming,
+    'the grid prewarms', 10000);
+    const firstGridMeter = new FrameMeter();
     let start = now();
+    api.overlay.open('grid');
+    const firstGridOpenTime = now() - start;
+    firstGridMeter.start();
+    await waitFor(() => !api.overlay.animating,
+        'the first grid open settles');
+    await Scripting.waitLeisure();
+    firstGridMeter.stop();
+    const firstGridFrames = firstGridMeter.summary;
+    api.overlay.close({immediate: true});
+    await Scripting.waitLeisure();
+
+    start = now();
     const snapshot = api.apps.gridApps('az');
     const snapshotTime = now() - start;
 
@@ -138,5 +198,8 @@ export async function run() {
     print(`| App search, exact name | ${format(median(searchTimes))} |`);
     print(`| Search open, warm | ${format(median(openTimes))} |`);
     print(`| Typing an exact app name | ${format(median(typeTimes))} |`);
+    print(`| First app-grid open, max frame | ${format(firstGridFrames.max)} |`);
+    print(`| First app-grid open, p95 frame | ${format(firstGridFrames.p95)} |`);
+    print(`| First app-grid open, open() | ${format(firstGridOpenTime)} |`);
     print(`| App grid open, prewarmed | ${format(median(gridTimes))} |`);
 }
