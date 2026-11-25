@@ -38,9 +38,16 @@ make test-shell-container
 
 Every workflow is owner-only. `CI` runs on pushes to `main` and on a pull
 request only after the owner adds the `ci` label, or by hand. `Shell smoke` runs
-on `main` pushes and by hand; it calls `CI image`. `CI image` is dispatched by
-hand or called by `Shell smoke`. `Release` runs when the owner pushes a `v*`
-tag; it runs the checks first, then builds and publishes the artifacts.
+by hand only; it calls `CI image`. `CI image` is dispatched by hand or called by
+`Shell smoke`. `Release` runs when the owner pushes a `v*` tag; it runs the
+checks first, then builds and publishes the artifacts.
+
+The container `Shell smoke` currently hangs at shell startup: GNOME Shell 51
+constructs its screenshot UI during startup, which requests
+`org.gnome.Shell.Screencast`, and the recorder service never answers inside the
+container. The host `make test-shell` passes, so the job is no longer triggered
+on pushes. Treat a container run as experimental until the recorder service is
+fixed or stubbed.
 
 ## GHCR
 

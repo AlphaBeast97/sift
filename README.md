@@ -235,8 +235,9 @@ container (Docker required).
 
 GitHub Actions run when the owner pushes to `main`, and on a pull request only
 after the owner adds the `ci` label or dispatches `CI` by hand. There are no
-scheduled or automatic pull-request runs. `Shell smoke` runs on `main` pushes
-and by hand. `Release` runs when the owner pushes a `v*` tag: it reruns the
+scheduled or automatic pull-request runs. The container `Shell smoke` runs by
+hand; `make test-shell` is the same check on the host. `Release` runs when the
+owner pushes a `v*` tag: it reruns the
 checks, builds the artifacts, verifies `SHA256SUMS`, and attaches them to the
 release.
 
