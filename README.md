@@ -1,7 +1,6 @@
 # Sift
 
 [![CI](https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml/badge.svg)](https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml)
-[![Shell smoke](https://github.com/AlphaBeast97/sift/actions/workflows/shell-smoke.yml/badge.svg)](https://github.com/AlphaBeast97/sift/actions/workflows/shell-smoke.yml)
 
 Spotlight-style search for GNOME Shell 51: applications, files, settings
 panels, a calculator, the web, an app grid, a workspace and window switcher,
@@ -235,8 +234,8 @@ container (Docker required).
 
 GitHub Actions run when the owner pushes to `main`, and on a pull request only
 after the owner adds the `ci` label or dispatches `CI` by hand. There are no
-scheduled or automatic pull-request runs. The container `Shell smoke` runs by
-hand; `make test-shell` is the same check on the host. `Release` runs when the
+scheduled or automatic pull-request runs. `make test-shell` is the supported
+shell smoke; the container variant is experimental. `Release` runs when the
 owner pushes a `v*` tag: it reruns the
 checks, builds the artifacts, verifies `SHA256SUMS`, and attaches them to the
 release.

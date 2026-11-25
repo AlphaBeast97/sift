@@ -1,8 +1,8 @@
 # Pinned GNOME 51 CI image
 
 `ci-image.yml` builds `tools/ci/gnome51/Dockerfile`; no job uses a stock rolling
-tag. The image is `ghcr.io/alphabeast97/sift-gnome51:gnome51` in GHCR and is consumed
-by digest in `shell-smoke.yml`.
+tag. The image is `ghcr.io/alphabeast97/sift-gnome51:gnome51` in GHCR and is
+pulled by tag in `ci.yml`.
 
 ## Pin
 
@@ -32,31 +32,29 @@ make test-shell-container
 - Result: build succeeded locally in 2435s, almost entirely package downloads.
   The lean Dockerfile is validated by `CI image` on GitHub instead of another
   local build.
-- Rendering: llvmpipe surfaceless; the manual `Shell smoke` passes.
+- Rendering: llvmpipe surfaceless; the former container smoke passed here.
 
 ## Triggers
 
 Every workflow is owner-only. `CI` runs on pushes to `main` and on a pull
-request only after the owner adds the `ci` label, or by hand. `Shell smoke` runs
-by hand only; it calls `CI image`. `CI image` is dispatched by hand or called by
-`Shell smoke`. `Release` runs when the owner pushes a `v*` tag; it runs the
-checks first, then builds and publishes the artifacts.
+request only after the owner adds the `ci` label, or by hand. `CI image` is
+dispatched by hand to rebuild the test image. `Release` runs when the owner
+pushes a `v*` tag; it runs the checks first, then builds and publishes the
+artifacts.
 
-The container `Shell smoke` currently hangs at shell startup: GNOME Shell 51
-constructs its screenshot UI during startup, which requests
-`org.gnome.Shell.Screencast`, and the recorder service never answers inside the
-container. The host `make test-shell` passes, so the job is no longer triggered
-on pushes. Treat a container run as experimental until the recorder service is
-fixed or stubbed.
+The container shell smoke was removed from CI: GNOME Shell 51 constructs its
+screenshot UI during startup, which requests `org.gnome.Shell.Screencast`, and
+the recorder service never answers inside the container, so the shell stalls
+before `startup-complete`. The host `make test-shell` passes and is the
+supported check. `make test-shell-container` remains experimental.
 
 ## GHCR
 
-- Published as `ghcr.io/alphabeast97/sift-gnome51:gnome51`; `Shell smoke` pulls
-  the pushed digest built in the same run. The path is hardcoded lowercase
-  because GHCR rejects repository names that contain uppercase letters.
-- First GitHub build: 4m15s in `Shell smoke` run 43548590019 (2026-11-14), down
-  from 2435s locally. The digest is not recorded because the workflow token has
-  no `read:packages` scope.
+- Published as `ghcr.io/alphabeast97/sift-gnome51:gnome51`. The path is hardcoded
+  lowercase because GHCR rejects repository names that contain uppercase
+  letters.
+- First GitHub build: 4m15s in the former `Shell smoke` run 43548590019
+  (2026-11-14), down from 2435s locally.
 - First smoke attempt failed before the shell started: `dbus-daemon` could not
   look up the container uid in `/etc/passwd`. The smoke job and
   `make test-shell-container` now mount the host `/etc/passwd` and `/etc/group`
@@ -65,8 +63,8 @@ fixed or stubbed.
   harness starts a private one and exports `DBUS_SYSTEM_BUS_ADDRESS` when
   `/run/dbus/system_bus_socket` is absent. `make test-shell-container` passes
   with it using the local image.
-- `Shell smoke` passes on GitHub in run 43605275298 (2026-11-14): cached image
-  job 26s, smoke 3m26s including the Rust build, extension pack, and
-  `sift shell smoke ok`.
+- The former `Shell smoke` job passed on GitHub in run 43605275298 (2026-11-14):
+  cached image job 26s, smoke 3m26s including the Rust build, extension pack,
+  and `sift shell smoke ok`.
 - `CI` passes on GitHub in run 43605698050: extension job 4m23s (npm ci, lint,
   unit tests, pack), Rust job 2m21s (fmt, clippy, tests).
