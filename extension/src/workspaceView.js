@@ -120,6 +120,12 @@ export const WorkspaceView = GObject.registerClass(
             this._connectSignals();
             if (this._prewarmed) {
                 this._prewarmed = false;
+                // The prewarm deliberately skips pruning; do it on the first
+                // real open if a window closed in the meantime.
+                if (this._hasPrunableWorkspace()) {
+                    this._rebuild();
+                    return;
+                }
                 this._selected = clamp(
                     global.workspace_manager.get_active_workspace_index(),
                     0, this._cards.length - 1);
@@ -272,6 +278,19 @@ export const WorkspaceView = GObject.registerClass(
             this._displayIds = [];
             this._managerIds = [];
             this._windowIds.clear();
+        }
+
+        _hasPrunableWorkspace() {
+            const manager = global.workspace_manager;
+            if (manager.n_workspaces <= 1)
+                return false;
+
+            let empty = 0;
+            for (let i = 0; i < manager.n_workspaces; i++) {
+                if (manager.get_workspace_by_index(i).list_windows().length === 0)
+                    empty++;
+            }
+            return empty > 1 && empty < manager.n_workspaces;
         }
 
         // One empty workspace is the spare GNOME keeps. Anything emptier goes
