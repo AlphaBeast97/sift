@@ -3,6 +3,7 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
@@ -22,6 +23,7 @@ const TILE_BORDER = 1;
 const TILE_SPACING = 3;
 const TITLE_HEIGHT = 15;
 const MIN_PREVIEW_HEIGHT = 24;
+const WINDOW_ICON_SIZE = 48;
 // The panel is sized for 1.5 rows; the half tile hints at scrolling.
 const VISIBLE_PREVIEWS = 1.5;
 const DRAG_MAX_SIZE = 240;
@@ -303,13 +305,19 @@ export const WorkspaceView = GObject.registerClass(
             this._layout();
         }
 
-        // Minimized windows are left out like the GNOME overview does; sticky
-        // windows appear once, on the active workspace, instead of on all.
+        // Minimized windows stay on their workspace card. Their actor is 0x0
+        // and cannot be cloned, so the tile falls back to the window icon.
         _isShown(window) {
+            if (window.skip_taskbar)
+                return false;
+
             const actor = window.get_compositor_private();
-            return !window.skip_taskbar &&
-                window.showing_on_its_workspace() &&
-                actor !== null && actor.width > 0 && actor.height > 0;
+            if (actor === null)
+                return false;
+
+            return window.minimized ||
+                (window.showing_on_its_workspace() &&
+                    actor.width > 0 && actor.height > 0);
         }
 
         _createCard(workspace, index, windows) {
@@ -529,16 +537,39 @@ export const WorkspaceView = GObject.registerClass(
         _createWindowTile(window) {
             const actor = window.get_compositor_private();
             const rect = window.get_frame_rect();
-            const sourceWidth = actor.width > 0 ? actor.width : rect.width;
-            const sourceHeight = actor.height > 0 ? actor.height : rect.height;
-            const clone = new Clutter.Clone({source: actor});
+            const hasPreview = !window.minimized && actor !== null &&
+                actor.width > 0 && actor.height > 0;
+            const sourceWidth = hasPreview ? actor.width : rect.width;
+            const sourceHeight = hasPreview ? actor.height : rect.height;
             const preview = new St.Widget({
                 style_class: 'sift-window-preview',
                 clip_to_allocation: true,
                 layout_manager: new Clutter.FixedLayout(),
                 reactive: true,
             });
-            preview.add_child(clone);
+
+            let clone = null;
+            let icon = null;
+            if (hasPreview) {
+                clone = new Clutter.Clone({source: actor});
+                preview.add_child(clone);
+            } else {
+                const app = Shell.WindowTracker.get_default()
+                    .get_window_app(window);
+                const gicon = app?.get_icon() ?? null;
+                icon = new St.Icon(gicon
+                    ? {
+                        gicon,
+                        icon_size: WINDOW_ICON_SIZE,
+                        style_class: 'sift-window-icon',
+                    }
+                    : {
+                        icon_name: 'application-x-executable-symbolic',
+                        icon_size: WINDOW_ICON_SIZE,
+                        style_class: 'sift-window-icon',
+                    });
+                preview.add_child(icon);
+            }
 
             const label = new St.Label({
                 style_class: 'sift-window-title',
@@ -623,6 +654,7 @@ export const WorkspaceView = GObject.registerClass(
                 actorWidth: sourceWidth,
                 actorHeight: sourceHeight,
                 clone,
+                icon,
                 preview,
                 closeButton,
                 tile,
@@ -719,6 +751,12 @@ export const WorkspaceView = GObject.registerClass(
 
                 for (const window of card.windows) {
                     window.preview.set_size(previewWidth, previewHeight);
+                    if (window.icon) {
+                        window.icon.set_position(
+                            Math.round((previewWidth - WINDOW_ICON_SIZE) / 2),
+                            Math.round((previewHeight - WINDOW_ICON_SIZE) / 2));
+                        continue;
+                    }
                     const scale = Math.min(
                         previewWidth / Math.max(1, window.actorWidth),
                         previewHeight / Math.max(1, window.actorHeight));

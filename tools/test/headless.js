@@ -858,6 +858,18 @@ export async function run() {
     if (wsManager.n_workspaces < 2)
         wsManager.append_new_workspace(false, global.get_current_time());
 
+    // A minimized window still belongs to its workspace card, like the dock.
+    const beforeWindows = new Set(
+        global.get_window_actors().map(actor => actor.meta_window));
+    await Scripting.createTestWindow({width: 480, height: 320});
+    await Scripting.waitTestWindows();
+    const testWindow = global.get_window_actors()
+        .map(actor => actor.meta_window)
+        .find(window => !beforeWindows.has(window));
+    assert(testWindow !== undefined, 'a test window is mapped');
+    testWindow.minimize();
+    await Scripting.waitLeisure();
+
     await openOverlay(api, 'search');
     api.overlay._toggleWorkspaces();
     await waitFor(() => api.overlay.view === 'workspace',
@@ -876,6 +888,17 @@ export async function run() {
         preview.width === api.workspaceView.cards[0].width - 38 &&
         preview.height >= 150),
     'window thumbnails fill the larger cards');
+    const minimizedWindow = api.workspaceView.cardRecords
+        .flatMap(record => record.windows)
+        .find(tile => tile.window === testWindow);
+    assert(minimizedWindow !== undefined,
+        'a minimized window stays on its workspace card');
+    assert(minimizedWindow.icon !== null,
+        'the minimized window falls back to its icon');
+
+    // Keep the rest of the workspace suite on its empty-workspace fixtures.
+    await Scripting.destroyTestWindows();
+    await Scripting.waitLeisure();
     assert(api.workspaceView.selectedIndex ===
         wsManager.get_active_workspace_index(), 'the active workspace is selected');
 

@@ -89,10 +89,12 @@ locked and it does not load at the GDM login screen; it comes back after unlock.
   blend of frequency and recency.
 - The window button in the search bar or **Super+Tab** opens the workspace
   view. Every workspace is a fixed-width card in a horizontal strip with large
-  live window thumbnails. About two and a half cards fit across, and each card
-  shows a row and a half of thumbnails; the partly visible card or row means
-  there is more. Click a workspace card or header, or press **Enter**, to
-  switch to it; **Up/Down** select a window and **Enter** focuses it.
+  live window thumbnails. Minimized windows stay in their card and use the app
+  icon in place of the live thumbnail. About two and a half cards fit across,
+  and each card shows a row and a half of thumbnails; the partly visible card
+  or row means there is more. Click a workspace card or header, or press
+  **Enter**, to switch to it; **Up/Down** select a window and **Enter** focuses
+  it.
   Drag a window onto the middle of another card to move it there. Dropping it
   on a card edge, a gap between cards, or past the last card creates a new
   workspace at that spot, so an app can be placed behind the workspace it came
