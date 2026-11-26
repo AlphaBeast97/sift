@@ -95,6 +95,7 @@ export const SiftOverlay = GObject.registerClass({
         this._prewarmPainted = false;
         this._prewarmLaterId = 0;
         this._prewarmFrames = 0;
+        this._prewarmPhase = 0;
         this._afterClose = null;
         this._themeId = 0;
 
@@ -676,20 +677,21 @@ export const SiftOverlay = GObject.registerClass({
             this.visible || this._state !== 'closed')
             return;
 
-        const rect = this._targetRect('grid');
-        if (!rect)
+        const gridRect = this._targetRect('grid');
+        const workspaceRect = this._targetRect('workspace');
+        if (!gridRect || !workspaceRect)
             return;
 
         this._prewarmPainted = true;
         this._prewarming = true;
         this._prewarmFrames = 0;
+        this._prewarmPhase = 0;
 
-        this._setPanelRectInstant(rect);
+        this._setPanelRectInstant(gridRect);
         this._gridView.visible = true;
+        this._workspaceView.visible = false;
         this._grid.open();
-        this._workspaceView.visible = true;
-        this._workspaceView.prewarm();
-        this._glass?.setRect(rect);
+        this._glass?.setRect(gridRect);
         this._glass?.open();
         this.reactive = false;
         this.opacity = 1;
@@ -701,6 +703,29 @@ export const SiftOverlay = GObject.registerClass({
                     return GLib.SOURCE_REMOVE;
                 if (++this._prewarmFrames < 2)
                     return GLib.SOURCE_CONTINUE;
+
+                if (this._prewarmPhase === 0) {
+                    // Paint the workspace at its own size, on top of the grid.
+                    this._prewarmPhase = 1;
+                    this._prewarmFrames = 0;
+                    this._gridView.visible = false;
+                    this._workspaceView.visible = true;
+                    this._setPanelRectInstant(workspaceRect);
+                    this._workspaceView.prewarm();
+                    return GLib.SOURCE_CONTINUE;
+                }
+
+                if (this._prewarmPhase === 1) {
+                    // Leave the grid and glass at the size the first grid open
+                    // uses, so that open is a no-op resize.
+                    this._prewarmPhase = 2;
+                    this._prewarmFrames = 0;
+                    this._workspaceView.visible = false;
+                    this._gridView.visible = true;
+                    this._setPanelRectInstant(gridRect);
+                    return GLib.SOURCE_CONTINUE;
+                }
+
                 this._prewarmLaterId = 0;
                 this._finishPrewarmPaint();
                 return GLib.SOURCE_REMOVE;

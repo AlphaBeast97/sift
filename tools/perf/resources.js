@@ -106,7 +106,7 @@ export async function run() {
         'the extension starts active');
 
     const cycles = [];
-    for (let index = 0; index < 3; index++) {
+    for (let index = 0; index < 4; index++) {
         Main.extensionManager.disableExtension(UUID);
         await waitFor(() => state() === ExtensionState.INACTIVE,
             'the extension is inactive');
@@ -123,28 +123,34 @@ export async function run() {
             !api.overlay._prewarming, 'the prewarm paints', 10000);
         const prewarmTime = now() - prewarmStart;
 
-        const grid = await measureOpen(api, 'grid');
-        const workspace = await measureOpen(api, 'workspace');
+        // Alternate which view opens first so both get a real first open.
+        const firstView = index % 2 === 0 ? 'grid' : 'workspace';
+        const secondView = firstView === 'grid' ? 'workspace' : 'grid';
+        const first = await measureOpen(api, firstView);
+        const second = await measureOpen(api, secondView);
         cycles.push({
             enableTime,
             prewarmTime,
-            grid,
-            workspace,
+            firstView,
+            first,
+            second,
             rssKb: readRssKb(),
         });
     }
 
+    const firsts = view => cycles.filter(cycle => cycle.firstView === view)
+        .map(cycle => cycle.first);
     const summary = {
         enable_ms: median(cycles.map(cycle => cycle.enableTime)),
         prewarm_ms: median(cycles.map(cycle => cycle.prewarmTime)),
         grid_first_open_max_frame_ms:
-            median(cycles.map(cycle => cycle.grid.max)),
+            median(firsts('grid').map(result => result.max)),
         grid_first_open_p95_frame_ms:
-            median(cycles.map(cycle => cycle.grid.p95)),
+            median(firsts('grid').map(result => result.p95)),
         workspace_first_open_max_frame_ms:
-            median(cycles.map(cycle => cycle.workspace.max)),
+            median(firsts('workspace').map(result => result.max)),
         workspace_first_open_p95_frame_ms:
-            median(cycles.map(cycle => cycle.workspace.p95)),
+            median(firsts('workspace').map(result => result.p95)),
         shell_rss_kb: median(cycles.map(cycle => cycle.rssKb)),
     };
 

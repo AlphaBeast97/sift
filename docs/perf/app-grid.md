@@ -59,13 +59,20 @@ That moves the one-time first-paint cost out of the opening animation.
 
 - The prewarm runs 100ms after enable, at low priority, so it does not compete
   with session startup.
-- It finishes about 280-350ms after enable, including tile chunks.
+- It finishes about 300-390ms after enable, including tile chunks and both
+  paint passes.
 - Opening before it finishes is still cold; the fix targets the normal case
   where the desktop is up before the user presses Super.
-- The workspace cards are built during the same paint pass and kept until the
-  view is opened once.
+- The grid is painted at its own size, then the workspace cards at theirs,
+  then the grid again. The first open of either view is a no-op resize.
+- The workspace cards are kept until the view is opened once.
 - The glass stays open until the first real close, so its clones and shader are
   not recreated on the first open. `close()` releases them afterwards.
+
+Measured first open after the prewarm, with either view first: max frame
+17.3-17.9ms, p95 17.2-17.5ms. A one-phase grid-only prewarm still spikes the
+first workspace open to 47.8ms because the cards are painted at the grid size
+and then resized.
 
 The paint pass is invisible in practice (1/255 opacity for two frames), and the
 overlay is not reactive during it.
