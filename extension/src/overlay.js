@@ -650,10 +650,8 @@ export const SiftOverlay = GObject.registerClass({
                 if (this._destroyed)
                     return GLib.SOURCE_REMOVE;
 
-                if (this.visible || this._state !== 'closed') {
-                    this._schedulePrewarm();
+                if (this.visible || this._state !== 'closed')
                     return GLib.SOURCE_REMOVE;
-                }
 
                 this._prewarmGrid(true);
                 return GLib.SOURCE_REMOVE;
@@ -670,8 +668,8 @@ export const SiftOverlay = GObject.registerClass({
     }
 
     // A hidden grid is never allocated or painted, so its first real open
-    // still builds theme nodes, icon textures and the glass shader. Paint one
-    // near-invisible frame while hidden to pay that cost up front.
+    // still builds theme nodes, icon textures and the glass shader. Paint a
+    // few near-invisible frames while hidden to pay that cost up front.
     _paintPrewarm() {
         if (this._destroyed || this._prewarmPainted || this._prewarming ||
             this.visible || this._state !== 'closed')
