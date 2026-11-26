@@ -274,7 +274,9 @@ one-time first-tile allocation are in `docs/perf/app-grid.md`.
 
 Each release also publishes `resource-report.json` plus a
 `RESOURCE_REPORT.md` diff against the previous release. `make resources`
-produces the JSON; the release workflow attaches both files.
+produces the JSON; the release workflow attaches both files. Shell RSS is the
+whole headless GNOME Shell process, so treat it as a trend rather than Sift's
+exact footprint.
 
 ## Troubleshooting
 
