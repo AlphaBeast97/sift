@@ -109,6 +109,15 @@ export async function run() {
     await Scripting.waitLeisure();
 
     let api = ext.getTestAPI();
+    assert(ext.metadata['session-modes'].length > 1,
+        'a second session mode entry makes GNOME enable Sift early');
+    assert(!ext.metadata['session-modes'].includes('gdm'),
+        'Sift never loads at GDM');
+    // The idle prewarm briefly shows the hidden overlay to paint it. Let it
+    // finish so it cannot race the "nothing opens on its own" checks.
+    await waitFor(() => !api.overlay._prewarming &&
+        (api.overlay._prewarmPainted || api.overlay._prewarmId === 0),
+    'the idle prewarm finishes', 3000);
     assert(!api.settings.get_boolean('web-search'),
         'web search is off by default');
     assert(!api.settings.get_boolean('settings-search'),
@@ -858,25 +867,27 @@ export async function run() {
     if (wsManager.n_workspaces < 2)
         wsManager.append_new_workspace(false, global.get_current_time());
 
-    // A minimized window still belongs to its workspace card, like the dock.
+    // A window created after the cards were prewarmed may still be unmapped
+    // when the view opens; it must appear without reopening the view.
     const beforeWindows = new Set(
         global.get_window_actors().map(actor => actor.meta_window));
+    assert(api.workspaceView._prewarmed, 'the workspace cards are prewarmed');
     await Scripting.createTestWindow({width: 480, height: 320});
+    api.overlay.open('workspace');
+    await waitFor(() => api.overlay.visible && api.overlay.view === 'workspace',
+        'the first workspace open starts', 2000);
+    await settle(api, 'the first workspace open settles');
     await Scripting.waitTestWindows();
     const testWindow = global.get_window_actors()
         .map(actor => actor.meta_window)
         .find(window => !beforeWindows.has(window));
     assert(testWindow !== undefined, 'a test window is mapped');
-    testWindow.minimize();
-    await Scripting.waitLeisure();
+    const tileFor = window => api.workspaceView.cardRecords
+        .flatMap(record => record.windows)
+        .find(tile => tile.window === window);
+    await waitFor(() => tileFor(testWindow) !== undefined,
+        'a window mapped after the first open appears on its card', 2000);
 
-    await openOverlay(api, 'search');
-    api.overlay._toggleWorkspaces();
-    await waitFor(() => api.overlay.view === 'workspace',
-        'the window button opens the workspace view', 2000);
-    await settle(api, 'the workspace view settles');
-    assert(api.overlay.view === 'workspace', 'the workspace view opens');
-    assert(api.workspaceView.visible, 'workspace columns are visible');
     assert(api.workspaceView.cards.length === wsManager.n_workspaces,
         'one column per workspace');
     assert(api.workspaceView.cards.every(card =>
@@ -888,9 +899,19 @@ export async function run() {
         preview.width === api.workspaceView.cards[0].width - 38 &&
         preview.height >= 150),
     'window thumbnails fill the larger cards');
-    const minimizedWindow = api.workspaceView.cardRecords
-        .flatMap(record => record.windows)
-        .find(tile => tile.window === testWindow);
+
+    // Moving a window updates the card it belongs to, and minimizing keeps
+    // it there with an icon fallback like the dock.
+    const otherWorkspace = wsManager.get_workspace_by_index(
+        (wsManager.get_active_workspace_index() + 1) % wsManager.n_workspaces);
+    testWindow.change_workspace(otherWorkspace);
+    await waitFor(() => api.workspaceView.cardRecords.find(record =>
+        record.workspace === otherWorkspace &&
+        record.windows.some(tile => tile.window === testWindow)) !== undefined,
+    'the window moves to the other workspace card', 2000);
+    testWindow.minimize();
+    await Scripting.waitLeisure();
+    const minimizedWindow = tileFor(testWindow);
     assert(minimizedWindow !== undefined,
         'a minimized window stays on its workspace card');
     assert(minimizedWindow.icon !== null,

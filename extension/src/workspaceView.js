@@ -239,11 +239,27 @@ export const WorkspaceView = GObject.registerClass(
                 return;
             const minimizedId = window.connect('notify::minimized',
                 () => this._scheduleReload());
+            // A window created while the cards are prewarming may not be
+            // mapped yet and is skipped; reload when it shows up.
+            const shownId = window.connect('shown',
+                () => this._scheduleReload());
+            const workspaceId = window.connect('workspace-changed',
+                () => this._scheduleReload());
+            const sizeId = window.connect('size-changed', () => {
+                if (!this._hasTile(window))
+                    this._scheduleReload();
+            });
             const unmanagedId = window.connect('unmanaged', () => {
                 this._windowIds.delete(window);
                 this._scheduleReload();
             });
-            this._windowIds.set(window, [unmanagedId, minimizedId]);
+            this._windowIds.set(window,
+                [unmanagedId, minimizedId, shownId, workspaceId, sizeId]);
+        }
+
+        _hasTile(window) {
+            return this._cards.some(card =>
+                card.windows.some(tile => tile.window === window));
         }
 
         _connectSignals() {

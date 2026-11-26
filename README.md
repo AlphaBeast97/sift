@@ -55,6 +55,10 @@ gnome-extensions enable sift@alphabeast97.github.io
 
 Sift runs only in the user session. GNOME Shell disables it while the screen is
 locked and it does not load at the GDM login screen; it comes back after unlock.
+`metadata.json` also lists the `sift` sentinel mode: GNOME enables extensions
+with more session-mode entries first, and Sift has to replace the login
+animation before it starts. `sift` is not a real session mode and is never
+active.
 
 ## Use
 
