@@ -9,7 +9,9 @@ root = Path(__file__).resolve().parents[2]
 meta = json.loads((root / 'extension/metadata.json').read_text())
 assert meta['uuid'] == 'sift@alphabeast97.github.io', meta['uuid']
 assert meta['shell-version'] == ['51'], meta['shell-version']
-assert meta['session-modes'] == ['user'], meta['session-modes']
+# "sift" is a sentinel that makes GNOME enable Sift before the login
+# animation; it is never active, and it keeps "gdm" out.
+assert meta['session-modes'] == ['user', 'sift'], meta['session-modes']
 assert meta['settings-schema'] == 'org.gnome.shell.extensions.sift', meta['settings-schema']
 
 schema = ET.parse(root / 'extension/schemas/org.gnome.shell.extensions.sift.gschema.xml')
