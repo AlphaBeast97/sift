@@ -109,7 +109,7 @@ async fn cold_start_query_reindex_quit_and_second_instance() {
     wait_for_status(&proxy, "\"state\":\"indexing\"").await;
 
     let ping: String = proxy.call("Ping", &()).await.unwrap();
-    assert!(ping.starts_with("0.1.0"));
+    assert!(ping.starts_with(env!("CARGO_PKG_VERSION")));
 
     let config_json: String = proxy.get_property("Config").await.unwrap();
     assert!(config_json.contains("\"max_entries\":250000"));

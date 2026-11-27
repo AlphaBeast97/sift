@@ -1,6 +1,6 @@
 {
   "name": "sift",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Spotlight-style search for GNOME Shell 51",
   "license": "GPL-3.0-or-later",
