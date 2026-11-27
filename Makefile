@@ -63,11 +63,20 @@ check-pack: extension
 
 test: test-gjs test-schema test-rust lint
 
-.PHONY: release install prefs uninstall
+.PHONY: release release-artifacts install prefs uninstall packages
 
 release: build
 	install -m 0755 daemon/target/release/siftd dist/siftd
-	cd dist && sha256sum siftd $(UUID).shell-extension.zip > SHA256SUMS
+	$(MAKE) release-artifacts
+
+release-artifacts: extension
+	install -m 0755 packaging/install.sh dist/install.sh
+	install -m 0755 packaging/get.sh dist/get.sh
+	install -m 0755 packaging/sift.sh dist/sift.sh
+	cd dist && sha256sum siftd $(UUID).shell-extension.zip install.sh sift.sh > SHA256SUMS
+
+packages: release
+	packaging/build-packages.sh
 
 install: release
 	packaging/install.sh --prefix "$(PREFIX)"
@@ -76,4 +85,4 @@ prefs:
 	gnome-extensions prefs $(UUID)
 
 uninstall:
-	packaging/install.sh --uninstall --prefix "$(PREFIX)" $(if $(filter 1,$(PURGE)),--purge)
+	packaging/install.sh --uninstall --prefix "$(PREFIX)" $(if $(filter 1,$(KEEP)),--keep-data)

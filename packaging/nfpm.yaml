@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# nfpm config for the system-wide .deb and .rpm packages.
+name: sift
+arch: amd64
+platform: linux
+version: "@VERSION@"
+section: gnome
+priority: optional
+maintainer: AlphaBeast97 <ksaad5272@gmail.com>
+description: |
+  Spotlight-style search, an app grid, and a workspace switcher for
+  GNOME Shell 51, with local file indexing and liquid glass.
+vendor: AlphaBeast97
+homepage: https://github.com/AlphaBeast97/sift
+license: GPL-3.0-or-later
+depends:
+  - gnome-shell
+  - gjs
+contents:
+  - src: "@PKG_ROOT@/usr"
+    dst: /usr
+    type: tree
