@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img">
+  <title>Sift</title>
+  <defs>
+    <linearGradient id="bg" x1="18" y1="8" x2="110" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6E9BFF"/>
+      <stop offset="0.52" stop-color="#6650F2"/>
+      <stop offset="1" stop-color="#191B3D"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="38" y1="30" x2="82" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#D9E4FF" stop-opacity="0.48"/>
+    </linearGradient>
+    <linearGradient id="handle" x1="80" y1="78" x2="106" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#CFE0FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#080A20" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+  <rect x="5" y="5" width="118" height="118" rx="27" fill="none"
+        stroke="#FFFFFF" stroke-opacity="0.20" stroke-width="2"/>
+
+  <g filter="url(#shadow)">
+    <circle cx="57" cy="55" r="27" fill="url(#lens)" fill-opacity="0.20"
+            stroke="#FFFFFF" stroke-width="7"/>
+    <circle cx="57" cy="55" r="27" fill="none"
+            stroke="#FFFFFF" stroke-opacity="0.48" stroke-width="2"/>
+    <path d="M77 76 L102 101" stroke="url(#handle)" stroke-width="10"
+          stroke-linecap="round"/>
+  </g>
+
+  <path d="M40 47h34M46 57h22M52 67h10" stroke="#FFFFFF"
+        stroke-opacity="0.92" stroke-width="4" stroke-linecap="round"/>
+
+  <path d="M91 31l2.2 5.8L99 39l-5.8 2.2L91 47l-2.2-5.8L83 39l5.8-2.2z"
+        fill="#FFFFFF" fill-opacity="0.9"/>
+</svg>

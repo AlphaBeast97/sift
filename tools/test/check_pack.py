@@ -27,6 +27,7 @@ required = {
     'extension.js',
     'prefs.js',
     'stylesheet.css',
+    'icons/sift.svg',
     'src/overlay.js',
     'src/overview.js',
     'src/results.js',

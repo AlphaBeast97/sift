@@ -27,7 +27,7 @@ daemon:
 
 extension:
 	mkdir -p dist
-	gnome-extensions pack extension --schema=$(SCHEMA) --extra-source=src -o dist --force
+	gnome-extensions pack extension --schema=$(SCHEMA) --extra-source=src --extra-source=icons -o dist --force
 
 test-shell: build
 	tools/test/run-shell-test.sh
