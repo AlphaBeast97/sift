@@ -11,6 +11,7 @@ import {run as shortcuts} from './shortcuts.test.js';
 import {run as spring} from './spring.test.js';
 import {run as stats} from './stats.test.js';
 import {run as usage} from './usage.test.js';
+import {run as update} from './update.test.js';
 import {run as webSearch} from './webSearch.test.js';
 import {run as windowStack} from './windowStack.test.js';
 
@@ -28,6 +29,7 @@ const tests = [
     ['spring', spring],
     ['gridMath', gridMath],
     ['usage', usage],
+    ['update', update],
     ['webSearch', webSearch],
     ['windowStack', windowStack],
 ];

@@ -119,6 +119,12 @@
       <description>When on, Super and Super+A open Sift and every other GNOME overview trigger (Activities, the hot corner, swipe and the login overview) does nothing. When off, GNOME's overview works normally.</description>
     </key>
 
+    <key name="update-check" type="b">
+      <default>true</default>
+      <summary>Check for updates</summary>
+      <description>Check GitHub once a day for a new Sift release and show a notification. Only the release check is sent; no usage data leaves the machine.</description>
+    </key>
+
     <key name="sift-search-shortcut" type="as">
       <default>['&lt;Control&gt;space']</default>
       <summary>Sift search shortcut</summary>

@@ -8,6 +8,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {findShortcutConflict, shortcutFromKey} from './src/lib/shortcuts.js';
+import {Updater} from './src/updater.js';
 import {usagePath} from './src/usage.js';
 
 const BUS_NAME = 'io.github.alphabeast97.Sift';
@@ -18,6 +19,7 @@ const SETTINGS_KEYS = [
     'glass-style', 'animations', 'app-order', 'max-results',
     'search-height', 'web-search', 'web-search-engine', 'web-browser',
     'settings-search', 'fullscreen-guard', 'grid-labels', 'disable-overview',
+    'update-check',
     'sift-search-shortcut', 'sift-apps-shortcut',
     'sift-workspaces-shortcut',
 ];
@@ -749,6 +751,76 @@ export default class SiftPreferences extends ExtensionPreferences {
         window.add(behavior);
         window.add(this._filesPage(window));
         window.add(this._howToPage(settings));
+        window.add(this._updatesPage(window, settings));
+    }
+
+    _updatesPage(window, settings) {
+        const page = new Adw.PreferencesPage({
+            title: 'Updates',
+            icon_name: 'software-update-available-symbolic',
+        });
+
+        const group = new Adw.PreferencesGroup({
+            title: 'Sift updates',
+            description: 'Sift checks GitHub once a day while enabled, and whenever this page opens. Only the release request is sent.',
+        });
+
+        const autoRow = new Adw.SwitchRow({
+            title: 'Check for updates automatically',
+            subtitle: 'Show a notification when a newer release is available.',
+        });
+        settings.bind('update-check', autoRow, 'active',
+            Gio.SettingsBindFlags.DEFAULT);
+        group.add(autoRow);
+
+        group.add(valueRow('Installed version',
+            `Sift ${this.metadata['version-name']}`));
+
+        const statusRow = valueRow('Status', 'Checking for updates…');
+        const checkButton = new Gtk.Button({
+            label: 'Check now',
+            valign: Gtk.Align.CENTER,
+        });
+        const installButton = new Gtk.Button({
+            label: 'Install update',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['suggested-action'],
+            sensitive: false,
+        });
+        statusRow.add_suffix(checkButton);
+        statusRow.add_suffix(installButton);
+        group.add(statusRow);
+        page.add(group);
+
+        const systemWide = (this.dir?.get_path?.() ?? '').startsWith('/usr/');
+        if (systemWide) {
+            statusRow.subtitle =
+                'Installed system-wide. Update it with your package manager.';
+            checkButton.sensitive = false;
+            return page;
+        }
+
+        const updater = new Updater({
+            currentVersion: this.metadata['version-name'],
+            onState: state => {
+                statusRow.subtitle = state.message;
+                checkButton.sensitive = !['checking', 'downloading', 'installing']
+                    .includes(state.state);
+                installButton.sensitive = state.state === 'available';
+                if (state.state === 'done')
+                    window.add_toast(new Adw.Toast({title: state.message}));
+            },
+        });
+
+        window.connect('close-request', () => {
+            updater.destroy();
+            return false;
+        });
+        checkButton.connect('clicked', () => updater.check());
+        installButton.connect('clicked', () => updater.install());
+        updater.check();
+
+        return page;
     }
 
     _filesPage(window) {

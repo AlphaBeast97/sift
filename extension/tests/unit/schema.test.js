@@ -26,6 +26,7 @@ export function run() {
     equal(settings.get_boolean('fullscreen-guard'), true);
     equal(settings.get_boolean('grid-labels'), true);
     equal(settings.get_boolean('disable-overview'), true);
+    equal(settings.get_boolean('update-check'), true);
     equal(settings.get_strv('sift-search-shortcut').join(','), '<Control>space');
     equal(settings.get_strv('sift-apps-shortcut').join(','), '<Alt>a');
     equal(settings.get_strv('sift-workspaces-shortcut').join(','),
@@ -39,5 +40,5 @@ export function run() {
     equal(range('search-height').join(','), '144,716');
 
     equal(schema.list_keys().sort().join(','),
-        'animations,app-order,disable-overview,fullscreen-guard,glass-brightness,glass-light-brightness,glass-mode,glass-style,grid-labels,max-results,search-height,settings-search,sift-apps-shortcut,sift-search-shortcut,sift-workspaces-shortcut,web-browser,web-search,web-search-engine');
+        'animations,app-order,disable-overview,fullscreen-guard,glass-brightness,glass-light-brightness,glass-mode,glass-style,grid-labels,max-results,search-height,settings-search,sift-apps-shortcut,sift-search-shortcut,sift-workspaces-shortcut,update-check,web-browser,web-search,web-search-engine');
 }
