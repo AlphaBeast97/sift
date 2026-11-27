@@ -9,8 +9,63 @@ permissions:
   packages: read
 
 jobs:
+  binary:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: daemon
+      - name: Build portable daemon
+        run: cargo build --release --manifest-path daemon/Cargo.toml
+      - name: Upload daemon
+        uses: actions/upload-artifact@v4
+        with:
+          name: siftd-linux-x86_64
+          path: daemon/target/release/siftd
+          if-no-files-found: error
+
+  packages:
+    if: github.actor == github.repository_owner
+    needs: binary
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download daemon
+        uses: actions/download-artifact@v4
+        with:
+          name: siftd-linux-x86_64
+          path: dist
+      - name: Install packaging tools
+        run: |
+          chmod +x dist/siftd
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-bin
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - name: Build .deb, .rpm and Arch packages
+        run: PATH="$(go env GOPATH)/bin:$PATH" packaging/build-packages.sh
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: sift-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+          if-no-files-found: error
+
   release:
     if: github.actor == github.repository_owner
+    needs: [binary, packages]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
@@ -24,8 +79,20 @@ jobs:
         run: npm ci
       - name: Test
         run: make test check-pack
+      - name: Download portable daemon
+        uses: actions/download-artifact@v4
+        with:
+          name: siftd-linux-x86_64
+          path: dist
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: sift-packages
+          path: dist
       - name: Build release artifacts
-        run: make release
+        run: |
+          chmod +x dist/siftd
+          make release-artifacts
       - name: Verify checksums
         run: cd dist && sha256sum -c SHA256SUMS
       - name: Measure resource usage
@@ -38,14 +105,29 @@ jobs:
         run: python3 tools/perf/resource_diff.py dist/resource-report.json > dist/RESOURCE_REPORT.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compose release notes
+        run: |
+          notes="docs/release-notes/${GITHUB_REF_NAME#v}.md"
+          if [ -f "$notes" ]; then cat "$notes"; else printf 'Sift %s\n' "$GITHUB_REF_NAME"; fi > dist/RELEASE_NOTES.md
+          printf '\n---\n\n' >> dist/RELEASE_NOTES.md
+          cat dist/RESOURCE_REPORT.md >> dist/RELEASE_NOTES.md
       - name: Attach artifacts
         uses: softprops/action-gh-release@v2
         with:
-          body_path: dist/RESOURCE_REPORT.md
+          name: Sift ${{ github.ref_name }}
+          body_path: dist/RELEASE_NOTES.md
           files: |
             dist/siftd
             dist/sift@alphabeast97.github.io.shell-extension.zip
             dist/SHA256SUMS
             dist/resource-report.json
             dist/RESOURCE_REPORT.md
+            dist/install.sh
+            dist/get.sh
+            dist/sift.sh
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+            LICENSE
+            THIRD_PARTY_NOTICES
           fail_on_unmatched_files: true
