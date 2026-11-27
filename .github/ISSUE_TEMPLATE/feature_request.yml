@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement for Sift.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow or annoyance, not only the proposed UI.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Sift to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing shortcuts, other tools, or a simpler version.
+  - type: input
+    id: version
+    attributes:
+      label: Sift version
+      placeholder: 1.0.0
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the README.
+          required: true
+        - label: This is about Sift, not GNOME Shell itself.
+          required: true

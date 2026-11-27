@@ -1,150 +1,221 @@
-# Sift
+<p align="center">
+  <img src="extension/icons/sift.svg" width="112" alt="Sift icon">
+</p>
 
-[![CI](https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml/badge.svg)](https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml)
+<h1 align="center">Sift</h1>
 
-Spotlight-style search for GNOME Shell 51: applications, files, settings
-panels, a calculator, the web, an app grid, a workspace and window switcher,
-and liquid glass.
+<p align="center">
+  Spotlight-style search, an app grid, and a workspace switcher for GNOME Shell 51.
+</p>
 
-Sift disables the GNOME Overview by default: **Super** opens Sift search,
-**Super+A** opens its app grid and **Super+Tab** opens the workspace switcher,
-while Activities, the hot corner, swipe and the login overview do nothing.
-Turn off "Disable the GNOME overview" in the preferences to keep GNOME's
-overview: Super, Super+A and Super+Tab go back to GNOME, and Sift opens with
-**Ctrl+Space**, **Alt+A** and **Ctrl+Super+Tab**. A recorded shortcut replaces
-its default. The UI and glass run in GJS, and application search uses GNOME's
-app system in the shell. File indexing, fuzzy matching, and calculations run in
-a small Rust daemon (`siftd`) so the shell process stays responsive.
+<p align="center">
+  <a href="https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml"><img src="https://github.com/AlphaBeast97/sift/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/AlphaBeast97/sift/releases/latest"><img src="https://img.shields.io/github/v/release/AlphaBeast97/sift" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg" alt="License"></a>
+  <a href="https://www.gnome.org/"><img src="https://img.shields.io/badge/GNOME%20Shell-51-4a86cf" alt="GNOME Shell 51"></a>
+</p>
 
-## Requirements
+Sift replaces the GNOME overview with a fast, local-first launcher. Press
+**Super**, type, and open an app, file, folder, settings panel, calculation, or
+web result. **Super+A** opens an A-Z app grid and **Super+Tab** opens a
+workspace switcher with live window thumbnails. The interface and liquid glass
+run in GJS; file indexing, fuzzy matching, and calculations run in a small Rust
+daemon (`siftd`) so the shell stays responsive.
 
-- GNOME Shell 51, on Wayland or X11, with a session bus.
-- For installs from source: Rust 1.99.1 (pinned by `rust-toolchain.toml`) and
-  `cargo`, plus `gnome-extensions`, `gjs`, and `gnome-shell`.
-- To lint and run the extension unit tests: Node.js and npm.
-
-Blur my Shell is optional and not required. Sift does not bundle any of its code.
+Sift never phones home. File search reads names only, app usage stays on your
+machine, and web search is off until you turn it on.
 
 ## Install
 
-From a source checkout:
+The recommended install downloads the latest release, verifies its
+`SHA256SUMS`, and installs under `~/.local` without root:
 
 ```bash
-make install                 # builds, packs, installs into ~/.local
-make install PREFIX=/usr/local   # only if that prefix is writable
+curl -fsSL https://github.com/AlphaBeast97/sift/releases/latest/download/get.sh | bash
 ```
 
-`make install` runs `packaging/install.sh`. It stops an already running daemon,
-installs `siftd` into `PREFIX/bin`, writes the D-Bus activation file into
-`${XDG_DATA_HOME:-PREFIX/share}/dbus-1/services`, installs the extension, and
-enables it. It never uses root and never downloads anything.
-
-The standalone installer accepts prebuilt artifacts too:
+Pin a version with `SIFT_VERSION=v1.0.0`:
 
 ```bash
-packaging/install.sh --binary dist/siftd \
-    --extension-zip dist/sift@alphabeast97.github.io.shell-extension.zip
+curl -fsSL https://github.com/AlphaBeast97/sift/releases/latest/download/get.sh \
+  | SIFT_VERSION=v1.0.0 bash
 ```
 
-On Wayland, GNOME Shell does not notice a newly installed extension until it
-rescans. If the installer prints the logout note, log out and back in, then run:
+Prefer to inspect first? Download `get.sh`, `install.sh`, `siftd`, the
+extension zip, and `SHA256SUMS` from the [latest release](https://github.com/AlphaBeast97/sift/releases/latest), verify the checksums, then run:
+
+```bash
+bash install.sh --binary ./siftd --extension-zip ./sift@alphabeast97.github.io.shell-extension.zip
+```
+
+On Wayland, GNOME Shell only rescans extensions at login. If the installer
+prints the logout note, log out and back in, then run:
 
 ```bash
 gnome-extensions enable sift@alphabeast97.github.io
 ```
 
-Sift runs only in the user session. GNOME Shell disables it while the screen is
-locked and it does not load at the GDM login screen; it comes back after unlock.
-`metadata.json` also lists the `sift` sentinel mode: GNOME enables extensions
-with more session-mode entries first, and Sift has to replace the login
-animation before it starts. `sift` is not a real session mode and is never
-active.
+Sift runs only in the user session. It is disabled while the screen is locked,
+does not load at the GDM login screen, and comes back after unlock.
+
+### From source
+
+```bash
+git clone https://github.com/AlphaBeast97/sift.git
+cd sift
+npm ci
+make install
+```
+
+`make install` builds `siftd`, packs the extension, installs both under
+`~/.local`, writes the D-Bus activation file, and enables the extension. Use
+`make install PREFIX=/usr/local` only when that prefix is writable.
+
+### Packages
+
+Release assets also include system-wide packages for people who do not want to
+build or run a user installer:
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./sift_1.0.0_amd64.deb
+
+# Fedora / openSUSE
+sudo dnf install ./sift-1.0.0-1.x86_64.rpm
+
+# Arch Linux
+sudo pacman -U ./sift-1.0.0-1-x86_64.pkg.tar.zst
+```
+
+Then enable Sift for your user and log out and back in on Wayland:
+
+```bash
+gnome-extensions enable sift@alphabeast97.github.io
+```
+
+System packages are updated with the distribution's package manager. Sift's
+own updater detects a system-wide install and asks you to use the package
+manager instead.
+
+### Requirements
+
+| | Needed for | Debian / Ubuntu | Fedora | Arch | openSUSE |
+| --- | --- | --- | --- | --- | --- |
+| GNOME Shell 51 | Runtime | `gnome-shell` | `gnome-shell` | `gnome-shell` | `gnome-shell` |
+| GJS | Runtime | `gjs` | `gjs` | `gjs` | `gjs` |
+| GLib tools | Build / tests | `libglib2.0-bin` | `glib2` | `glib2` | `glib2-tools` |
+| Rust 1.99.1 | Build from source | [rustup](https://rustup.rs/) | rustup | rustup | rustup |
+| Node.js + npm | Build / lint / tests | `nodejs npm` | `nodejs npm` | `nodejs npm` | `nodejs npm` |
+| zip | Packing | `zip` | `zip` | `zip` | `zip` |
+
+Prebuilt releases are Linux x86_64 and need glibc 2.35 or newer (Ubuntu 22.04+,
+Debian 12+, Fedora 36+). Other architectures can build from source.
 
 ## Use
 
-- **Super**: open or close Sift search, **Super+A**: open the app grid, and
-  **Super+Tab**: open the workspace switcher. The grid button in the search bar
-  and the empty-state button open the grid too.
-- With the GNOME overview disabled (default), Activities, the hot corner, swipe
-  and the login overview do nothing, and login goes straight to the desktop.
-- With the GNOME overview enabled, Super, Super+A and Super+Tab work as usual;
-  Sift opens with **Ctrl+Space**, **Alt+A** and **Ctrl+Super+Tab** instead.
-- Record different shortcuts in the preferences; each one replaces its default.
-- Sift stays closed while an app is fullscreen. Turn off **Disable in
-  fullscreen apps** under Search → Fullscreen to allow shortcuts there.
-- Type to search applications. Two or more characters also search file names,
-  directories, and evaluate arithmetic and unit expressions.
-- Web results are off by default. Turn on **Search the web** under
-  Search → Web, then type an address such as `example.com` to open it, or a
-  phrase to get a last **Search the web** row. The row only appears when local
-  results leave room; Sift never contacts the network by itself.
+Sift disables the GNOME overview by default. Activities, the hot corner, swipe,
+and the login overview do nothing, and login goes straight to the desktop. With
+the overview disabled, the default shortcuts are:
+
+| Action | Shortcut |
+| --- | --- |
+| Open or close search | **Super** |
+| Open the app grid | **Super+A** |
+| Open the workspace switcher | **Super+Tab** |
+| Move the selection | **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End** |
+| Open the selected item | **Enter** |
+| Open a new app window, or reveal a file | **Ctrl+Enter** |
+| Copy the selected calculation | **Ctrl+C** |
+| Close the panel | **Escape** |
+
+Turn off **Disable the GNOME overview** in preferences to keep GNOME's
+overview. Super, Super+A, and Super+Tab go back to GNOME, and Sift opens with
+**Ctrl+Space**, **Alt+A**, and **Ctrl+Super+Tab**. Record different shortcuts in
+preferences; a recorded shortcut replaces its default.
+
+Sift stays closed while an app is fullscreen. Turn off **Disable in fullscreen
+apps** under Search → Fullscreen to allow shortcuts there.
+
+### Search
+
+- Type to search applications. Two or more characters also search file and
+  folder names and evaluate arithmetic and unit expressions.
+- **Enter** opens an app or file; on a calculation it copies the result and
+  closes. **Ctrl+Enter** opens a new app window or reveals a file in the file
+  manager. **Ctrl+C** copies the selected calculation.
+- Web results are off by default. Turn on **Search the web** under Search → Web,
+  then type an address such as `example.com`, or a phrase to get a last
+  **Search the web** row. Sift never contacts the network by itself.
 - Settings panel results are off by default. Turn on **Search settings panels**
   under Search → Results, then type part of a panel name such as `display` or
-  `wifi` to open it directly. Multi-word queries try the meaningful words when
-  needed.
-- **Up/Down**, **Tab**, **Page Up/Page Down**, **Home/End**: move the selection.
-- **Enter**: open an app or file; on a calculation, copy the result and close.
-- **Ctrl+Enter**: open a new app window, or reveal a file in the file manager.
-- **Ctrl+C**: copy the selected calculation result.
-- **Escape**: close the panel.
-- In the app grid, arrows and paging keys move between tiles; an icon opens on
-  Enter; typing switches back to search. The grid is A-Z by default; **Order
-  apps** under Search → App grid can sort by recent use, most used, or a smart
-  blend of frequency and recency.
-- The window button in the search bar or **Super+Tab** opens the workspace
-  view. Every workspace is a fixed-width card in a horizontal strip with large
-  live window thumbnails. Minimized windows stay in their card and use the app
-  icon in place of the live thumbnail. About two and a half cards fit across,
-  and each card shows a row and a half of thumbnails; the partly visible card
-  or row means there is more. Click a workspace card or header, or press
-  **Enter**, to switch to it; **Up/Down** select a window and **Enter** focuses
-  it.
-  Drag a window onto the middle of another card to move it there. Dropping it
-  on a card edge, a gap between cards, or past the last card creates a new
+  `wifi` to open it directly.
+- The panel height stays fixed while typing; extra results scroll.
+
+### App grid
+
+The grid button in the search bar and the empty-state button open the grid.
+Arrows and paging keys move between tiles, an icon opens on **Enter**, and
+typing switches back to search. The grid is A-Z by default; **Order apps** under
+Search → App grid can sort by recent use, most used, or a blend of frequency and
+recency.
+
+### Workspaces and windows
+
+The window button in the search bar or **Super+Tab** opens the workspace view.
+Every workspace is a fixed-width card in a horizontal strip with live window
+thumbnails. Minimized windows stay in their card and use the app icon in place
+of the live thumbnail. About two and a half cards fit across, and each card
+shows a row and a half of thumbnails; the partly visible card or row means
+there is more.
+
+- Click a workspace card or header, or press **Enter**, to switch to it.
+  **Up/Down** select a window and **Enter** focuses it.
+- Drag a window onto the middle of another card to move it there. Dropping it on
+  a card edge, a gap between cards, or past the last card creates a new
   workspace at that spot, so an app can be placed behind the workspace it came
-  from. Drag a workspace header onto another position to reorder it with its
-  apps. **Ctrl+Left/Right** reorders the selected workspace and
+  from.
+- Drag a workspace header onto another position to reorder it with its apps.
+  **Ctrl+Left/Right** reorders the selected workspace and
   **Shift+Left/Right** moves the selected window to the previous or next
-  workspace. Each window and workspace card has a close button. Empty
-  workspaces left behind when their last window closes disappear immediately,
-  and at most one empty workspace is kept. **Left/Right** move between
-  workspaces, typing switches back to search, and pressing the workspace
-  shortcut again also returns to search. When the strip does not fit,
-  **Shift+wheel** or a horizontal wheel pans it, a plain vertical wheel pans it
-  when the pointer is not over a scrolling card, and dragging near either edge
-  scrolls automatically.
+  workspace.
+- Each window and workspace card has a close button. Empty workspaces left
+  behind when their last window closes disappear immediately, and at most one
+  empty workspace is kept.
+- **Left/Right** move between workspaces, typing switches back to search, and
+  pressing the workspace shortcut again returns to search.
+- When the strip does not fit, **Shift+wheel** or a horizontal wheel pans it, a
+  plain vertical wheel pans it when the pointer is not over a scrolling card,
+  and dragging near either edge scrolls automatically.
 
-File search reads names only. File contents are never indexed or read.
+## Updates
 
-App launches and repeated search choices stay in
-`~/.local/state/sift/usage.json` and never leave the machine. Picking a
-non-first app, file, or folder result twice promotes it for that query and its
-prefixes. A settings panel selected twice is favored whenever it appears in
-later searches. Clear the counts with **Clear learned ranking** in preferences.
+Sift checks GitHub once a day while enabled, and whenever you open
+**Preferences → Updates**. A newer release shows a notification and an
+**Install update** button. The updater downloads the release, verifies
+`SHA256SUMS`, runs the same installer, and removes the temporary files. On
+Wayland, log out and back in after installing. Turn off **Check for updates
+automatically** to stop the background check; manual checks still work.
+
+System-wide packages are not self-updated. Use `apt`, `dnf`, `zypper`, or your
+distribution's updater.
 
 ## Preferences
 
 ```bash
-make prefs
-# or
 gnome-extensions prefs sift@alphabeast97.github.io
+# or
+make prefs
 ```
 
-The window exposes a glass mode (Auto, Light, Dark or Clear), separate Dark
-glass and Light glass brightness sliders, a glass style (Liquid, Crystal, Glow
-or Flat), animations, search panel height, maximum results, web search with its
-engine and browser, settings panel search (web and settings panel results are
-off by default), the fullscreen guard, app-grid labels and order,
-learned-ranking clearing, the GNOME overview takeover, and all three
-shortcuts, plus a **Files** page for the file index and a **How to use** page
-covering shortcuts, navigation, calculator examples, the app grid, workspaces
-and window dragging, settings panels, fullscreen behavior, privacy, and
-current limits.
-The panel height is fixed while typing; extra results scroll. Changes apply
-live.
+The window covers glass mode and brightness, glass style, animations, search
+panel height, maximum results, web search, settings panel search, the fullscreen
+guard, app-grid labels and order, learned-ranking clearing, the GNOME overview
+takeover, and all three shortcuts. A **Files** page configures the index and a
+**How to use** page covers shortcuts, navigation, calculator examples, the app
+grid, workspaces, privacy, and current limits. Changes apply live.
+
 Extension settings are ordinary GSettings under
-`org.gnome.shell.extensions.sift` and can be scripted with `gsettings`; index
-settings are stored in the daemon's TOML file described below.
+`org.gnome.shell.extensions.sift` and can be scripted with `gsettings`.
 
 ## File index
 
@@ -161,9 +232,8 @@ max_entries = 250000
 - `roots` are expanded against `$HOME`. `roots = []` disables file search.
 - `exclude_dirs` accepts a folder name (matches anywhere, such as
   `node_modules`), a relative path from the root, an absolute path, or a `~/`
-  path. The built-in list covers Go/Rust/Java/Node caches, containers, Steam,
-  and other app data; see `daemon/src/config.rs`.
-- Relative roots are resolved against `$HOME`.
+  path. The built-in list covers Go, Rust, Java, Node, container, Steam, and
+  other app caches; see `daemon/src/config.rs`.
 - `max_entries` caps how many entries are kept (default 250,000, maximum
   1,000,000). Reaching the cap is reported as `Search index truncated`.
 
@@ -179,80 +249,35 @@ gdbus call --session --dest io.github.alphabeast97.Sift \
 The index cache lives in `${XDG_CACHE_HOME:-~/.cache}/sift/`. A completed scan
 writes it immediately; watcher changes are batched and flushed within ten
 minutes or on quit. The footer shows `Indexing files…` while a scan runs and
-`Search index degraded`/`truncated` when the daemon cannot watch a root, watches
-only part of it, or hits `max_entries`.
+`Search index degraded` / `Search index truncated` when the daemon cannot watch
+a root, watches only part of it, or hits `max_entries`.
 
 The daemon watches every included folder, so changes appear without a reindex.
 If the kernel's inotify watch limit is exhausted, `Status.watcher` becomes
 `partial`; changes in unwatched folders appear on the next reconcile scan. Raise
 `fs.inotify.max_user_watches` and run `Reindex` to try again. If the kernel's
-event queue overflows, the daemon rebuilds its watches and rescans automatically.
+event queue overflows, the daemon rebuilds its watches and rescans
+automatically.
 
-## Daemon interface
+## Privacy
 
-The extension talks to `siftd` over the session bus at
-`io.github.alphabeast97.Sift` / `/io/github/alphabeast97/Sift`:
-
-- `Ping() -> s` returns `version+git-hash`.
-- `Query(text, limit) -> s` returns JSON with a `files` array and an optional
-  `calc` object. `text` is at most 128 bytes and `limit` is 1–50. File rows
-  carry `path`, `name`, and `kind` (`file` or `dir`).
-- `Reindex()` rereads the config and rebuilds the index.
-- `EnsureFresh()` asks for a reconcile scan when the last one is over an hour
-  old, or ten minutes old while watching is degraded or unavailable.
-- `Quit()` flushes the cache and stops the daemon.
-- The `Status` property is JSON (`state`, `indexed`, `roots`, `truncated`,
-  `watcher`, `last_reconcile`); `watcher` is `ok`, `partial`, or `unavailable`;
-  `StatusChanged` fires when it changes. The `Config` property is JSON
-  (`roots`, `exclude_dirs`, `max_entries`).
-
-## Uninstall
-
-```bash
-make uninstall          # disable and remove the extension, binary, service file
-make uninstall PURGE=1  # also remove ~/.config/sift and ~/.cache/sift
-```
-
-Or call `packaging/install.sh --uninstall [--purge]` directly. Without `--purge`,
-configuration and cache are kept for a later reinstall.
-
-## Releases and tests
-
-Build release artifacts and verify them:
-
-```bash
-make release
-ls dist/siftd dist/sift@alphabeast97.github.io.shell-extension.zip dist/SHA256SUMS
-(cd dist && sha256sum -c SHA256SUMS)
-```
-
-Automated checks:
-
-```bash
-make test               # GJS unit tests, schema test, Rust tests, eslint
-make test-shell         # headless GNOME Shell smoke test
-SIFT_E2E=1 make test-shell   # daemon + file-search end-to-end test
-make check-pack         # metadata/schema/zip sanity check
-```
-
-`make ci-image` and `make test-shell-container` build and run the pinned GNOME 51
-container (Docker required).
-
-GitHub Actions run when the owner pushes to `main`, and on a pull request only
-after the owner adds the `ci` label or dispatches `CI` by hand. There are no
-scheduled or automatic pull-request runs. `make test-shell` is the supported
-shell smoke; the container variant is experimental. `Release` runs when the
-owner pushes a `v*` tag: it reruns the
-checks, builds the artifacts, verifies `SHA256SUMS`, and attaches them to the
-release.
+- File search reads names only. File contents are never indexed or read.
+- App launches and repeated search choices stay in
+  `~/.local/state/sift/usage.json` and never leave the machine. Picking a
+  non-first app, file, or folder result twice promotes it for that query and its
+  prefixes. A settings panel selected twice is favored whenever it appears in
+  later searches. Learned choices do not expire; the store only drops the
+  oldest entries when it grows beyond 300 apps or 200 queries. Clear the counts
+  with **Clear learned ranking** in preferences.
+- Web search is off by default and only runs when you choose a web result.
+- Sift runs as your user. It never asks for root and has no telemetry.
 
 ## Performance
 
-Measured with `make perf` on an Intel i5-8365U and GNOME Shell 51.1. The
-daemon numbers are the median of 100 queries over a synthetic 250,000-entry
-index. The shell numbers come from the headless harness at 1280x720 with 90
-installed apps. Re-run the command on your machine; these are measurements,
-not estimates.
+Measured with `make perf` on an Intel i5-8365U and GNOME Shell 51.1. The daemon
+numbers are the median of 100 queries over a synthetic 250,000-entry index. The
+shell numbers come from the headless harness at 1280x720 with 90 installed apps.
+Re-run the command on your machine; these are measurements, not estimates.
 
 | Daemon query | p50 | p95 |
 | --- | --- | --- |
@@ -276,17 +301,24 @@ not estimates.
 runs the headless shell benchmark; it prints both tables. Grid details and the
 one-time first-tile allocation are in `docs/perf/app-grid.md`.
 
-Each release also publishes `resource-report.json` plus a
-`RESOURCE_REPORT.md` diff against the previous release. `make resources`
-produces the JSON; the release workflow attaches both files. Shell RSS is the
-whole headless GNOME Shell process, so treat it as a trend rather than Sift's
-exact footprint.
+Each release also publishes `resource-report.json` and a `RESOURCE_REPORT.md`
+diff against the previous release. `make resources` produces the JSON; the
+release workflow attaches both files. Shell RSS is the whole headless GNOME
+Shell process, so treat it as a trend rather than Sift's exact footprint.
 
 ## Troubleshooting
 
+- **Something looks wrong.** Run `sift --doctor`; it checks the shell version,
+  extension state, daemon, D-Bus service, config, cache and inotify limit.
 - **No file results, footer says the index is degraded.** Check whether the
   daemon runs:
-  `gdbus call --session --dest io.github.alphabeast97.Sift --object-path /io/github/alphabeast97/Sift --method io.github.alphabeast97.Sift.Ping`.
+
+  ```bash
+  gdbus call --session --dest io.github.alphabeast97.Sift \
+      --object-path /io/github/alphabeast97/Sift \
+      --method io.github.alphabeast97.Sift.Ping
+  ```
+
   Reinstall to restore the D-Bus service file, and check the journal for
   `siftd` errors.
 - **The extension is installed but does not open.** Confirm it is enabled with
@@ -296,13 +328,49 @@ exact footprint.
   in preferences. Auto follows the system color scheme; Light and Dark force
   their glass with their own brightness sliders; Clear is a near-transparent
   veil that keeps the desktop visible, with clean light text and a filled
-  selection. Liquid bends the backdrop at the rim, Crystal
-  sharpens that bend into a bright edge, Glow replaces the bend with a soft
-  halo, and Flat skips the blur. Blur my Shell can be enabled or disabled
-  independently.
-- **Blur my Shell is installed.** Sift detects it only to pick a conservative
-  default; it does not patch or depend on it.
+  selection. Liquid bends the backdrop at the rim, Crystal sharpens that bend
+  into a bright edge, Glow replaces the bend with a soft halo, and Flat skips
+
+## Development
+
+```bash
+npm ci
+make test          # GJS unit tests, schema test, Rust tests, eslint
+make test-shell    # headless GNOME Shell smoke test
+SIFT_E2E=1 make test-shell   # daemon + file-search end-to-end test
+make check-pack    # metadata, schema, icon, and zip sanity check
+make release       # build dist/ artifacts and SHA256SUMS
+make packages      # build the .deb, .rpm and Arch packages (nfpm required)
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, style, and release
+process. CI is owner-gated: it runs when the owner pushes to `main`, adds the
+`ci` label to a pull request, or dispatches the workflow manually.
+
+The extension talks to `siftd` over the session bus at
+`io.github.alphabeast97.Sift` / `/io/github/alphabeast97/Sift`. The daemon
+exposes `Ping`, `Query`, `Reindex`, `EnsureFresh`, and `Quit`, plus `Status` and
+`Config` properties. The extension and daemon are versioned together.
+
+## Uninstall
+
+`make uninstall` stops the daemon and removes everything Sift added: the
+extension, `siftd`, `sift`, the D-Bus activation file, GSettings, learned
+ranking, config, cache and index data.
+
+```bash
+make uninstall          # full removal
+make uninstall KEEP=1   # keep settings, ranking, config, cache and index data
+```
+
+Or call `packaging/install.sh --uninstall [--keep-data]` directly. `--keep-data`
+is only useful for a later reinstall; without it nothing is left behind. These
+commands remove a user install. If Sift came from a system package, remove it
+with `apt`, `dnf`, `zypper` or `pacman`.
 
 ## License
 
-GPL-3.0-or-later. See `LICENSE` and `THIRD_PARTY_NOTICES`.
+GPL-3.0-or-later. See [LICENSE](LICENSE) and
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). Release notes live in
+[docs/release-notes](docs/release-notes) and the changelog in
+[CHANGELOG.md](CHANGELOG.md).

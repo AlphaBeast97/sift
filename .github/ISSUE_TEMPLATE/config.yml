@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/AlphaBeast97/sift/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Usage and troubleshooting
+    url: https://github.com/AlphaBeast97/sift#troubleshooting
+    about: Check the README and run `sift --doctor` first.

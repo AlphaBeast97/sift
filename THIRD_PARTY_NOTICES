@@ -19,12 +19,6 @@ fend-core
   Source: https://github.com/printfn/fend
   Used by siftd for arithmetic and unit-expression evaluation.
 
-Blur my Shell
-  License: GPL-3.0-or-later
-  Source: https://github.com/aunetx/blur-my-shell
-  Optional compatibility target only. No Blur my Shell code is bundled,
-  linked, or required.
-
 Other Rust dependencies
 -----------------------
 

@@ -1,0 +1,92 @@
+name: Bug report
+description: Something in Sift is broken or looks wrong.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Run `sift --doctor` and include the output; it
+        checks the most common install problems first.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the behavior you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Press Super
+        2. Type …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Sift version
+      description: Shown in Preferences → Updates, or in `gnome-extensions info sift@alphabeast97.github.io`.
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: gnome
+    attributes:
+      label: GNOME Shell version
+      description: Output of `gnome-shell --version`.
+      placeholder: GNOME Shell 51.1
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: Ubuntu 26.04, Fedora 43, Arch Linux, …
+    validations:
+      required: true
+  - type: dropdown
+    id: session
+    attributes:
+      label: Session
+      options:
+        - Wayland
+        - X11
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: sift --doctor output
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`journalctl --user -b --no-pager | grep -i sift` or the output of `gnome-extensions info …`."
+      render: shell
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Drag images here if the problem is visual.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I am running GNOME Shell 51.
+          required: true
