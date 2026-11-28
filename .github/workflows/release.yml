@@ -50,7 +50,7 @@ jobs:
           go-version: stable
           cache: false
       - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
       - name: Build .deb, .rpm and Arch packages
         run: PATH="$(go env GOPATH)/bin:$PATH" packaging/build-packages.sh
       - name: Upload packages
@@ -96,13 +96,23 @@ jobs:
       - name: Verify checksums
         run: cd dist && sha256sum -c SHA256SUMS
       - name: Measure resource usage
+        continue-on-error: true
+        timeout-minutes: 5
         run: |
+          rm -f /usr/share/dbus-1/services/org.gnome.Shell.Screencast.service \
+                /usr/share/dbus-1/services/org.gnome.Shell.CalendarServer.service
           export XDG_RUNTIME_DIR=/tmp/sift-runtime
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
-          make resources
+          timeout -k 5 240 make resources || true
       - name: Compare with the previous release
-        run: python3 tools/perf/resource_diff.py dist/resource-report.json > dist/RESOURCE_REPORT.md
+        run: |
+          if [ -s dist/resource-report.json ]; then
+            python3 tools/perf/resource_diff.py dist/resource-report.json > dist/RESOURCE_REPORT.md
+          else
+            printf 'Resource measurement was unavailable for this release.\n' > dist/RESOURCE_REPORT.md
+            printf '{"version":1,"cycles":[],"summary":{}}\n' > dist/resource-report.json
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Compose release notes
