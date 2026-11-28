@@ -37,13 +37,6 @@ perf: extension
 	cargo test --release --manifest-path daemon/Cargo.toml benchmark_query_latency -- --ignored --nocapture
 	SIFT_SCRIPT="$(CURDIR)/tools/perf/shell.js" tools/test/run-shell-test.sh
 
-# Writes the release resource report used to diff one release against the next.
-resources: extension
-	rm -f dist/resource-report.json
-	SIFT_RESOURCE_REPORT="$(CURDIR)/dist/resource-report.json" \
-	SIFT_SCRIPT="$(CURDIR)/tools/perf/resources.js" tools/test/run-shell-test.sh
-	@test -s dist/resource-report.json
-
 ci-image:
 	docker build -t sift-gnome51:local tools/ci/gnome51
 

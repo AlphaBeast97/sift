@@ -304,11 +304,6 @@ Re-run the command on your machine; these are measurements, not estimates.
 runs the headless shell benchmark; it prints both tables. Grid details and the
 one-time first-tile allocation are in `docs/perf/app-grid.md`.
 
-Each release includes its measured resource table in the release notes.
-`make resources` writes the raw numbers to `dist/resource-report.json`. Shell
-RSS is the whole headless GNOME Shell process, so treat it as a trend rather
-than Sift's exact footprint.
-
 ## Troubleshooting
 
 - **Something looks wrong.** Run `sift --doctor`; it checks the shell version,

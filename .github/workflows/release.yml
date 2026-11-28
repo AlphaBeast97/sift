@@ -79,23 +79,6 @@ jobs:
         run: npm ci
       - name: Test
         run: make test check-pack
-      - name: Measure resource usage
-        continue-on-error: true
-        timeout-minutes: 5
-        run: |
-          rm -f /usr/share/dbus-1/services/org.gnome.Shell.Screencast.service \
-                /usr/share/dbus-1/services/org.gnome.Shell.CalendarServer.service
-          export XDG_RUNTIME_DIR=/tmp/sift-runtime
-          mkdir -p "$XDG_RUNTIME_DIR"
-          chmod 700 "$XDG_RUNTIME_DIR"
-          timeout -k 5 240 make resources || true
-      - name: Render resource usage
-        run: |
-          if [ -s dist/resource-report.json ]; then
-            python3 tools/perf/resource_report.py dist/resource-report.json > dist/RESOURCE_USAGE.md
-          else
-            : > dist/RESOURCE_USAGE.md
-          fi
       - name: Download portable daemon
         uses: actions/download-artifact@v4
         with:
@@ -116,10 +99,6 @@ jobs:
         run: |
           notes="docs/release-notes/${GITHUB_REF_NAME#v}.md"
           if [ -f "$notes" ]; then cat "$notes"; else printf 'Sift %s\n' "$GITHUB_REF_NAME"; fi > dist/RELEASE_NOTES.md
-          if [ -s dist/RESOURCE_USAGE.md ]; then
-            printf '\n' >> dist/RELEASE_NOTES.md
-            cat dist/RESOURCE_USAGE.md >> dist/RELEASE_NOTES.md
-          fi
       - name: Attach artifacts
         uses: softprops/action-gh-release@v2
         with:
