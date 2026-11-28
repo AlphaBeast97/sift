@@ -79,22 +79,6 @@ jobs:
         run: npm ci
       - name: Test
         run: make test check-pack
-      - name: Download portable daemon
-        uses: actions/download-artifact@v4
-        with:
-          name: siftd-linux-x86_64
-          path: dist
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          name: sift-packages
-          path: dist
-      - name: Build release artifacts
-        run: |
-          chmod +x dist/siftd
-          make release-artifacts
-      - name: Verify checksums
-        run: cd dist && sha256sum -c SHA256SUMS
       - name: Measure resource usage
         continue-on-error: true
         timeout-minutes: 5
@@ -115,6 +99,22 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download portable daemon
+        uses: actions/download-artifact@v4
+        with:
+          name: siftd-linux-x86_64
+          path: dist
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: sift-packages
+          path: dist
+      - name: Build release artifacts
+        run: |
+          chmod +x dist/siftd
+          make release-artifacts
+      - name: Verify checksums
+        run: cd dist && sha256sum -c SHA256SUMS
       - name: Compose release notes
         run: |
           notes="docs/release-notes/${GITHUB_REF_NAME#v}.md"
