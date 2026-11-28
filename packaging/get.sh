@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO=AlphaBeast97/sift
-UUID=sift@alphabeast97.github.io
+TARBALL=sift-linux-x86_64.tar.gz
 VERSION=${SIFT_VERSION:-latest}
 
 die() {
@@ -22,7 +22,7 @@ case $(uname -m) in
     *) die "prebuilt Sift releases are x86_64 only; build from source: https://github.com/$REPO#from-source" ;;
 esac
 
-for command in gnome-shell gjs gnome-extensions gdbus; do
+for command in gnome-shell gjs gnome-extensions gdbus tar; do
     command -v "$command" >/dev/null 2>&1 ||
         die "$command is required (install the gnome-shell and gjs packages)"
 done
@@ -51,17 +51,21 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 printf 'Downloading Sift (%s)...\n' "$VERSION"
-for file in install.sh sift.sh SHA256SUMS siftd "$UUID.shell-extension.zip"; do
+for file in SHA256SUMS "$TARBALL"; do
     fetch "$BASE/$file" "$tmp/$file"
 done
 
+expected=$(awk -v name="$TARBALL" '$2 == name {print $1}' "$tmp/SHA256SUMS")
+[ -n "$expected" ] || die "SHA256SUMS has no entry for $TARBALL"
+
 if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$tmp" && sha256sum -c SHA256SUMS)
+    actual=$(sha256sum "$tmp/$TARBALL" | awk '{print $1}')
 elif command -v shasum >/dev/null 2>&1; then
-    (cd "$tmp" && shasum -a 256 -c SHA256SUMS)
+    actual=$(shasum -a 256 "$tmp/$TARBALL" | awk '{print $1}')
 else
     die 'sha256sum or shasum is required to verify the download'
 fi
+[ "$actual" = "$expected" ] || die "checksum mismatch for $TARBALL"
 
-bash "$tmp/install.sh" --binary "$tmp/siftd" \
-    --extension-zip "$tmp/$UUID.shell-extension.zip"
+tar -xzf "$tmp/$TARBALL" -C "$tmp"
+bash "$tmp/install.sh"

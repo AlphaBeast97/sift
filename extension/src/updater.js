@@ -10,9 +10,8 @@ import {
     releaseAssets,
 } from './lib/update.js';
 
-const UUID = 'sift@alphabeast97.github.io';
-const ZIP = `${UUID}.shell-extension.zip`;
-const ASSETS = ['install.sh', 'sift.sh', 'SHA256SUMS', 'siftd', ZIP];
+const BUNDLE = 'sift-linux-x86_64.tar.gz';
+const ASSETS = ['SHA256SUMS', BUNDLE];
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const USER_AGENT = 'sift-updater';
 
@@ -206,56 +205,65 @@ export class Updater {
     _verify(dir) {
         const sums = parseChecksums(
             new TextDecoder().decode(readBytes(GLib.build_filenamev([dir, 'SHA256SUMS']))));
-        for (const name of ASSETS) {
-            if (name === 'SHA256SUMS')
-                continue;
-            const expected = sums.get(name);
-            if (!expected)
-                throw new Error(`SHA256SUMS has no entry for ${name}`);
-            const actual = GLib.compute_checksum_for_data(
-                GLib.ChecksumType.SHA256,
-                readBytes(GLib.build_filenamev([dir, name])));
-            if (actual !== expected)
-                throw new Error(`Checksum mismatch for ${name}`);
-        }
+        const expected = sums.get(BUNDLE);
+        if (!expected)
+            throw new Error(`SHA256SUMS has no entry for ${BUNDLE}`);
+        const actual = GLib.compute_checksum_for_data(
+            GLib.ChecksumType.SHA256,
+            readBytes(GLib.build_filenamev([dir, BUNDLE])));
+        if (actual !== expected)
+            throw new Error(`Checksum mismatch for ${BUNDLE}`);
     }
 
     _runInstaller(dir, tag) {
         this._state('installing', `Installing Sift ${tag}…`);
-        const argv = [
-            'bash',
-            GLib.build_filenamev([dir, 'install.sh']),
-            '--binary', GLib.build_filenamev([dir, 'siftd']),
-            '--extension-zip', GLib.build_filenamev([dir, ZIP]),
-        ];
+        this._run(['tar', '-xzf', GLib.build_filenamev([dir, BUNDLE]),
+            '-C', dir], error => {
+            if (error) {
+                this._installing = false;
+                this._cleanup(dir);
+                this._state('error', `Update failed: ${error.message}`);
+                return;
+            }
 
+            this._run(['bash', GLib.build_filenamev([dir, 'install.sh'])],
+                installError => {
+                    this._installing = false;
+                    if (installError) {
+                        this._cleanup(dir);
+                        this._state('error',
+                            `Update failed: ${installError.message}`);
+                        return;
+                    }
+                    writeCache(tag);
+                    this._cleanup(dir);
+                    this._state('done',
+                        `Sift ${tag} is installed. Log out and back in on Wayland to load it.`);
+                });
+        });
+    }
+
+    _run(argv, done) {
         let proc;
         try {
             proc = Gio.Subprocess.new(argv,
                 Gio.SubprocessFlags.STDOUT_PIPE |
                 Gio.SubprocessFlags.STDERR_PIPE);
         } catch (error) {
-            this._installing = false;
-            this._cleanup(dir);
-            this._state('error', `Could not start the installer: ${error.message}`);
+            done(error);
             return;
         }
 
         proc.communicate_utf8_async(null, this._cancellable, (source, result) => {
-            this._installing = false;
             try {
                 const [, stdout, stderr] =
                     source.communicate_utf8_finish(result);
                 if (!source.get_successful())
                     throw new Error(stderr.trim() || stdout.trim() ||
-                        'the installer exited with an error');
-                writeCache(tag);
-                this._cleanup(dir);
-                this._state('done',
-                    `Sift ${tag} is installed. Log out and back in on Wayland to load it.`);
+                        'the command exited with an error');
+                done(null);
             } catch (error) {
-                this._cleanup(dir);
-                this._state('error', `Update failed: ${error.message}`);
+                done(error);
             }
         });
     }

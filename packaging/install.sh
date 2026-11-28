@@ -59,6 +59,7 @@ fi
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(dirname -- "$SCRIPT_DIR")
 DIST=$ROOT/dist
+if [ -d "$SCRIPT_DIR/dist" ]; then DIST=$SCRIPT_DIR/dist; fi
 BINARY=${BINARY:-$DIST/siftd}
 EXTENSION_ZIP=${EXTENSION_ZIP:-$DIST/$UUID.shell-extension.zip}
 

@@ -70,10 +70,15 @@ release: build
 	$(MAKE) release-artifacts
 
 release-artifacts: extension
-	install -m 0755 packaging/install.sh dist/install.sh
+	rm -rf dist/bundle
+	mkdir -p dist/bundle/dist
+	install -m 0755 dist/siftd dist/bundle/dist/siftd
+	install -m 0644 dist/$(UUID).shell-extension.zip dist/bundle/dist/$(UUID).shell-extension.zip
+	install -m 0755 packaging/install.sh packaging/sift.sh dist/bundle/
+	tar -czf dist/sift-linux-x86_64.tar.gz -C dist/bundle .
+	rm -rf dist/bundle
 	install -m 0755 packaging/get.sh dist/get.sh
-	install -m 0755 packaging/sift.sh dist/sift.sh
-	cd dist && sha256sum siftd $(UUID).shell-extension.zip install.sh sift.sh > SHA256SUMS
+	cd dist && ls sift-linux-x86_64.tar.gz get.sh *.deb *.rpm *.pkg.tar.zst 2>/dev/null | sort -u | xargs -r sha256sum > SHA256SUMS
 
 packages: release
 	packaging/build-packages.sh
