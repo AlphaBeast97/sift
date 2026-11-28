@@ -1,8 +1,9 @@
 UUID := sift@alphabeast97.github.io
 SCHEMA := schemas/org.gnome.shell.extensions.sift.gschema.xml
 PREFIX ?= $(HOME)/.local
+VERSION ?= $(shell sed -n 's/.*"version-name": "\([^"]*\)".*/\1/p' extension/metadata.json)
 
-.PHONY: test test-gjs test-rust test-schema test-shell check-pack ci-image test-shell-container lint build daemon extension perf resources
+.PHONY: test test-gjs test-rust test-schema test-release test-shell check-pack ci-image test-shell-container lint build daemon extension perf resources
 
 test-gjs:
 	gjs -m extension/tests/unit/all.js
@@ -16,6 +17,9 @@ test-schema:
 	glib-compile-schemas --strict --targetdir "$$tmp" extension/schemas; \
 	GSETTINGS_SCHEMA_DIR="$$tmp" GSETTINGS_BACKEND=keyfile XDG_CONFIG_HOME="$$tmp" \
 		gjs -m extension/tests/unit/schema.js
+
+test-release:
+	python3 tools/test/check_release_body.py
 
 lint:
 	npx eslint extension tools
@@ -37,6 +41,15 @@ perf: extension
 	cargo test --release --manifest-path daemon/Cargo.toml benchmark_query_latency -- --ignored --nocapture
 	SIFT_SCRIPT="$(CURDIR)/tools/perf/shell.js" tools/test/run-shell-test.sh
 
+# Measures shell resource use for the release notes.
+resources: extension
+	rm -f dist/resource-report.json
+	SIFT_RESOURCE_REPORT="$(CURDIR)/dist/resource-report.json" \
+	SIFT_SCRIPT="$(CURDIR)/tools/perf/resources.js" tools/test/run-shell-test.sh
+	@test -s dist/resource-report.json
+	install -Dm0644 dist/resource-report.json docs/release-notes/$(VERSION)-resources.json
+	@echo "wrote docs/release-notes/$(VERSION)-resources.json"
+
 ci-image:
 	docker build -t sift-gnome51:local tools/ci/gnome51
 
@@ -54,7 +67,7 @@ test-shell-container:
 check-pack: extension
 	python3 tools/test/check_pack.py
 
-test: test-gjs test-schema test-rust lint
+test: test-gjs test-schema test-rust test-release lint
 
 .PHONY: release release-artifacts install prefs uninstall packages
 

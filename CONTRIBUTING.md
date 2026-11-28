@@ -93,10 +93,14 @@ Releases use `vMAJOR.MINOR.PATCH` tags. Before tagging:
 1. Update `version` in `package.json`, `version-name` in
    `extension/metadata.json`, and `CHANGELOG.md`.
 2. Add `docs/release-notes/<version>.md`.
-3. Run `make test check-pack` and `make test-shell`.
-4. Run `make release` and verify `dist/SHA256SUMS`.
-5. Run `make packages` and install at least the package for your distro to
+3. Run `make resources` on GNOME Shell 51 and commit
+   `docs/release-notes/<version>-resources.json`.
+4. Run `make test check-pack` and `make test-shell`.
+5. Run `make release` and verify `dist/SHA256SUMS`.
+6. Run `make packages` and install at least the package for your distro to
    check the system-wide paths. `nfpm` is required.
-6. Push `main`, then push the tag. The release workflow builds the portable
+7. Push `main`, then push the tag. The release workflow builds the portable
    daemon, `.deb`, `.rpm`, and Arch packages, runs the checks, and attaches the
-   installer, daemon, extension zip, license, notices, and checksums.
+   installer, installer bundle, packages, and checksums. It composes the release
+   body from the notes, the resource table, and that version's `CHANGELOG.md`
+   section.

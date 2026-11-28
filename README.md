@@ -304,6 +304,10 @@ Re-run the command on your machine; these are measurements, not estimates.
 runs the headless shell benchmark; it prints both tables. Grid details and the
 one-time first-tile allocation are in `docs/perf/app-grid.md`.
 
+Each release runs `make resources` on GNOME Shell 51 and includes the resulting
+table in its release notes. Shell RSS is the whole headless GNOME Shell process,
+so treat it as a trend rather than Sift's exact footprint.
+
 ## Troubleshooting
 
 - **Something looks wrong.** Run `sift --doctor`; it checks the shell version,
@@ -337,6 +341,7 @@ make test          # GJS unit tests, schema test, Rust tests, eslint
 make test-shell    # headless GNOME Shell smoke test
 SIFT_E2E=1 make test-shell   # daemon + file-search end-to-end test
 make check-pack    # metadata, schema, icon, and zip sanity check
+make resources     # measure shell resource use for the release notes
 make release       # build dist/ artifacts and SHA256SUMS
 make packages      # build the .deb, .rpm and Arch packages (nfpm required)
 ```

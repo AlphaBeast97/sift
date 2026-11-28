@@ -96,9 +96,7 @@ jobs:
       - name: Verify checksums
         run: cd dist && sha256sum -c SHA256SUMS
       - name: Compose release notes
-        run: |
-          notes="docs/release-notes/${GITHUB_REF_NAME#v}.md"
-          if [ -f "$notes" ]; then cat "$notes"; else printf 'Sift %s\n' "$GITHUB_REF_NAME"; fi > dist/RELEASE_NOTES.md
+        run: python3 tools/release/release_body.py "$GITHUB_REF_NAME" > dist/RELEASE_NOTES.md
       - name: Attach artifacts
         uses: softprops/action-gh-release@v2
         with:
