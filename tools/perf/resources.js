@@ -155,6 +155,7 @@ export async function run() {
 
     const report = {
         version: 1,
+        date: GLib.DateTime.new_now_local().format('%Y-%m-%d'),
         os: GLib.get_os_info('PRETTY_NAME'),
         cycles,
         summary,

@@ -20,7 +20,7 @@ result = subprocess.run(
     check=True, capture_output=True, text=True)
 
 body = result.stdout
-assert "## Resource usage" in body
+assert "### Resource usage" in body
 assert "## Full changelog" in body
 assert "### Added" in body
 assert "See [CHANGELOG.md]" not in body

@@ -30,13 +30,16 @@ def format_value(value, unit):
 def resource_section(path):
     report = json.loads(path.read_text(encoding="utf-8"))
     summary = report.get("summary", {})
-    os_name = report.get("os") or "Linux"
+    measured = f"Measured locally on {report.get('os') or 'Linux'}"
+    if report.get("date"):
+        measured += f" on {report['date']}"
+    measured += (" with `make resources`. Shell RSS is the whole headless GNOME "
+                 "Shell process, so treat it as a trend rather than Sift's exact "
+                 "footprint.")
     lines = [
-        "## Resource usage",
+        "### Resource usage",
         "",
-        f"Measured locally on {os_name} with `make resources`. Shell RSS is the "
-        "whole headless GNOME Shell process, so treat it as a trend rather than "
-        "Sift's exact footprint.",
+        measured,
         "",
         "| Metric | Value |",
         "| --- | ---: |",
@@ -72,8 +75,8 @@ def main():
 
     parts = [
         notes.read_text(encoding="utf-8").rstrip(),
-        resource_section(resources),
         changelog_section(changelog, version),
+        resource_section(resources),
     ]
     print("\n\n".join(parts))
     return 0
