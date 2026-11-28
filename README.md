@@ -41,11 +41,14 @@ curl -fsSL https://github.com/AlphaBeast97/sift/releases/latest/download/get.sh 
   | SIFT_VERSION=v1.0.0 bash
 ```
 
-Prefer to inspect first? Download `get.sh`, `install.sh`, `siftd`, the
-extension zip, and `SHA256SUMS` from the [latest release](https://github.com/AlphaBeast97/sift/releases/latest), verify the checksums, then run:
+Prefer to inspect first? Download `get.sh`, `sift-linux-x86_64.tar.gz`, and
+`SHA256SUMS` from the [latest release](https://github.com/AlphaBeast97/sift/releases/latest),
+verify the checksum, then extract and run the installer:
 
 ```bash
-bash install.sh --binary ./siftd --extension-zip ./sift@alphabeast97.github.io.shell-extension.zip
+sha256sum -c --ignore-missing SHA256SUMS
+tar -xzf sift-linux-x86_64.tar.gz
+bash install.sh
 ```
 
 On Wayland, GNOME Shell only rescans extensions at login. If the installer
@@ -301,10 +304,10 @@ Re-run the command on your machine; these are measurements, not estimates.
 runs the headless shell benchmark; it prints both tables. Grid details and the
 one-time first-tile allocation are in `docs/perf/app-grid.md`.
 
-Each release also publishes `resource-report.json` and a `RESOURCE_REPORT.md`
-diff against the previous release. `make resources` produces the JSON; the
-release workflow attaches both files. Shell RSS is the whole headless GNOME
-Shell process, so treat it as a trend rather than Sift's exact footprint.
+Each release includes its measured resource table in the release notes.
+`make resources` writes the raw numbers to `dist/resource-report.json`. Shell
+RSS is the whole headless GNOME Shell process, so treat it as a trend rather
+than Sift's exact footprint.
 
 ## Troubleshooting
 

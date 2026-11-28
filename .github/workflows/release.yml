@@ -89,16 +89,13 @@ jobs:
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
           timeout -k 5 240 make resources || true
-      - name: Compare with the previous release
+      - name: Render resource usage
         run: |
           if [ -s dist/resource-report.json ]; then
-            python3 tools/perf/resource_diff.py dist/resource-report.json > dist/RESOURCE_REPORT.md
+            python3 tools/perf/resource_report.py dist/resource-report.json > dist/RESOURCE_USAGE.md
           else
-            printf 'Resource measurement was unavailable for this release.\n' > dist/RESOURCE_REPORT.md
-            printf '{"version":1,"cycles":[],"summary":{}}\n' > dist/resource-report.json
+            : > dist/RESOURCE_USAGE.md
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Download portable daemon
         uses: actions/download-artifact@v4
         with:
@@ -119,25 +116,20 @@ jobs:
         run: |
           notes="docs/release-notes/${GITHUB_REF_NAME#v}.md"
           if [ -f "$notes" ]; then cat "$notes"; else printf 'Sift %s\n' "$GITHUB_REF_NAME"; fi > dist/RELEASE_NOTES.md
-          printf '\n---\n\n' >> dist/RELEASE_NOTES.md
-          cat dist/RESOURCE_REPORT.md >> dist/RELEASE_NOTES.md
+          if [ -s dist/RESOURCE_USAGE.md ]; then
+            printf '\n' >> dist/RELEASE_NOTES.md
+            cat dist/RESOURCE_USAGE.md >> dist/RELEASE_NOTES.md
+          fi
       - name: Attach artifacts
         uses: softprops/action-gh-release@v2
         with:
           name: Sift ${{ github.ref_name }}
           body_path: dist/RELEASE_NOTES.md
           files: |
-            dist/siftd
-            dist/sift@alphabeast97.github.io.shell-extension.zip
-            dist/SHA256SUMS
-            dist/resource-report.json
-            dist/RESOURCE_REPORT.md
-            dist/install.sh
             dist/get.sh
-            dist/sift.sh
+            dist/sift-linux-x86_64.tar.gz
+            dist/SHA256SUMS
             dist/*.deb
             dist/*.rpm
             dist/*.pkg.tar.zst
-            LICENSE
-            THIRD_PARTY_NOTICES
           fail_on_unmatched_files: true

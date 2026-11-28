@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Release resource report. Run with `make resources`; writes JSON to
-// SIFT_RESOURCE_REPORT so the release workflow can diff it against the
-// previous release.
+// SIFT_RESOURCE_REPORT for the release notes.
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 
